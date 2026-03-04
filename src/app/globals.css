@@ -305,6 +305,15 @@
   animation: float-slow 8s ease-in-out infinite;
 }
 
+/* ─── Glass Card (admin panels) ─── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+}
+.dark .glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(8px);
+}
+
 /* ─── Admin Accent ─── */
 :root {
   --admin-accent: #4f46e5;

@@ -96,3 +96,70 @@ export interface SystemEvent {
   payload: Record<string, unknown>;
   timestamp: string;
 }
+
+// ─── Admin Types ───
+export type UserRole = 'user' | 'admin';
+export type UserStatus = 'active' | 'suspended' | 'pending';
+export type UserPlan = 'starter' | 'pro' | 'enterprise';
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  plan: UserPlan;
+  projects_count: number;
+  created_at: string;
+  last_login: string;
+  avatar_color: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actor: string;
+  actor_email: string;
+  action: string;
+  target: string;
+  details: string;
+  timestamp: string;
+  ip_address: string;
+}
+
+export interface BillingMetrics {
+  mrr: number;
+  total_revenue: number;
+  active_subscriptions: number;
+  churn_rate: number;
+  plan_distribution: { plan: UserPlan; count: number; percentage: number }[];
+}
+
+export interface LLMUsageData {
+  date: string;
+  tokens_used: number;
+  cost: number;
+  provider: 'openai' | 'anthropic' | 'google';
+  project_id: string;
+  project_name: string;
+}
+
+export interface AdminTransaction {
+  id: string;
+  user_name: string;
+  user_email: string;
+  amount: number;
+  plan: UserPlan;
+  status: 'completed' | 'pending' | 'failed' | 'refunded';
+  date: string;
+}
+
+export interface AdminStats {
+  total_users: number;
+  total_projects: number;
+  monthly_llm_cost: number;
+  active_agents: number;
+  users_growth: number;
+  projects_growth: number;
+  cost_change: number;
+  agents_change: number;
+}

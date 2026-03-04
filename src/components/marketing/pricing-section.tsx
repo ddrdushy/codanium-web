@@ -110,7 +110,7 @@ export function PricingSection() {
               transition={{
                 duration: 0.5,
                 delay: i * 0.12,
-                ease: 'easeOut',
+                ease: 'easeOut' as const,
               }}
               className={cn(
                 'relative flex flex-col rounded-2xl border p-8',

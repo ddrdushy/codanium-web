@@ -104,7 +104,7 @@ export function FeaturesSection() {
               transition={{
                 duration: 0.5,
                 delay: i * 0.1,
-                ease: 'easeOut',
+                ease: 'easeOut' as const,
               }}
               className="group relative rounded-xl glass p-6 card-lift"
             >

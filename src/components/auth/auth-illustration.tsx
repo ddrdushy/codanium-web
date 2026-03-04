@@ -52,7 +52,7 @@ export function AuthIllustration() {
           >
             <motion.div
               animate={{ y: [0, -8, 0] }}
-              transition={{ duration: 3 + i * 0.5, repeat: Infinity, ease: 'easeInOut' }}
+              transition={{ duration: 3 + i * 0.5, repeat: Infinity, ease: 'easeInOut' as const }}
               className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--surface)]/80 backdrop-blur-sm border border-border shadow-lg"
             >
               <div

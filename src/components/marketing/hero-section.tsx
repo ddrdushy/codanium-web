@@ -115,7 +115,7 @@ export function HeroSection() {
           <motion.div
             initial={{ opacity: 0, x: 40, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' }}
+            transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' as const }}
             className="relative hidden lg:block"
           >
             <div className="animate-float-slow rounded-2xl border border-border bg-[var(--surface)] p-5 shadow-2xl">
