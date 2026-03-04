@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { mockProjects } from '@/lib/mock-data';
@@ -26,9 +27,13 @@ type ViewMode = 'grid' | 'list';
 type FilterMode = 'all' | 'active' | 'paused' | 'completed';
 
 export default function ProjectsPage() {
+  const { data: session } = useSession();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const userName = session?.user?.name || 'User';
+  const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   const filteredProjects = mockProjects.filter(p => {
     if (filterMode !== 'all' && p.status !== filterMode) return false;
@@ -59,7 +64,7 @@ export default function ProjectsPage() {
               <span className="text-xs font-semibold text-emerald-400">{totalAgents} agents working</span>
             </div>
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber/30 to-blue-500/30 border border-foreground/10 flex items-center justify-center text-xs font-bold">
-              U
+              {userInitials}
             </div>
           </div>
         </div>

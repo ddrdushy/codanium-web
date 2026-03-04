@@ -1,20 +1,48 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import Link from 'next/link';
 import { mockSDLCProgress, mockAgents } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Search, Bell, Zap, Sun, Moon } from 'lucide-react';
+import { Search, Bell, Zap, Sun, Moon, Shield, LogOut, ChevronDown, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();
+  const { data: session } = useSession();
   const [mounted, setMounted] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const activeAgents = mockAgents.filter(a => a.status === 'working');
   const pendingDecisions = 1;
 
   useEffect(() => setMounted(true), []);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Get user info from session
+  const userName = session?.user?.name || 'User';
+  const userEmail = session?.user?.email || '';
+  const userInitials = userName
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+  const isAdmin = (session?.user as { role?: string })?.role === 'admin';
 
   return (
     <header className="h-14 border-b border-border bg-[var(--surface)]/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0">
@@ -106,9 +134,84 @@ export function Topbar() {
           )}
         </button>
 
-        {/* User Avatar */}
-        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber/30 to-blue-500/30 border border-foreground/10 flex items-center justify-center text-xs font-bold text-foreground/80">
-          U
+        {/* User Avatar + Dropdown */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-foreground/[0.04] transition-all"
+          >
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber/30 to-blue-500/30 border border-foreground/10 flex items-center justify-center text-xs font-bold text-foreground/80">
+              {userInitials}
+            </div>
+            <span className="hidden md:block text-sm font-medium text-foreground max-w-[100px] truncate">
+              {userName.split(' ')[0]}
+            </span>
+            <ChevronDown className={cn(
+              'hidden md:block w-3 h-3 text-muted-foreground transition-transform',
+              userMenuOpen && 'rotate-180'
+            )} />
+          </button>
+
+          {/* Dropdown Menu */}
+          <AnimatePresence>
+            {userMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-full mt-1.5 w-56 z-50 rounded-xl border border-border bg-[var(--surface)] shadow-xl shadow-black/20 overflow-hidden"
+              >
+                {/* User Info */}
+                <div className="px-3 py-3 border-b border-border">
+                  <p className="text-sm font-semibold text-foreground truncate">{userName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
+                  {isAdmin && (
+                    <Badge className="mt-1.5 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)] border-[var(--admin-accent)]/20 text-[10px]">
+                      Admin
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Menu Items */}
+                <div className="py-1">
+                  <Link
+                    href="/projects"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    My Projects
+                  </Link>
+
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/[0.06] transition-all"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      Admin Panel
+                    </Link>
+                  )}
+                </div>
+
+                {/* Sign Out */}
+                <div className="py-1 border-t border-border">
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      signOut({ callbackUrl: '/login' });
+                    }}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-500/[0.06] transition-all w-full text-left"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Sign Out
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </header>
