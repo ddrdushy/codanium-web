@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: ats_secret_2025
       POSTGRES_DB: ai_team_studio
     ports:
-      - "5432:5432"
+      - "14000:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,10 +29,10 @@ services:
     container_name: ats-app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "14001:3000"
     environment:
       DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
-      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:14001
       NEXTAUTH_SECRET: docker-dev-secret-change-in-production
       NODE_ENV: production
     depends_on:
@@ -49,7 +49,7 @@ services:
     profiles:
       - dev
     ports:
-      - "5555:5555"
+      - "14002:5555"
     environment:
       DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
     command: npx prisma studio --port 5555 --browser none

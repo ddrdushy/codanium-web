@@ -1,5 +1,5 @@
 # ─── AI Team Studio — Multi-stage Dockerfile ───
-# Optimized for Next.js 16 + Prisma + PostgreSQL
+# Optimized for Next.js 16 + Prisma 7.x + PostgreSQL
 
 # ── Stage 1: Dependencies ──────────────────────────────────────────────────────
 FROM node:22-alpine AS deps
@@ -25,7 +25,6 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=prisma /app/src/generated ./src/generated
-COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
 COPY . .
 
 # Provide a build-time DATABASE_URL (not used at runtime)
@@ -46,15 +45,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built assets
+# Copy built assets — standalone already includes traced node_modules
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma files for migrations
+# Copy Prisma generated client (not traced by standalone)
 COPY --from=prisma /app/src/generated ./src/generated
-COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Copy Prisma schema + config for migrations
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
