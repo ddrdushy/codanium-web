@@ -198,7 +198,7 @@ export function Sidebar() {
               {/* Footer */}
               <div className="px-2 py-1.5 border-t border-border">
                 <Link
-                  href="/"
+                  href="/projects"
                   onClick={() => setSelectorOpen(false)}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
                 >

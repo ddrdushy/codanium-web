@@ -73,14 +73,14 @@ export function BoardView() {
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all',
                 activeFilter === type
                   ? 'bg-amber/15 text-amber border border-amber/20'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04] border border-transparent'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] border border-transparent'
               )}
             >
               <Icon className="w-3 h-3" />
               {label}
               {type !== 'All' && (
                 <span className="text-[10px] opacity-60">
-                  {type === 'All' ? totalCards : mockCards.filter(c => c.type === type).length}
+                  {mockCards.filter(c => c.type === type).length}
                 </span>
               )}
             </button>
