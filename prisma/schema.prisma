@@ -1,0 +1,458 @@
+// ─── AI Team Studio — Prisma Schema ───
+// PostgreSQL database for the AI-Powered Product Delivery OS
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Users & Auth ───────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String?
+  role          UserRole  @default(USER)
+  status        UserStatus @default(ACTIVE)
+  plan          UserPlan   @default(STARTER)
+  avatarColor   String    @default("#f59e0b")
+  lastLogin     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  ownedProjects   Project[]       @relation("ProjectOwner")
+  projectMembers  ProjectMember[]
+  cards           Card[]          @relation("CardAssignee")
+  decisions       Decision[]      @relation("DecisionOwner")
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  sessions        Session[]
+  accounts        Account[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum UserPlan {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+// ─── Projects ───────────────────────────────────────────────────────────────
+
+model Project {
+  id           String        @id @default(cuid())
+  name         String
+  description  String        @default("")
+  status       ProjectStatus @default(ACTIVE)
+  currentStage String        @default("Business Analysis")
+  completion   Int           @default(0) // 0-100
+  color        String        @default("#f59e0b")
+  ownerId      String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  owner         User             @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members       ProjectMember[]
+  cards         Card[]
+  decisions     Decision[]
+  agents        Agent[]
+  sdlcStages    SDLCStage[]
+  llmUsage      LLMUsage[]
+  documents     Document[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("member") // owner, admin, member, viewer
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+// ─── Cards (Kanban) ─────────────────────────────────────────────────────────
+
+model Card {
+  id              String       @id @default(cuid())
+  title           String
+  description     String       @default("")
+  type            CardType     @default(TASK)
+  state           CardState    @default(PLANNED)
+  priority        Priority     @default(MEDIUM)
+  projectId       String
+  assigneeId      String?
+  ownerAgentId    String?
+  parentId        String?
+  linkedDecisionId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Relations
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee   User?     @relation("CardAssignee", fields: [assigneeId], references: [id])
+  ownerAgent Agent?    @relation(fields: [ownerAgentId], references: [id])
+  parent     Card?     @relation("CardHierarchy", fields: [parentId], references: [id])
+  children   Card[]    @relation("CardHierarchy")
+
+  @@index([projectId])
+  @@index([state])
+  @@map("cards")
+}
+
+enum CardType {
+  EPIC
+  FEATURE
+  TASK
+  QA
+  DECISION_BLOCKER
+}
+
+enum CardState {
+  PLANNED
+  IN_PROGRESS
+  UNDER_REVIEW
+  TESTING
+  BLOCKED
+  DONE
+  RELEASED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─── Decisions ──────────────────────────────────────────────────────────────
+
+model Decision {
+  id              String         @id @default(cuid())
+  trigger         String
+  context         String         @default("")
+  riskRating      RiskRating     @default(MEDIUM)
+  recommendation  String         @default("")
+  approvedOption  String?
+  status          DecisionStatus @default(DRAFTED)
+  ownerId         String
+  projectId       String
+  createdAt       DateTime       @default(now())
+  approvedAt      DateTime?
+  updatedAt       DateTime       @updatedAt
+
+  // Relations
+  owner   User              @relation("DecisionOwner", fields: [ownerId], references: [id])
+  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  options DecisionOption[]
+
+  @@index([projectId])
+  @@map("decisions")
+}
+
+model DecisionOption {
+  id          String     @id @default(cuid())
+  name        String
+  description String     @default("")
+  pros        String[]   // PostgreSQL array
+  cons        String[]
+  risk        RiskRating @default(MEDIUM)
+  effort      Effort     @default(MEDIUM)
+  decisionId  String
+
+  decision Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@map("decision_options")
+}
+
+enum DecisionStatus {
+  DRAFTED
+  OPTIONS_COLLECTED
+  RECOMMENDED
+  AWAITING_APPROVAL
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+  VERIFIED
+}
+
+enum RiskRating {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Effort {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ─── Agents ─────────────────────────────────────────────────────────────────
+
+model Agent {
+  id          String      @id @default(cuid())
+  name        String
+  shortName   String
+  group       AgentGroup
+  status      AgentStatus @default(IDLE)
+  currentTask String?
+  avatar      String      @default("🤖")
+  projectId   String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cards   Card[]
+
+  @@index([projectId])
+  @@map("agents")
+}
+
+enum AgentGroup {
+  GOVERNANCE
+  SDLC
+  ENGINEERING
+  PLATFORM
+  AI_COST
+}
+
+enum AgentStatus {
+  IDLE
+  WORKING
+  WAITING
+  BLOCKED
+}
+
+// ─── SDLC Pipeline ──────────────────────────────────────────────────────────
+
+model SDLCStage {
+  id         String     @id @default(cuid())
+  name       String
+  order      Int
+  status     StageStatus @default(PENDING)
+  gatePassed Boolean     @default(false)
+  projectId  String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("sdlc_stages")
+}
+
+enum StageStatus {
+  COMPLETED
+  ACTIVE
+  PENDING
+  BLOCKED
+}
+
+// ─── Documents ──────────────────────────────────────────────────────────────
+
+model Document {
+  id         String       @id @default(cuid())
+  title      String
+  type       DocumentType
+  status     DocStatus    @default(DRAFT)
+  content    String       @default("")
+  wordCount  Int          @default(0)
+  sections   Int          @default(0)
+  locked     Boolean      @default(false)
+  owner      String
+  ownerAvatar String     @default("📋")
+  projectId  String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("documents")
+}
+
+enum DocumentType {
+  BRD
+  SDD
+  API_SPEC
+  RUNBOOK
+  ADR
+}
+
+enum DocStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  PUBLISHED
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+model Notification {
+  id          String           @id @default(cuid())
+  type        NotificationType
+  title       String
+  description String           @default("")
+  read        Boolean          @default(false)
+  actionLabel String?
+  actionHref  String?
+  userId      String
+  projectId   String?
+  createdAt   DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  DECISION
+  COMPLETION
+  PR
+  FAILURE
+  AGENT
+  DEPLOY
+  SECURITY
+  BUILD
+}
+
+// ─── Audit Logs ─────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  target    String
+  details   String   @default("")
+  ipAddress String   @default("")
+  userId    String
+  projectId String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── LLM Usage Tracking ────────────────────────────────────────────────────
+
+model LLMUsage {
+  id         String   @id @default(cuid())
+  tokensUsed Int
+  cost       Float
+  provider   String   // openai, anthropic, ollama
+  model      String   @default("")
+  agentName  String   @default("")
+  projectId  String
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([createdAt])
+  @@map("llm_usage")
+}
+
+// ─── Billing / Transactions ─────────────────────────────────────────────────
+
+model Transaction {
+  id        String            @id @default(cuid())
+  userName  String
+  userEmail String
+  amount    Float
+  plan      UserPlan
+  status    TransactionStatus @default(COMPLETED)
+  createdAt DateTime          @default(now())
+
+  @@map("transactions")
+}
+
+enum TransactionStatus {
+  COMPLETED
+  PENDING
+  FAILED
+  REFUNDED
+}

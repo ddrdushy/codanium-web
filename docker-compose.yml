@@ -1,0 +1,62 @@
+# ─── AI Team Studio — Docker Compose ───
+# PostgreSQL + Next.js App
+
+services:
+  # ─── PostgreSQL Database ─────────────────────────────────────────────────────
+  db:
+    image: postgres:17-alpine
+    container_name: ats-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ats_user
+      POSTGRES_PASSWORD: ats_secret_2025
+      POSTGRES_DB: ai_team_studio
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ats_user -d ai_team_studio"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Next.js Application ─────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ats-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: docker-dev-secret-change-in-production
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ─── Prisma Studio (Dev Only) ────────────────────────────────────────────────
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deps
+    container_name: ats-prisma-studio
+    profiles:
+      - dev
+    ports:
+      - "5555:5555"
+    environment:
+      DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
+    command: npx prisma studio --port 5555 --browser none
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
