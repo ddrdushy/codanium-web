@@ -70,14 +70,22 @@ export interface SDLCProgress {
 }
 
 // ─── Project Types ───
+export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived';
+
 export interface Project {
   id: string;
   name: string;
   description: string;
   current_stage: SDLCStage;
+  status: ProjectStatus;
   created_at: string;
   card_count: number;
   active_agents: number;
+  total_agents: number;
+  completion: number; // 0-100
+  team_size: number;
+  last_activity: string;
+  color: string; // accent color for project
 }
 
 // ─── Event Types ───

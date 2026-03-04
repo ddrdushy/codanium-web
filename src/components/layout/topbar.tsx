@@ -99,7 +99,7 @@ export function Topbar() {
         </Tooltip>
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-md hover:bg-white/[0.04] transition-colors">
+        <button className="relative p-2 rounded-md hover:bg-foreground/[0.04] transition-colors">
           <Bell className="w-4 h-4 text-muted-foreground" />
           {pendingDecisions > 0 && (
             <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber pulse-dot" />
@@ -107,7 +107,7 @@ export function Topbar() {
         </button>
 
         {/* User Avatar */}
-        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber/30 to-blue-500/30 border border-white/10 flex items-center justify-center text-xs font-bold text-white/80">
+        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber/30 to-blue-500/30 border border-foreground/10 flex items-center justify-center text-xs font-bold text-foreground/80">
           U
         </div>
       </div>
