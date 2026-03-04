@@ -1,14 +1,20 @@
 'use client';
 
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
 import { mockSDLCProgress, mockAgents } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Search, Bell, Zap } from 'lucide-react';
+import { Search, Bell, Zap, Sun, Moon } from 'lucide-react';
 
 export function Topbar() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const activeAgents = mockAgents.filter(a => a.status === 'working');
   const pendingDecisions = 1;
+
+  useEffect(() => setMounted(true), []);
 
   return (
     <header className="h-14 border-b border-border bg-[var(--surface)]/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0">
@@ -23,7 +29,7 @@ export function Topbar() {
                     'w-6 h-1.5 rounded-full transition-all duration-300',
                     stage.status === 'completed' && 'bg-emerald-500',
                     stage.status === 'active' && 'bg-amber animate-pulse',
-                    stage.status === 'pending' && 'bg-white/[0.06]',
+                    stage.status === 'pending' && 'bg-foreground/[0.06]',
                     stage.status === 'blocked' && 'bg-red-500',
                   )}
                 />
@@ -42,11 +48,32 @@ export function Topbar() {
       {/* Right side controls */}
       <div className="flex items-center gap-3">
         {/* Search */}
-        <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/[0.04] border border-border text-sm text-muted-foreground hover:text-foreground hover:border-white/10 transition-all">
+        <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-foreground/[0.04] border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/10 transition-all">
           <Search className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Search...</span>
-          <kbd className="hidden sm:inline text-[10px] font-mono bg-white/[0.06] px-1.5 py-0.5 rounded">⌘K</kbd>
+          <kbd className="hidden sm:inline text-[10px] font-mono bg-foreground/[0.06] px-1.5 py-0.5 rounded">⌘K</kbd>
         </button>
+
+        {/* Theme Toggle */}
+        {mounted && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="p-2 rounded-md hover:bg-[var(--sidebar-accent)] border border-transparent hover:border-border transition-all"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-4 h-4 text-amber" />
+                ) : (
+                  <Moon className="w-4 h-4 text-muted-foreground" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Switch to {theme === 'dark' ? 'light' : 'dark'} mode
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Active agents indicator */}
         <Tooltip>

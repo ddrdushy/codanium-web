@@ -61,8 +61,53 @@
   --color-surface-overlay: var(--surface-overlay);
 }
 
+/* ─── Light Theme ─── */
 :root {
   --radius: 0.5rem;
+  --background: #fafafa;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #d97706;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #52525b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f0f0ff;
+  --accent-foreground: #09090b;
+  --destructive: #ef4444;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.06);
+  --ring: #d97706;
+  --chart-1: #d97706;
+  --chart-2: #2563eb;
+  --chart-3: #059669;
+  --chart-4: #7c3aed;
+  --chart-5: #dc2626;
+  --sidebar: #f8f8fa;
+  --sidebar-foreground: #52525b;
+  --sidebar-primary: #d97706;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(0, 0, 0, 0.03);
+  --sidebar-accent-foreground: #09090b;
+  --sidebar-border: rgba(0, 0, 0, 0.08);
+  --sidebar-ring: #d97706;
+  --amber: #d97706;
+  --amber-muted: rgba(217, 119, 6, 0.12);
+  --electric: #2563eb;
+  --electric-muted: rgba(37, 99, 235, 0.12);
+  --success: #059669;
+  --warning: #d97706;
+  --surface: #ffffff;
+  --surface-raised: #f8f8fa;
+  --surface-overlay: #f0f0f3;
+}
+
+/* ─── Dark Theme ─── */
+.dark {
   --background: #09090b;
   --foreground: #fafafa;
   --card: #0c0c0f;
@@ -114,7 +159,23 @@
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — dark */
+.dark ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Custom scrollbar — light */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -123,11 +184,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 /* Noise grain overlay */
@@ -164,9 +225,23 @@
 .card-lift {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.card-lift:hover {
+.dark .card-lift:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+:not(.dark) .card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* Grain overlay — hidden in light mode */
+:not(.dark) .grain::before {
+  display: none;
+}
+
+/* Kanban column — light mode */
+:not(.dark) .kanban-column:hover {
+  background: rgba(0, 0, 0, 0.02);
 }
 
 /* Pulse animation for active agents */

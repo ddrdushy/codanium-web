@@ -94,7 +94,7 @@ export function Sidebar() {
                       'flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150 group relative',
                       isActive
                         ? 'bg-amber/10 text-amber'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04]'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-[var(--sidebar-accent)]'
                     )}
                   >
                     {isActive && (
