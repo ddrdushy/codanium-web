@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Search, Bell, Zap, Sun, Moon, Shield, LogOut, ChevronDown, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCommandPaletteStore } from '@/lib/command-palette-store';
+import { useNotificationStore, selectUnreadCount } from '@/lib/notification-store';
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();
@@ -19,8 +20,9 @@ export function Topbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const activeAgents = mockAgents.filter(a => a.status === 'working');
-  const pendingDecisions = 1;
   const openPalette = useCommandPaletteStore((s) => s.open);
+  const openNotifications = useNotificationStore((s) => s.open);
+  const unreadCount = useNotificationStore(selectUnreadCount);
 
   useEffect(() => setMounted(true), []);
 
@@ -132,10 +134,25 @@ export function Topbar() {
         </Tooltip>
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-md hover:bg-foreground/[0.04] transition-colors">
+        <button
+          onClick={openNotifications}
+          className="relative p-2 rounded-md hover:bg-foreground/[0.04] transition-colors"
+        >
           <Bell className="w-4 h-4 text-muted-foreground" />
-          {pendingDecisions > 0 && (
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber pulse-dot" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 flex items-center justify-center">
+              {unreadCount > 9 ? (
+                <span className="w-4 h-4 rounded-full bg-amber text-[9px] font-bold text-black flex items-center justify-center">
+                  9+
+                </span>
+              ) : unreadCount > 0 ? (
+                <span className="min-w-[14px] h-3.5 rounded-full bg-amber text-[9px] font-bold text-black flex items-center justify-center px-0.5">
+                  {unreadCount}
+                </span>
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-amber pulse-dot" />
+              )}
+            </span>
           )}
         </button>
 
