@@ -4,6 +4,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SessionProvider } from "next-auth/react";
+import { CommandPaletteProvider } from "@/components/command-palette/command-palette-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +35,7 @@ export default function RootLayout({
           <ThemeProvider>
             <TooltipProvider delayDuration={200}>
               {children}
+              <CommandPaletteProvider />
             </TooltipProvider>
           </ThemeProvider>
         </SessionProvider>

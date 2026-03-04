@@ -3,8 +3,9 @@
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
-import { Sun, Moon, ChevronRight } from 'lucide-react';
+import { Sun, Moon, ChevronRight, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCommandPaletteStore } from '@/lib/command-palette-store';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const pageTitles: Record<string, string> = {
@@ -36,6 +37,8 @@ export function AdminTopbar() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
+  const openPalette = useCommandPaletteStore((s) => s.open);
+
   useEffect(() => setMounted(true), []);
 
   const currentPage = getPageTitle(pathname || '/admin');
@@ -61,6 +64,16 @@ export function AdminTopbar() {
 
       {/* Right side */}
       <div className="flex items-center gap-3">
+        {/* Search */}
+        <button
+          onClick={openPalette}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-foreground/[0.04] border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/10 transition-all"
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Search...</span>
+          <kbd className="hidden sm:inline text-[10px] font-mono bg-foreground/[0.06] px-1.5 py-0.5 rounded">⌘K</kbd>
+        </button>
+
         {/* Theme Toggle */}
         {mounted && (
           <Tooltip>

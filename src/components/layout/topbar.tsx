@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Search, Bell, Zap, Sun, Moon, Shield, LogOut, ChevronDown, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useCommandPaletteStore } from '@/lib/command-palette-store';
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();
@@ -19,6 +20,7 @@ export function Topbar() {
   const menuRef = useRef<HTMLDivElement>(null);
   const activeAgents = mockAgents.filter(a => a.status === 'working');
   const pendingDecisions = 1;
+  const openPalette = useCommandPaletteStore((s) => s.open);
 
   useEffect(() => setMounted(true), []);
 
@@ -76,7 +78,10 @@ export function Topbar() {
       {/* Right side controls */}
       <div className="flex items-center gap-3">
         {/* Search */}
-        <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-foreground/[0.04] border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/10 transition-all">
+        <button
+          onClick={openPalette}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-foreground/[0.04] border border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/10 transition-all"
+        >
           <Search className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Search...</span>
           <kbd className="hidden sm:inline text-[10px] font-mono bg-foreground/[0.06] px-1.5 py-0.5 rounded">⌘K</kbd>
