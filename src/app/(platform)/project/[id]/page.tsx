@@ -1,7 +1,11 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { fetchProject, fetchCards, fetchAgents, fetchDecisions } from '@/lib/api';
 import { mockProject, mockCards, mockAgents, mockDecisions, mockSDLCProgress } from '@/lib/mock-data';
+import type { Project, Card, Agent, Decision } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -11,47 +15,74 @@ import {
   Zap, TrendingUp
 } from 'lucide-react';
 
-const statCards = [
-  {
-    label: 'Total Cards',
-    value: '47',
-    sub: '18 in progress',
-    icon: Kanban,
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10 border-blue-500/20',
-    href: '/project/prj-001/board',
-  },
-  {
-    label: 'Active Agents',
-    value: '8',
-    sub: 'of 23 total',
-    icon: Bot,
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-500/10 border-emerald-500/20',
-    href: '/project/prj-001/agents',
-  },
-  {
-    label: 'Pending Decisions',
-    value: '1',
-    sub: 'awaiting approval',
-    icon: Scale,
-    color: 'text-amber',
-    bg: 'bg-amber/10 border-amber/20',
-    href: '/project/prj-001/decisions',
-  },
-  {
-    label: 'Blocked Items',
-    value: '2',
-    sub: 'need attention',
-    icon: AlertTriangle,
-    color: 'text-red-400',
-    bg: 'bg-red-500/10 border-red-500/20',
-    href: '/project/prj-001/board',
-  },
-];
+function getStatCards(projectId: string, cards: Card[], agents: Agent[], decisions: Decision[]) {
+  const inProgressCount = cards.filter(c => c.state === 'In Progress').length;
+  const activeAgentCount = agents.filter(a => a.status === 'working').length;
+  const pendingCount = decisions.filter(d => d.status === 'Awaiting Approval').length;
+  const blockedCount = cards.filter(c => c.state === 'Blocked').length;
+
+  return [
+    {
+      label: 'Total Cards',
+      value: String(cards.length),
+      sub: `${inProgressCount} in progress`,
+      icon: Kanban,
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/10 border-blue-500/20',
+      href: `/project/${projectId}/board`,
+    },
+    {
+      label: 'Active Agents',
+      value: String(activeAgentCount),
+      sub: `of ${agents.length} total`,
+      icon: Bot,
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-500/10 border-emerald-500/20',
+      href: `/project/${projectId}/agents`,
+    },
+    {
+      label: 'Pending Decisions',
+      value: String(pendingCount),
+      sub: 'awaiting approval',
+      icon: Scale,
+      color: 'text-amber',
+      bg: 'bg-amber/10 border-amber/20',
+      href: `/project/${projectId}/decisions`,
+    },
+    {
+      label: 'Blocked Items',
+      value: String(blockedCount),
+      sub: 'need attention',
+      icon: AlertTriangle,
+      color: 'text-red-400',
+      bg: 'bg-red-500/10 border-red-500/20',
+      href: `/project/${projectId}/board`,
+    },
+  ];
+}
 
 export default function ProjectDashboard() {
-  const activeAgents = mockAgents.filter(a => a.status === 'working');
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const [project, setProject] = useState<Project>(mockProject);
+  const [cards, setCards] = useState<Card[]>(mockCards);
+  const [agents, setAgents] = useState<Agent[]>(mockAgents);
+  const [decisions, setDecisions] = useState<Decision[]>(mockDecisions);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetchProject(projectId).then((p) => { if (p) setProject(p); }),
+      fetchCards(projectId).then(setCards).catch(() => {}),
+      fetchAgents(projectId).then(setAgents).catch(() => {}),
+      fetchDecisions(projectId).then(setDecisions).catch(() => {}),
+    ])
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, [projectId]);
+
+  const activeAgents = agents.filter(a => a.status === 'working');
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -61,8 +92,8 @@ export default function ProjectDashboard() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-2xl font-bold tracking-tight">{mockProject.name}</h1>
-        <p className="text-sm text-muted-foreground mt-1">{mockProject.description}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
       </motion.div>
 
       {/* SDLC Progress */}
@@ -106,7 +137,7 @@ export default function ProjectDashboard() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {statCards.map((stat, i) => {
+        {getStatCards(projectId, cards, agents, decisions).map((stat, i) => {
           const Icon = stat.icon;
           return (
             <motion.div
@@ -150,7 +181,7 @@ export default function ProjectDashboard() {
               <Bot className="w-4 h-4 text-emerald-400" />
               Active Agents
             </h3>
-            <Link href="/project/prj-001/agents" className="text-[11px] text-amber hover:underline flex items-center gap-0.5">
+            <Link href={`/project/${projectId}/agents`} className="text-[11px] text-amber hover:underline flex items-center gap-0.5">
               View all <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
@@ -184,12 +215,12 @@ export default function ProjectDashboard() {
               <Scale className="w-4 h-4 text-amber" />
               Recent Decisions
             </h3>
-            <Link href="/project/prj-001/decisions" className="text-[11px] text-amber hover:underline flex items-center gap-0.5">
+            <Link href={`/project/${projectId}/decisions`} className="text-[11px] text-amber hover:underline flex items-center gap-0.5">
               View all <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           <div className="space-y-2">
-            {mockDecisions.map(dec => (
+            {decisions.map(dec => (
               <div key={dec.decision_id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/[0.02] transition-colors">
                 <div className={cn(
                   'mt-0.5 w-2 h-2 rounded-full shrink-0',

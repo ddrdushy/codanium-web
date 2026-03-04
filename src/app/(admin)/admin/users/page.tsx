@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MoreHorizontal, Shield, User as UserIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table';
+import { fetchAdminUsers } from '@/lib/api';
 import { mockAdminUsers } from '@/lib/mock-admin-data';
 import { AdminUser, UserStatus } from '@/types';
 
@@ -82,26 +83,35 @@ const itemVariants = {
 };
 
 export default function AdminUsersPage() {
+  const [users, setUsers] = useState<AdminUser[]>(mockAdminUsers);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+
+  useEffect(() => {
+    fetchAdminUsers()
+      .then((data) => setUsers(data.users))
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, []);
 
   // Count users per status
   const statusCounts = useMemo(() => {
     const counts: Record<FilterTab, number> = {
-      all: mockAdminUsers.length,
+      all: users.length,
       active: 0,
       suspended: 0,
       pending: 0,
     };
-    mockAdminUsers.forEach((user) => {
+    users.forEach((user) => {
       counts[user.status] = (counts[user.status] || 0) + 1;
     });
     return counts;
-  }, []);
+  }, [users]);
 
   // Filtered users
   const filteredUsers = useMemo(() => {
-    return mockAdminUsers.filter((user) => {
+    return users.filter((user) => {
       const matchesTab = activeTab === 'all' || user.status === activeTab;
       const matchesSearch =
         search === '' ||
@@ -109,7 +119,7 @@ export default function AdminUsersPage() {
         user.email.toLowerCase().includes(search.toLowerCase());
       return matchesTab && matchesSearch;
     });
-  }, [search, activeTab]);
+  }, [users, search, activeTab]);
 
   return (
     <motion.div
@@ -295,7 +305,7 @@ export default function AdminUsersPage() {
           <p className="text-sm text-muted-foreground">
             Showing{' '}
             <span className="font-medium text-foreground">{filteredUsers.length}</span> of{' '}
-            <span className="font-medium text-foreground">{mockAdminUsers.length}</span>{' '}
+            <span className="font-medium text-foreground">{users.length}</span>{' '}
             users
           </p>
           <div className="flex items-center gap-2">

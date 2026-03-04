@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
+import { fetchProjects } from '@/lib/api';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { mockProjects } from '@/lib/mock-data';
@@ -28,21 +29,30 @@ type FilterMode = 'all' | 'active' | 'paused' | 'completed';
 
 export default function ProjectsPage() {
   const { data: session } = useSession();
+  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  useEffect(() => {
+    fetchProjects()
+      .then(setProjects)
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, []);
+
   const userName = session?.user?.name || 'User';
   const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-  const filteredProjects = mockProjects.filter(p => {
+  const filteredProjects = projects.filter(p => {
     if (filterMode !== 'all' && p.status !== filterMode) return false;
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
-  const activeCount = mockProjects.filter(p => p.status === 'active').length;
-  const totalAgents = mockProjects.reduce((a, p) => a + p.active_agents, 0);
+  const activeCount = projects.filter(p => p.status === 'active').length;
+  const totalAgents = projects.reduce((a, p) => a + p.active_agents, 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -80,7 +90,7 @@ export default function ProjectsPage() {
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {mockProjects.length} projects · {activeCount} active · {totalAgents} agents deployed
+              {projects.length} projects · {activeCount} active · {totalAgents} agents deployed
             </p>
           </div>
           <Button className="bg-amber text-background hover:bg-amber/90 font-semibold h-10 px-5">

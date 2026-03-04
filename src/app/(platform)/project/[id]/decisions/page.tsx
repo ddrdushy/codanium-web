@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fetchDecisions } from '@/lib/api';
 import { mockDecisions } from '@/lib/mock-data';
 import { Decision, RiskRating } from '@/types';
 import { cn } from '@/lib/utils';
@@ -32,8 +34,24 @@ const riskColors: Record<RiskRating, string> = {
 };
 
 export default function DecisionsPage() {
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const [decisions, setDecisions] = useState<Decision[]>(mockDecisions);
+  const [loading, setLoading] = useState(true);
   const [selectedDecision, setSelectedDecision] = useState<Decision | null>(mockDecisions[2]);
-  const pendingCount = mockDecisions.filter(d => d.status === 'Awaiting Approval').length;
+
+  useEffect(() => {
+    fetchDecisions(projectId)
+      .then((data) => {
+        setDecisions(data);
+        if (data.length > 0) setSelectedDecision(data[Math.min(2, data.length - 1)]);
+      })
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, [projectId]);
+
+  const pendingCount = decisions.filter(d => d.status === 'Awaiting Approval').length;
 
   return (
     <div className="flex h-full">
@@ -54,7 +72,7 @@ export default function DecisionsPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {mockDecisions.map((dec, i) => {
+          {decisions.map((dec, i) => {
             const config = statusConfig[dec.status] || statusConfig['Drafted'];
             const StatusIcon = config.icon;
             const isSelected = selectedDecision?.decision_id === dec.decision_id;

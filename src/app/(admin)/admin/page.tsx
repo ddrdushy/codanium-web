@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Users, FolderOpen, DollarSign, Bot } from 'lucide-react';
+import { fetchAdminStats } from '@/lib/api';
+import type { AdminStats } from '@/types';
 import {
   AreaChart,
   Area,
@@ -60,6 +62,16 @@ const itemVariants = {
 };
 
 export default function AdminDashboardPage() {
+  const [stats, setStats] = useState<AdminStats>(mockAdminStats);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAdminStats()
+      .then(setStats)
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, []);
+
   // Aggregate LLM usage costs by date (last 14 days)
   const costTrendData = useMemo(() => {
     const costByDate: Record<string, number> = {};
@@ -102,29 +114,29 @@ export default function AdminDashboardPage() {
       >
         <StatCard
           title="Total Users"
-          value={mockAdminStats.total_users.toLocaleString()}
-          change={mockAdminStats.users_growth}
+          value={stats.total_users.toLocaleString()}
+          change={stats.users_growth}
           icon={<Users className="w-5 h-5" />}
           color="#3b82f6"
         />
         <StatCard
           title="Total Projects"
-          value={mockAdminStats.total_projects.toLocaleString()}
-          change={mockAdminStats.projects_growth}
+          value={stats.total_projects.toLocaleString()}
+          change={stats.projects_growth}
           icon={<FolderOpen className="w-5 h-5" />}
           color="#f59e0b"
         />
         <StatCard
           title="Monthly LLM Cost"
-          value={`$${mockAdminStats.monthly_llm_cost.toLocaleString()}`}
-          change={mockAdminStats.cost_change}
+          value={`$${stats.monthly_llm_cost.toLocaleString()}`}
+          change={stats.cost_change}
           icon={<DollarSign className="w-5 h-5" />}
           color="#10b981"
         />
         <StatCard
           title="Active Agents"
-          value={mockAdminStats.active_agents.toLocaleString()}
-          change={mockAdminStats.agents_change}
+          value={stats.active_agents.toLocaleString()}
+          change={stats.agents_change}
           icon={<Bot className="w-5 h-5" />}
           color="#8b5cf6"
         />

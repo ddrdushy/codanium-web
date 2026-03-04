@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -12,6 +12,7 @@ import {
   Key,
   Shield,
 } from 'lucide-react';
+import { fetchAuditLog } from '@/lib/api';
 import { mockAuditLog } from '@/lib/mock-admin-data';
 import type { AuditLogEntry } from '@/types';
 
@@ -94,11 +95,20 @@ function formatTimestamp(timestamp: string): string {
 }
 
 export default function AuditLogPage() {
+  const [logs, setLogs] = useState<AuditLogEntry[]>(mockAuditLog);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
 
+  useEffect(() => {
+    fetchAuditLog()
+      .then((data) => setLogs(data.logs))
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, []);
+
   const filteredEntries = useMemo(() => {
-    return mockAuditLog.filter((entry: AuditLogEntry) => {
+    return logs.filter((entry: AuditLogEntry) => {
       // Filter by action prefix
       if (activeFilter && !entry.action.startsWith(activeFilter)) {
         return false;
@@ -116,7 +126,7 @@ export default function AuditLogPage() {
       }
       return true;
     });
-  }, [search, activeFilter]);
+  }, [logs, search, activeFilter]);
 
   return (
     <motion.div

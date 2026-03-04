@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import { fetchCards } from '@/lib/api';
 import { mockCards } from '@/lib/mock-data';
-import { CardState, CardType } from '@/types';
+import { Card, CardState, CardType } from '@/types';
 import { BoardColumn } from './board-column';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,20 +26,36 @@ const typeFilters: { type: CardType | 'All'; icon: React.ElementType; label: str
 ];
 
 export function BoardView() {
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const [cards, setCards] = useState<Card[]>(mockCards);
+  const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<CardType | 'All'>('All');
 
+  useEffect(() => {
+    if (projectId) {
+      fetchCards(projectId)
+        .then(setCards)
+        .catch(() => {/* keep mock data */})
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [projectId]);
+
   const filteredCards = activeFilter === 'All'
-    ? mockCards
-    : mockCards.filter(c => c.type === activeFilter);
+    ? cards
+    : cards.filter(c => c.type === activeFilter);
 
   const cardsByState = STATES.reduce((acc, state) => {
     acc[state] = filteredCards.filter(c => c.state === state);
     return acc;
-  }, {} as Record<CardState, typeof mockCards>);
+  }, {} as Record<CardState, typeof cards>);
 
-  const totalCards = mockCards.length;
-  const blockedCount = mockCards.filter(c => c.state === 'Blocked').length;
-  const doneCount = mockCards.filter(c => c.state === 'Done' || c.state === 'Released').length;
+  const totalCards = cards.length;
+  const blockedCount = cards.filter(c => c.state === 'Blocked').length;
+  const doneCount = cards.filter(c => c.state === 'Done' || c.state === 'Released').length;
 
   return (
     <div className="flex flex-col h-full">
@@ -80,7 +98,7 @@ export function BoardView() {
               {label}
               {type !== 'All' && (
                 <span className="text-[10px] opacity-60">
-                  {mockCards.filter(c => c.type === type).length}
+                  {cards.filter(c => c.type === type).length}
                 </span>
               )}
             </button>

@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fetchAgents, fetchCards } from '@/lib/api';
 import { mockAgents, mockCards } from '@/lib/mock-data';
-import { Agent, AgentGroup, AgentStatus } from '@/types';
+import { Agent, Card, AgentGroup, AgentStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -122,24 +124,46 @@ const eventIcons: Record<string, React.ElementType> = {
 type FilterMode = 'all' | 'working' | 'idle';
 
 export default function AgentsPage() {
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(mockAgents.find(a => a.status === 'working') || null);
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const [agents, setAgents] = useState<Agent[]>(mockAgents);
+  const [cards, setCards] = useState<Card[]>(mockCards);
+  const [loading, setLoading] = useState(true);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
+
+  useEffect(() => {
+    Promise.all([
+      fetchAgents(projectId).then(setAgents).catch(() => {}),
+      fetchCards(projectId).then(setCards).catch(() => {}),
+    ])
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, [projectId]);
+
+  // Select first working agent once agents are loaded
+  useEffect(() => {
+    if (!selectedAgent && agents.length > 0) {
+      setSelectedAgent(agents.find(a => a.status === 'working') || null);
+    }
+  }, [agents, selectedAgent]);
 
   const groups: AgentGroup[] = ['governance', 'sdlc', 'engineering', 'platform', 'ai_cost'];
 
-  const workingCount = mockAgents.filter(a => a.status === 'working').length;
-  const waitingCount = mockAgents.filter(a => a.status === 'waiting').length;
-  const idleCount = mockAgents.filter(a => a.status === 'idle').length;
+  const workingCount = agents.filter(a => a.status === 'working').length;
+  const waitingCount = agents.filter(a => a.status === 'waiting').length;
+  const idleCount = agents.filter(a => a.status === 'idle').length;
 
   const filteredAgents = filterMode === 'all'
-    ? mockAgents
+    ? agents
     : filterMode === 'working'
-      ? mockAgents.filter(a => a.status === 'working' || a.status === 'waiting')
-      : mockAgents.filter(a => a.status === 'idle');
+      ? agents.filter(a => a.status === 'working' || a.status === 'waiting')
+      : agents.filter(a => a.status === 'idle');
 
   // Get cards assigned to selected agent
   const agentCards = selectedAgent
-    ? mockCards.filter(c => c.owner_agent === selectedAgent.id)
+    ? cards.filter(c => c.owner_agent === selectedAgent.id)
     : [];
 
   return (
@@ -168,7 +192,7 @@ export default function AgentsPage() {
           {/* Filter tabs */}
           <div className="flex gap-1 bg-white/[0.03] rounded-lg p-0.5">
             {[
-              { key: 'all' as FilterMode, label: `All (${mockAgents.length})` },
+              { key: 'all' as FilterMode, label: `All (${agents.length})` },
               { key: 'working' as FilterMode, label: `Active (${workingCount + waitingCount})` },
               { key: 'idle' as FilterMode, label: `Idle (${idleCount})` },
             ].map(tab => (
@@ -288,7 +312,7 @@ export default function AgentsPage() {
         {/* Footer Stats */}
         <div className="px-4 py-3 border-t border-border bg-white/[0.01]">
           <div className="flex items-center justify-between text-[10px] text-muted-foreground/50">
-            <span>{mockAgents.length} total agents</span>
+            <span>{agents.length} total agents</span>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <Circle className="w-2 h-2 fill-emerald-500 text-emerald-500" /> {workingCount}
