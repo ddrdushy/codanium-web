@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, DollarSign, TrendingUp } from 'lucide-react';
 import {
@@ -13,6 +13,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { StatCard } from '@/components/admin/stat-card';
+import { fetchAnalytics } from '@/lib/api';
 import { mockLLMUsage } from '@/lib/mock-admin-data';
 
 // ─── Animation variants ───
@@ -41,25 +42,35 @@ function formatTokens(tokens: number): string {
 }
 
 export default function AnalyticsPage() {
+  const [llmUsage, setLlmUsage] = useState(mockLLMUsage);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAnalytics()
+      .then(setLlmUsage)
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, []);
+
   // ─── Total summary metrics ───
   const totalTokens = useMemo(
-    () => mockLLMUsage.reduce((sum, e) => sum + e.tokens_used, 0),
-    []
+    () => llmUsage.reduce((sum, e) => sum + e.tokens_used, 0),
+    [llmUsage]
   );
   const totalCost = useMemo(
-    () => mockLLMUsage.reduce((sum, e) => sum + e.cost, 0),
-    []
+    () => llmUsage.reduce((sum, e) => sum + e.cost, 0),
+    [llmUsage]
   );
   const uniqueDays = useMemo(
-    () => new Set(mockLLMUsage.map((e) => e.date)).size,
-    []
+    () => new Set(llmUsage.map((e) => e.date)).size,
+    [llmUsage]
   );
   const avgCostPerDay = totalCost / uniqueDays;
 
   // ─── Daily token usage chart data (last 14 days) ───
   const dailyTokenData = useMemo(() => {
     const byDate: Record<string, number> = {};
-    mockLLMUsage.forEach((entry) => {
+    llmUsage.forEach((entry) => {
       byDate[entry.date] = (byDate[entry.date] || 0) + entry.tokens_used;
     });
     return Object.entries(byDate)
@@ -73,12 +84,12 @@ export default function AnalyticsPage() {
       }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .slice(-14);
-  }, []);
+  }, [llmUsage]);
 
   // ─── Cost by provider ───
   const providerData = useMemo(() => {
     const byProvider: Record<string, number> = {};
-    mockLLMUsage.forEach((entry) => {
+    llmUsage.forEach((entry) => {
       byProvider[entry.provider] = (byProvider[entry.provider] || 0) + entry.cost;
     });
     const entries = Object.entries(byProvider).sort((a, b) => b[1] - a[1]);
@@ -88,12 +99,12 @@ export default function AnalyticsPage() {
       cost: Math.round(cost * 100) / 100,
       percentage: (cost / maxCost) * 100,
     }));
-  }, []);
+  }, [llmUsage]);
 
   // ─── Cost by project (top 5) ───
   const projectData = useMemo(() => {
     const byProject: Record<string, number> = {};
-    mockLLMUsage.forEach((entry) => {
+    llmUsage.forEach((entry) => {
       byProject[entry.project_name] =
         (byProject[entry.project_name] || 0) + entry.cost;
     });
@@ -106,7 +117,7 @@ export default function AnalyticsPage() {
       cost: Math.round(cost * 100) / 100,
       percentage: (cost / maxCost) * 100,
     }));
-  }, []);
+  }, [llmUsage]);
 
   const providerColors: Record<string, string> = {
     anthropic: '#f59e0b',

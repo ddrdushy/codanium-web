@@ -22,10 +22,11 @@ export async function GET(request: NextRequest) {
           select: {
             members: true,
             cards: true,
+            agents: true,
           },
         },
         agents: {
-          where: { status: { not: 'IDLE' } },
+          where: { status: 'WORKING' },
           select: { id: true },
         },
       },
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
       owner: project.owner,
       memberCount: project._count.members,
       cardCount: project._count.cards,
+      totalAgents: project._count.agents,
       activeAgentCount: project.agents.length,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,

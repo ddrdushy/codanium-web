@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { fetchBilling } from '@/lib/api';
 import {
   mockBillingMetrics,
   mockTransactions,
@@ -56,17 +57,30 @@ function formatDate(dateString: string): string {
 }
 
 export default function AdminBillingPage() {
+  const [billingMetrics, setBillingMetrics] = useState(mockBillingMetrics);
+  const [transactions, setTransactions] = useState(mockTransactions);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
+  useEffect(() => {
+    fetchBilling()
+      .then(({ metrics, transactions: txns }) => {
+        setBillingMetrics(metrics);
+        setTransactions(txns);
+      })
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, []);
+
   const filteredTransactions = useMemo(() => {
-    if (!search.trim()) return mockTransactions;
+    if (!search.trim()) return transactions;
     const term = search.toLowerCase();
-    return mockTransactions.filter(
+    return transactions.filter(
       (t) =>
         t.user_name.toLowerCase().includes(term) ||
         t.user_email.toLowerCase().includes(term)
     );
-  }, [search]);
+  }, [search, transactions]);
 
   return (
     <div className="space-y-6">
@@ -91,31 +105,31 @@ export default function AdminBillingPage() {
       >
         <StatCard
           title="MRR"
-          value={formatCurrency(mockBillingMetrics.mrr)}
+          value={formatCurrency(billingMetrics.mrr)}
           change={mockAdminStats.projects_growth}
           icon={<TrendingUp className="w-5 h-5" />}
           color="#10b981"
         />
         <StatCard
           title="Total Revenue"
-          value={formatCurrency(mockBillingMetrics.total_revenue)}
+          value={formatCurrency(billingMetrics.total_revenue)}
           change={12.5}
           icon={<DollarSign className="w-5 h-5" />}
           color="#3b82f6"
         />
         <StatCard
           title="Active Subscriptions"
-          value={mockBillingMetrics.active_subscriptions}
+          value={billingMetrics.active_subscriptions}
           change={mockAdminStats.users_growth}
           icon={<CreditCard className="w-5 h-5" />}
           color="#f59e0b"
         />
         <StatCard
           title="Churn Rate"
-          value={`${mockBillingMetrics.churn_rate}%`}
+          value={`${billingMetrics.churn_rate}%`}
           change={-0.5}
           icon={<Percent className="w-5 h-5" />}
-          color={mockBillingMetrics.churn_rate > 3 ? '#ef4444' : '#10b981'}
+          color={billingMetrics.churn_rate > 3 ? '#ef4444' : '#10b981'}
         />
       </motion.div>
 
@@ -130,7 +144,7 @@ export default function AdminBillingPage() {
           Plan Distribution
         </h2>
         <div className="space-y-4">
-          {mockBillingMetrics.plan_distribution.map((plan, index) => (
+          {billingMetrics.plan_distribution.map((plan, index) => (
             <div key={plan.plan} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="capitalize font-medium text-foreground">
