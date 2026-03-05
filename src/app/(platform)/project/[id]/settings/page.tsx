@@ -9,7 +9,10 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings, DollarSign, Bell, Palette, Sparkles, CheckCircle2, Info } from 'lucide-react';
+import {
+  Settings, DollarSign, Bell, Palette, Sparkles, CheckCircle2, Info,
+  Zap, Wrench, Eye, EyeOff, Loader2, AlertTriangle, Server, XCircle,
+} from 'lucide-react';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -46,6 +49,15 @@ const SPENDING_CATEGORIES = [
 
 const BUDGET_ALERT_OPTIONS = ['50%', '75%', '90%'];
 
+const PROVIDER_OPTIONS = [
+  { id: 'openai', label: 'OpenAI', icon: Zap, description: 'GPT-4o, GPT-4, GPT-3.5 Turbo', defaultModel: 'gpt-4o' },
+  { id: 'anthropic', label: 'Anthropic', icon: Sparkles, description: 'Claude Sonnet, Claude Haiku', defaultModel: 'claude-sonnet-4-20250514' },
+  { id: 'ollama', label: 'Ollama', icon: Server, description: 'Run models locally — free', defaultModel: 'llama3' },
+  { id: 'custom', label: 'Custom', icon: Wrench, description: 'Any OpenAI-compatible endpoint', defaultModel: '' },
+] as const;
+
+type ProviderType = typeof PROVIDER_OPTIONS[number]['id'];
+
 const fadeUp = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } };
 
 export default function SettingsPage() {
@@ -67,6 +79,18 @@ export default function SettingsPage() {
     Object.fromEntries(NOTIFICATION_OPTIONS.map(n => [n.id, n.defaultOn]))
   );
 
+  // AI Provider (BYOM) state
+  const [selectedProvider, setSelectedProvider] = useState<ProviderType>('openai');
+  const [apiKey, setApiKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [defaultModel, setDefaultModel] = useState('gpt-4o');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
+  const [existingConfig, setExistingConfig] = useState<any | null>(null);
+  const [savingProvider, setSavingProvider] = useState(false);
+  const [savedProvider, setSavedProvider] = useState(false);
+
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
       .then(r => r.json())
@@ -77,6 +101,88 @@ export default function SettingsPage() {
       })
       .catch(() => {});
   }, [projectId]);
+
+  // Load existing LLM config on mount
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/llm/config`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.provider) {
+          setExistingConfig(data);
+          setSelectedProvider(data.provider);
+          setApiKey(data.apiKey ?? '');
+          setBaseUrl(data.baseUrl ?? '');
+          setDefaultModel(data.model ?? '');
+        }
+      })
+      .catch(() => {});
+  }, [projectId]);
+
+  const handleProviderChange = (provider: ProviderType) => {
+    setSelectedProvider(provider);
+    setTestStatus('idle');
+    setTestMessage('');
+    const option = PROVIDER_OPTIONS.find(p => p.id === provider);
+    setDefaultModel(option?.defaultModel ?? '');
+    if (provider === 'ollama') {
+      setBaseUrl('http://localhost:11434');
+      setApiKey('');
+    } else if (provider === 'custom') {
+      setBaseUrl('');
+    } else {
+      setBaseUrl('');
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTestStatus('testing');
+    setTestMessage('');
+    try {
+      const res = await fetch('/api/llm/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          apiKey,
+          baseUrl,
+          model: defaultModel,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestStatus('success');
+        setTestMessage(data.modelsCount ? `Connected! ${data.modelsCount} models available.` : 'Connected!');
+      } else {
+        setTestStatus('error');
+        setTestMessage(data.error ?? 'Connection failed. Check your configuration.');
+      }
+    } catch {
+      setTestStatus('error');
+      setTestMessage('Connection failed. Check your configuration.');
+    }
+  };
+
+  const handleSaveProviderConfig = async () => {
+    setSavingProvider(true);
+    try {
+      await fetch(`/api/projects/${projectId}/llm/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          apiKey,
+          baseUrl,
+          model: defaultModel,
+        }),
+      });
+      setSavedProvider(true);
+      setTimeout(() => setSavedProvider(false), 2000);
+    } catch { /* silently fail */ }
+    finally { setSavingProvider(false); }
+  };
+
+  const showApiKeyInput = selectedProvider !== 'ollama';
+  const showBaseUrlInput = selectedProvider === 'ollama' || selectedProvider === 'custom';
 
   const handleSaveProject = async () => {
     setSaving(true);
@@ -295,8 +401,176 @@ export default function SettingsPage() {
           </div>
         </motion.section>
 
-        {/* ─── Section 3: Budget & Spending ─────────────────────────────── */}
-        <motion.section {...fadeUp} transition={{ delay: 0.15 }}>
+        {/* ─── Section 3: AI Provider (BYOM) ──────────────────────────── */}
+        <motion.section {...fadeUp} transition={{ delay: 0.12 }}>
+          <div className="rounded-xl border border-border bg-[var(--surface-raised)] p-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="w-4 h-4 text-amber" />
+              <h2 className="text-lg font-bold text-foreground">AI Provider</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              Connect your own model provider to power your AI team
+            </p>
+
+            {/* Demo Mode Banner */}
+            {!existingConfig && (
+              <div className="flex items-start gap-3 rounded-xl border border-amber/30 bg-amber/10 px-4 py-3 mb-6">
+                <AlertTriangle className="w-4 h-4 text-amber mt-0.5 shrink-0" />
+                <p className="text-sm text-amber">
+                  Your AI team is running in demo mode. Connect a model provider to get real AI responses.
+                </p>
+              </div>
+            )}
+
+            {/* Provider Selection */}
+            <div className="mb-6">
+              <Label className="text-sm font-medium mb-3 block">Provider</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {PROVIDER_OPTIONS.map(option => {
+                  const Icon = option.icon;
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => handleProviderChange(option.id)}
+                      className={cn(
+                        'text-left rounded-xl border px-4 py-3.5 transition-all',
+                        selectedProvider === option.id
+                          ? 'border-amber/40 bg-amber/5'
+                          : 'border-border bg-[var(--surface)] hover:border-border/80'
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          'w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors',
+                          selectedProvider === option.id
+                            ? 'border-amber'
+                            : 'border-muted-foreground/30'
+                        )}>
+                          {selectedProvider === option.id && (
+                            <div className="w-2 h-2 rounded-full bg-amber" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Icon className={cn(
+                            'w-4 h-4',
+                            selectedProvider === option.id ? 'text-amber' : 'text-muted-foreground'
+                          )} />
+                          <div>
+                            <p className={cn(
+                              'text-sm font-medium',
+                              selectedProvider === option.id ? 'text-foreground' : 'text-muted-foreground'
+                            )}>
+                              {option.label}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{option.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-border my-6" />
+
+            {/* API Key */}
+            {showApiKeyInput && (
+              <div className="space-y-2 mb-5">
+                <Label htmlFor="api-key" className="text-sm font-medium">API Key</Label>
+                <div className="relative">
+                  <Input
+                    id="api-key"
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKey}
+                    onChange={e => setApiKey(e.target.value)}
+                    placeholder={selectedProvider === 'openai' ? 'sk-...' : selectedProvider === 'anthropic' ? 'sk-ant-...' : 'Your API key'}
+                    className="bg-[var(--surface)] border-border pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">Your key is stored encrypted and never shared</p>
+              </div>
+            )}
+
+            {/* Base URL */}
+            {showBaseUrlInput && (
+              <div className="space-y-2 mb-5">
+                <Label htmlFor="base-url" className="text-sm font-medium">Base URL</Label>
+                <Input
+                  id="base-url"
+                  value={baseUrl}
+                  onChange={e => setBaseUrl(e.target.value)}
+                  placeholder={selectedProvider === 'ollama' ? 'http://localhost:11434' : 'https://your-endpoint.com/v1'}
+                  className="bg-[var(--surface)] border-border"
+                />
+              </div>
+            )}
+
+            {/* Model Selector */}
+            <div className="space-y-2 mb-6">
+              <Label htmlFor="default-model" className="text-sm font-medium">Model</Label>
+              <Input
+                id="default-model"
+                value={defaultModel}
+                onChange={e => setDefaultModel(e.target.value)}
+                placeholder={selectedProvider === 'custom' ? 'Enter model name' : undefined}
+                className="bg-[var(--surface)] border-border"
+              />
+            </div>
+
+            {/* Test Connection Result */}
+            {testStatus === 'success' && (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 mb-5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <p className="text-sm text-emerald-400">{testMessage}</p>
+              </div>
+            )}
+            {testStatus === 'error' && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 mb-5">
+                <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                <p className="text-sm text-red-400">{testMessage}</p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                onClick={handleTestConnection}
+                disabled={testStatus === 'testing'}
+                variant="outline"
+                className="border-border text-foreground hover:bg-white/5"
+              >
+                {testStatus === 'testing' ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Testing...
+                  </span>
+                ) : 'Test Connection'}
+              </Button>
+              <Button
+                onClick={handleSaveProviderConfig}
+                disabled={savingProvider}
+                className="bg-amber text-black hover:bg-amber/90 font-medium"
+              >
+                {savedProvider ? (
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" /> Saved!
+                  </span>
+                ) : savingProvider ? 'Saving...' : 'Save Configuration'}
+              </Button>
+            </div>
+          </div>
+        </motion.section>
+
+        {/* ─── Section 4: Budget & Spending ─────────────────────────────── */}
+        <motion.section {...fadeUp} transition={{ delay: 0.18 }}>
           <div className="rounded-xl border border-border bg-[var(--surface-raised)] p-6">
             <div className="flex items-center gap-2 mb-1">
               <DollarSign className="w-4 h-4 text-amber" />
@@ -397,8 +671,8 @@ export default function SettingsPage() {
           </div>
         </motion.section>
 
-        {/* ─── Section 4: Notifications ─────────────────────────────────── */}
-        <motion.section {...fadeUp} transition={{ delay: 0.2 }}>
+        {/* ─── Section 5: Notifications ─────────────────────────────────── */}
+        <motion.section {...fadeUp} transition={{ delay: 0.24 }}>
           <div className="rounded-xl border border-border bg-[var(--surface-raised)] p-6">
             <div className="flex items-center gap-2 mb-1">
               <Bell className="w-4 h-4 text-amber" />

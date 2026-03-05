@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAgents } from '@/lib/api';
 import { mockAgents } from '@/lib/mock-data';
+import { useAgentStream } from '@/lib/hooks/use-agent-stream';
 import { Agent } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +14,7 @@ import {
   Send, Bot, User, Sparkles, ChevronDown, Paperclip,
   Code2, FileText, CheckCircle2, AlertTriangle, Clock,
   MessageSquare, Zap, Eye, Terminal, Copy, ThumbsUp,
-  RotateCcw, ArrowRight, Loader2
+  RotateCcw, ArrowRight, Loader2, Square
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -60,12 +61,25 @@ export default function ChatPage() {
   const [agents, setAgents] = useState<Agent[]>(mockAgents);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [sending, setSending] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showThinking, setShowThinking] = useState<string | null>(null);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [showStreamThinking, setShowStreamThinking] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const {
+    send: streamSend,
+    stop: streamStop,
+    isStreaming,
+    currentAgent,
+    streamContent,
+    streamThinking,
+    artifacts: streamArtifacts,
+    completedMessageId,
+    usage,
+    error: streamError,
+  } = useAgentStream();
 
   useEffect(() => {
     if (!projectId) return;
@@ -104,21 +118,42 @@ export default function ChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamContent, streamThinking]);
+
+  // When the stream completes, add the final agent message to the messages array
+  useEffect(() => {
+    if (completedMessageId && !isStreaming && streamContent) {
+      const respondingAgent = currentAgent
+        ? agents.find(a => a.shortName === currentAgent.shortName) ?? agents[0]
+        : agents[0];
+
+      const agentMsg: ChatMessage = {
+        id: completedMessageId,
+        role: 'agent',
+        agent: respondingAgent,
+        content: streamContent,
+        thinking: streamThinking || undefined,
+        artifacts: streamArtifacts.length > 0 ? streamArtifacts : undefined,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, agentMsg]);
+    }
+  }, [completedMessageId, isStreaming]);
 
   const activeAgents = agents.filter(a => a.status === 'working' || a.status === 'waiting');
 
   const handleSend = useCallback(async () => {
     const text = inputValue.trim();
-    if (!text || sending) return;
+    if (!text || isStreaming) return;
 
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const tempId = `temp-${Date.now()}`;
     const userMsg: ChatMessage = { id: tempId, role: 'user', content: text, timestamp: now };
     setMessages(prev => [...prev, userMsg]);
     setInputValue('');
-    setSending(true);
+    setShowStreamThinking(true);
 
+    // Save user message to DB
     try {
       const res = await fetch(`/api/projects/${projectId}/chat`, {
         method: 'POST',
@@ -129,33 +164,13 @@ export default function ChatPage() {
         const saved = await res.json();
         setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: saved.id } : m));
       }
-
-      setTimeout(() => {
-        const orchestrator = agents.find(a => a.shortName === 'ORC') ?? agents[0];
-        if (orchestrator) {
-          const ackMsg: ChatMessage = {
-            id: `ack-${Date.now()}`,
-            role: 'agent',
-            agent: orchestrator,
-            content: `Received your request. I'm routing this to the appropriate agent for analysis. Stand by...`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          };
-          setMessages(prev => [...prev, ackMsg]);
-
-          fetch(`/api/projects/${projectId}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              role: 'AGENT', content: ackMsg.content, agentId: orchestrator.id,
-            }),
-          }).catch(() => {});
-        }
-        setSending(false);
-      }, 1200);
     } catch {
-      setSending(false);
+      // DB save failed — user message is still shown optimistically
     }
-  }, [inputValue, sending, projectId, agents]);
+
+    // Start AI streaming via the orchestration engine
+    streamSend(projectId, text, selectedAgent?.shortName);
+  }, [inputValue, isStreaming, projectId, selectedAgent, streamSend]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -322,9 +337,113 @@ export default function ChatPage() {
               </motion.div>
             ))}
 
-            {sending && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-xs text-muted-foreground/50">
-                <Loader2 className="w-3 h-3 animate-spin" /> Your AI team is working on it...
+            {isStreaming && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <div className="flex items-start gap-3">
+                  <div className="relative shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-[var(--surface)] border border-border flex items-center justify-center text-base">
+                      {currentAgent
+                        ? (agents.find(a => a.shortName === currentAgent.shortName)?.avatar || '🤖')
+                        : '🤖'}
+                    </div>
+                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber border-2 border-background animate-pulse" />
+                  </div>
+                  <div className="max-w-[85%] space-y-2 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold text-foreground">
+                        {currentAgent?.name ?? 'AI Team'}
+                      </span>
+                      <Loader2 className="w-3 h-3 animate-spin text-amber" />
+                      <span className="text-[10px] text-muted-foreground/40">streaming...</span>
+                    </div>
+
+                    {streamThinking && (
+                      <>
+                        <button
+                          onClick={() => setShowStreamThinking(!showStreamThinking)}
+                          className="flex items-center gap-1.5 text-[10px] text-violet-400/70 hover:text-violet-400 transition-colors"
+                        >
+                          <Eye className="w-3 h-3" />
+                          {showStreamThinking ? 'Hide reasoning' : 'Show reasoning'}
+                        </button>
+                        <AnimatePresence>
+                          {showStreamThinking && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="bg-violet-500/[0.06] border border-violet-500/15 rounded-lg px-3 py-2 text-[11px] text-muted-foreground/70 italic">
+                                <span className="text-violet-400 font-semibold not-italic text-[10px] uppercase tracking-wider">Reasoning</span>
+                                <p className="mt-1 whitespace-pre-wrap">{streamThinking}</p>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </>
+                    )}
+
+                    {streamContent ? (
+                      <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
+                        <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                          {streamContent.split('\n').map((line, j) => {
+                            if (line.startsWith('**') && line.endsWith('**')) {
+                              return <p key={j} className="font-semibold text-foreground mt-2 first:mt-0">{line.replace(/\*\*/g, '')}</p>;
+                            }
+                            if (line.match(/^\d+\.\s\*\*/)) {
+                              const parts = line.match(/^(\d+\.)\s\*\*(.+?)\*\*\s*[—–-]?\s*(.*)/);
+                              if (parts) {
+                                return (
+                                  <p key={j} className="mt-1.5 pl-2">
+                                    <span className="text-amber font-mono text-[11px]">{parts[1]}</span>{' '}
+                                    <span className="font-semibold text-foreground">{parts[2]}</span>
+                                    {parts[3] && <span className="text-muted-foreground"> — {parts[3]}</span>}
+                                  </p>
+                                );
+                              }
+                            }
+                            if (line === '') return <br key={j} />;
+                            return <p key={j} className="mt-1 first:mt-0">{line}</p>;
+                          })}
+                          <span className="inline-block w-1.5 h-4 bg-amber/60 animate-pulse ml-0.5 -mb-0.5 rounded-sm" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Your AI team is working on it...
+                        </div>
+                      </div>
+                    )}
+
+                    {streamArtifacts.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {streamArtifacts.map((art, j) => (
+                          <Badge key={j} variant="outline" className="text-[10px] bg-white/[0.03] animate-in fade-in">
+                            {art.type === 'code' ? <Code2 className="w-2.5 h-2.5 mr-1 text-emerald-400" /> : <FileText className="w-2.5 h-2.5 mr-1 text-blue-400" />}
+                            {art.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10"
+                      onClick={streamStop}
+                    >
+                      <Square className="w-2.5 h-2.5 mr-1 fill-current" /> Stop generating
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {streamError && !isStreaming && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-xs text-red-400/70 bg-red-500/[0.06] border border-red-500/15 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-3 h-3 shrink-0" /> {streamError}
               </motion.div>
             )}
 
@@ -410,10 +529,10 @@ export default function ChatPage() {
                 <Button
                   size="sm"
                   className="h-7 px-3 bg-amber text-background hover:bg-amber/90 rounded-xl"
-                  disabled={!inputValue.trim() || sending}
+                  disabled={!inputValue.trim() || isStreaming}
                   onClick={handleSend}
                 >
-                  {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  {isStreaming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 </Button>
               </div>
               <div className="flex items-center justify-between mt-1.5 px-1">

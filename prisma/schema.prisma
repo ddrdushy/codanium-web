@@ -120,11 +120,14 @@ model Project {
   documents     Document[]
   auditLogs     AuditLog[]
   notifications Notification[]
-  chatMessages    ChatMessage[]
-  gitBranches     GitBranch[]
-  gitPullRequests GitPullRequest[]
-  gitReleases     GitRelease[]
-  wireframes      Wireframe[]
+  chatMessages      ChatMessage[]
+  gitBranches       GitBranch[]
+  gitPullRequests   GitPullRequest[]
+  gitReleases       GitRelease[]
+  wireframes        Wireframe[]
+  events            Event[]
+  artifacts         Artifact[]
+  orchestrationRuns OrchestrationRun[]
 
   @@map("projects")
 }
@@ -466,13 +469,15 @@ enum TransactionStatus {
 // ─── Chat Messages ─────────────────────────────────────────────────────────
 
 model ChatMessage {
-  id         String      @id @default(cuid())
-  role       MessageRole
-  content    String
-  thinking   String?
-  agentId    String?
-  projectId  String
-  createdAt  DateTime    @default(now())
+  id                  String      @id @default(cuid())
+  role                MessageRole
+  content             String
+  thinking            String?
+  agentId             String?
+  projectId           String
+  orchestrationRunId  String?     // Links to the OrchestrationRun that produced this message
+  artifacts           String?     // JSON array of {name, type}
+  createdAt           DateTime    @default(now())
 
   agent   Agent?  @relation(fields: [agentId], references: [id])
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -607,4 +612,116 @@ enum DeviceType {
   DESKTOP
   MOBILE
   TABLET
+}
+
+// ─── LLM Provider Configuration (BYOM) ────────────────────────────────────
+
+model LLMProviderConfig {
+  id              String      @id @default(cuid())
+  provider        String      // 'openai' | 'anthropic' | 'ollama' | 'custom'
+  displayName     String      @default("")
+  apiKeyEncrypted String?     // AES-256-GCM encrypted
+  baseUrl         String?     // For Ollama, custom endpoints
+  organizationId  String?     // For OpenAI
+  defaultModel    String
+  isActive        Boolean     @default(true)
+  scope           ConfigScope // USER, PROJECT, AGENT
+
+  // Polymorphic ownership
+  userId         String?
+  projectId      String?
+  agentShortName String?      // When scope = AGENT, which agent this config applies to
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([projectId, agentShortName])
+  @@map("llm_provider_configs")
+}
+
+enum ConfigScope {
+  USER
+  PROJECT
+  AGENT
+}
+
+// ─── Orchestration Events ──────────────────────────────────────────────────
+
+model Event {
+  id        String   @id @default(cuid())
+  type      String   // 'MessageProcessed', 'TaskCreated', 'DecisionRequested', etc.
+  actor     String   // Agent shortName
+  payload   String   @default("{}") // JSON stringified
+  projectId String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, type])
+  @@index([createdAt])
+  @@map("events")
+}
+
+// ─── Agent Artifacts ───────────────────────────────────────────────────────
+
+model Artifact {
+  id         String       @id @default(cuid())
+  name       String       // e.g., 'gateway-refactor.md'
+  type       ArtifactType
+  content    String       @default("")
+  ownerAgent String       // Agent shortName that produced it
+  version    Int          @default(1)
+  messageId  String?      // ChatMessage that generated this artifact
+  projectId  String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, ownerAgent])
+  @@map("artifacts")
+}
+
+enum ArtifactType {
+  CODE
+  DOCUMENT
+  CONFIG
+  WIREFRAME
+  TEST
+}
+
+// ─── Orchestration Runs ────────────────────────────────────────────────────
+
+model OrchestrationRun {
+  id           String    @id @default(cuid())
+  status       RunStatus @default(RUNNING)
+  userMessage  String
+  routedTo     String    // Agent shortName
+  autoRouted   Boolean   @default(false)
+  delegations  String[]  // Chain of agent shortNames
+  tokensTotal  Int       @default(0)
+  costTotal    Float     @default(0)
+  latencyMs    Int       @default(0)
+  errorMessage String?
+  projectId    String
+  userId       String
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([createdAt])
+  @@map("orchestration_runs")
+}
+
+enum RunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  TIMEOUT
 }
