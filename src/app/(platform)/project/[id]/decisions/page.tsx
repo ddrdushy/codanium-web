@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import {
   Scale, CheckCircle2, Clock, AlertTriangle, XCircle,
   ChevronRight, Shield, Zap, ThumbsUp, ThumbsDown,
-  ArrowRight, ExternalLink
+  ArrowRight, ExternalLink, Sparkles, Loader2
 } from 'lucide-react';
 
 const statusConfig: Record<string, { color: string; bg: string; icon: React.ElementType }> = {
@@ -80,6 +80,20 @@ export default function DecisionsPage() {
     } finally {
       setApproving(false);
     }
+  };
+
+  const handleReject = async (decisionId: string) => {
+    try {
+      await fetch(`/api/projects/${projectId}/decisions/${decisionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'DRAFTED' }),
+      });
+      const updated = await fetchDecisions(projectId);
+      setDecisions(updated);
+      const sel = updated.find(d => d.decision_id === decisionId);
+      if (sel) setSelectedDecision(sel);
+    } catch {}
   };
 
   const pendingCount = decisions.filter(d => d.status === 'Awaiting Approval').length;
@@ -152,6 +166,34 @@ export default function DecisionsPage() {
               transition={{ duration: 0.2 }}
               className="p-6 max-w-3xl"
             >
+              {/* AI Recommends Banner */}
+              {selectedDecision.status === 'Awaiting Approval' && selectedDecision.recommendation && (
+                <div className="mb-6 rounded-xl border-2 border-amber/30 bg-gradient-to-r from-amber/[0.08] to-orange-500/[0.05] p-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-5 h-5 text-amber" />
+                    <h3 className="text-base font-bold text-amber">Your AI Team Recommends</h3>
+                  </div>
+                  <p className="text-sm text-foreground mb-4">{selectedDecision.recommendation}</p>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      size="sm"
+                      disabled={approving}
+                      onClick={() => {
+                        const recommended = selectedDecision.options.find(o => selectedDecision.recommendation?.includes(o.name));
+                        if (recommended) handleApprove(selectedDecision.decision_id, recommended.name);
+                      }}
+                      className="bg-amber text-black hover:bg-amber/90 font-semibold px-6"
+                    >
+                      {approving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <>
+                        <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                        Approve Recommendation
+                      </>}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">or review all options below</span>
+                  </div>
+                </div>
+              )}
+
               {/* Header */}
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
@@ -186,7 +228,8 @@ export default function DecisionsPage() {
               <div className="mb-6">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <Scale className="w-4 h-4 text-amber" />
-                  Options
+                  Available Options
+                  <span className="text-xs font-normal text-muted-foreground">— compare and choose</span>
                 </h3>
                 <div className="space-y-3">
                   {selectedDecision.options.map((option, i) => {
@@ -199,7 +242,7 @@ export default function DecisionsPage() {
                         className={cn(
                           'rounded-xl border p-4 transition-all',
                           isApproved && 'border-emerald-500/30 bg-emerald-500/[0.04] glow-green',
-                          isRecommended && !isApproved && 'border-amber/20 bg-amber/[0.03]',
+                          isRecommended && !isApproved && 'border-amber/30 bg-amber/[0.04] border-l-4 border-l-amber',
                           !isApproved && !isRecommended && 'border-border bg-[var(--surface)]'
                         )}
                       >
@@ -222,7 +265,7 @@ export default function DecisionsPage() {
                               {option.risk}
                             </Badge>
                             <Badge variant="outline" className="text-[9px] bg-white/[0.04]">
-                              Effort: {option.effort}
+                              Timeline: {option.effort}
                             </Badge>
                           </div>
                         </div>
@@ -254,15 +297,32 @@ export default function DecisionsPage() {
 
                         {/* Approve button for pending decisions */}
                         {selectedDecision.status === 'Awaiting Approval' && !isApproved && (
-                          <div className="mt-3 pt-3 border-t border-border">
+                          <div className="mt-3 pt-3 border-t border-border flex items-center gap-3">
                             <Button
                               size="sm"
                               disabled={approving}
                               onClick={() => handleApprove(selectedDecision.decision_id, option.name)}
-                              className="h-7 text-xs bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20"
+                              className={cn(
+                                'h-8 text-xs font-semibold px-4',
+                                isRecommended
+                                  ? 'bg-amber text-black hover:bg-amber/90'
+                                  : 'bg-white/[0.06] text-foreground hover:bg-white/[0.1] border border-border'
+                              )}
                             >
-                              {approving ? 'Approving...' : 'Approve this option'}
+                              {approving ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : isRecommended ? (
+                                <>
+                                  <Sparkles className="w-3 h-3 mr-1.5" />
+                                  Choose Recommended
+                                </>
+                              ) : (
+                                'Choose This Option'
+                              )}
                             </Button>
+                            {isRecommended && (
+                              <span className="text-[10px] text-amber/60">Best match for your project</span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -270,6 +330,19 @@ export default function DecisionsPage() {
                   })}
                 </div>
               </div>
+
+              {/* Reject / Ask for more options */}
+              {selectedDecision.status === 'Awaiting Approval' && (
+                <div className="mb-6 flex items-center gap-3 text-xs text-muted-foreground/60">
+                  <span>Not sure about any option?</span>
+                  <button
+                    onClick={() => handleReject(selectedDecision.decision_id)}
+                    className="text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                  >
+                    Ask for more options
+                  </button>
+                </div>
+              )}
 
               {/* Recommendation */}
               {selectedDecision.recommendation && (
@@ -285,7 +358,7 @@ export default function DecisionsPage() {
               {/* Impacted cards and artifacts */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-xl border border-border bg-[var(--surface)] p-4">
-                  <h3 className="text-xs font-semibold text-muted-foreground mb-2">Impacted Cards</h3>
+                  <h3 className="text-xs font-semibold text-muted-foreground mb-2">Related Tasks</h3>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedDecision.impacted_cards.map(card => (
                       <Badge key={card} variant="outline" className="text-[10px] bg-white/[0.04]">{card}</Badge>
@@ -293,7 +366,7 @@ export default function DecisionsPage() {
                   </div>
                 </div>
                 <div className="rounded-xl border border-border bg-[var(--surface)] p-4">
-                  <h3 className="text-xs font-semibold text-muted-foreground mb-2">Impacted Artifacts</h3>
+                  <h3 className="text-xs font-semibold text-muted-foreground mb-2">Related Documents</h3>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedDecision.impacted_artifacts.map(art => (
                       <Badge key={art} variant="outline" className="text-[10px] bg-white/[0.04] font-mono">{art}</Badge>

@@ -25,10 +25,10 @@ AI Team Studio is a **full-service AI software delivery platform**. Users descri
 - **Auth**: NextAuth.js (dev mode auto-login)
 - **Styling**: Tailwind CSS 4, custom dark theme (amber accent)
 - **State**: Zustand stores, framer-motion transitions
-- **Components**: Radix UI primitives, Recharts, cmdk command palette
+- **Components**: Radix UI primitives, Recharts, cmdk command palette, @dnd-kit
 
 ## Architecture
-- `src/app/(marketing)/` — Landing page, auth
+- `src/app/(marketing)/` — Landing page, auth (with guided onboarding)
 - `src/app/(platform)/` — Authenticated app (12 pages, all wired to real DB)
 - `src/app/api/` — REST routes (projects, cards, agents, decisions, git, wireframes, admin)
 - `prisma/schema.prisma` — 20+ models with enums
@@ -56,31 +56,32 @@ npx prisma generate  # Regenerate Prisma client
 - **Parallel fetches**: `Promise.all` for pages needing multiple API calls
 - **Seed-first**: Always add Prisma models, seed data, then API routes, then wire pages
 
-## Current Status (12/12 pages wired to real data)
-All platform pages read from PostgreSQL — zero mock-only pages remain.
+## Current Status — Frontend Complete
 
-### Alignment Gaps (Vision vs Implementation)
+### Data Layer ✅
+All 12 platform pages wired to real PostgreSQL — zero mock-only pages remain.
 
-The infrastructure is strong. The **framing and UX language** need adjustment to match the client-facing delivery platform vision:
+### UX Copy Rework ✅
+All user-facing text reframed from developer-centric to client-centric language across 25+ files (marketing, sidebar, dashboard, all platform pages, modals, auth, command palette).
 
-| Area | Current State | What It Should Be |
-|------|--------------|-------------------|
-| **Landing hero** | "Ship 10x Faster with AI Agent Teams" | "Describe Your Idea. We'll Build It." |
-| **Landing subtitle** | "23 agents work alongside your team" | "Our AI team handles everything — from requirements to deployment" |
-| **Navigation labels** | Board, Agents, Engineering, Git | Progress, Deliverables, My Decisions, (hide technical pages) |
-| **Dashboard metrics** | Total Cards, Active Agents, Blocked Items | % Complete, Days to Delivery, Decisions Needed, Cost vs Budget |
-| **Board page** | Developer kanban with Agile terminology | Client milestone view (or hide behind "Technical Details") |
-| **Git/Engineering** | Exposed to all users | Should be internal/hidden — clients don't need to see Git |
-| **Agent page** | Shows agent roster as "team members" | Agents should be invisible workers — show results, not roles |
-| **Settings** | LLM providers, agent authority configs | Simple: budget slider, approval preferences, notification settings |
-| **Project creation** | Name + description only | Guided requirements flow: "What do you want built?" multi-step |
-| **Onboarding** | Standard signup form | Guided journey: describe idea -> confirm requirements -> see plan -> approve |
-| **All technical language** | BRD, SDD, SDLC, DoD, gate passing | Requirements, Design, Building, Testing, Launching |
-| **Decision framing** | Technical decisions (OAuth, DB, framework) | "Here's what we recommend and why — approve or tell us what you'd prefer" |
+### Alignment Gaps — All Closed ✅
 
-### What's Well-Aligned
-- **Pipeline/SDLC progress view** — Excellent for showing clients delivery progress
-- **Decision system** — Core to the vision (client approves, agents execute)
-- **Chat with agents** — Direct communication channel between client and AI team
-- **23-agent architecture** — Right roles, just need to be presented as invisible workers
-- **Notification system** — Good for keeping clients informed of progress
+| Gap | Solution | File(s) |
+|-----|----------|---------|
+| **Project creation** was name+description only | 4-step guided wizard: Idea → Audience → Priorities → Review | `create-project-modal.tsx` |
+| **Onboarding** was standard signup | Post-signup welcome screen with "Describe my first idea" flow | `signup-form.tsx` |
+| **Settings** exposed LLM providers & agent configs | Simplified to 4 sections: Project Details, Preferences, Budget & Spending, Notifications | `settings/page.tsx` |
+| **Board** was developer-only kanban | Added Milestones view toggle with progress bars and blocked-items banner | `board-view.tsx` |
+| **Agents** showed technical capabilities | Added human-readable role descriptions + "What I Do" section per agent | `agents/page.tsx` |
+| **Decisions** had small approve buttons | Added "Your AI Team Recommends" banner, prominent Choose Recommended CTA, Ask for more options | `decisions/page.tsx` |
+
+### What's Next — Backend Intelligence
+The frontend/UI layer is complete. Remaining work is backend AI functionality:
+
+- Real AI agent orchestration engine
+- Real chat with AI (not mock messages)
+- Real requirements gathering AI (BA agent)
+- Real code generation by agents
+- Real deployment pipeline
+- Production authentication (currently demo mode)
+- Payment/billing integration

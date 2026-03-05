@@ -104,12 +104,12 @@ const statusConfig: Record<AgentStatus, {
 
 // Mock activity events for selected agent
 const mockAgentEvents = [
-  { time: '2 min ago', action: 'Started working on', target: 'TASK-016', type: 'task' },
-  { time: '8 min ago', action: 'Completed review of', target: 'TASK-015', type: 'review' },
-  { time: '15 min ago', action: 'Created pull request', target: 'PR #43', type: 'pr' },
-  { time: '32 min ago', action: 'Updated artifact', target: 'sdd.md', type: 'artifact' },
-  { time: '1h ago', action: 'Ran tests for', target: 'FEAT-006', type: 'test' },
-  { time: '1h 20min ago', action: 'Committed code to', target: 'feature/decision-api', type: 'commit' },
+  { time: '2 min ago', action: 'Started working on', target: 'Login System', type: 'task' },
+  { time: '8 min ago', action: 'Finished reviewing', target: 'User Dashboard', type: 'review' },
+  { time: '15 min ago', action: 'Submitted code update for', target: 'Settings Page', type: 'pr' },
+  { time: '32 min ago', action: 'Updated the', target: 'Design Specifications', type: 'artifact' },
+  { time: '1h ago', action: 'Tested', target: 'Payment Flow', type: 'test' },
+  { time: '1h 20min ago', action: 'Completed work on', target: 'User Authentication', type: 'commit' },
 ];
 
 const eventIcons: Record<string, React.ElementType> = {
@@ -119,6 +119,32 @@ const eventIcons: Record<string, React.ElementType> = {
   artifact: FileText,
   test: Activity,
   commit: Code2,
+};
+
+const agentRoleDescriptions: Record<string, string> = {
+  'orchestrator': 'I coordinate your entire AI team, making sure everyone is working on the right things at the right time.',
+  'state-controller': 'I track the status of every task and make sure work progresses smoothly through each stage.',
+  'decision-controller': 'I prepare important decisions for your review, analyze the options, and implement what you approve.',
+  'audit-gatekeeper': 'I check quality at every milestone to make sure nothing gets past that isn\'t ready.',
+  'security-compliance': 'I keep your project secure by scanning for vulnerabilities and enforcing security best practices.',
+  'business-analyst': 'I help clarify exactly what you want built and turn your ideas into detailed requirements.',
+  'solution-architect': 'I design the technical foundation of your project, choosing the right tools and approach.',
+  'ui-ux-designer': 'I create the visual designs and user experience for your product.',
+  'product-manager': 'I define what features to build, in what order, and track overall project progress.',
+  'tech-lead': 'I oversee code quality and technical decisions, making sure everything is built to high standards.',
+  'junior-developer': 'I write code for new features and create tests to make sure they work correctly.',
+  'senior-developer': 'I handle the most complex technical challenges and improve existing code quality.',
+  'qa-engineer': 'I thoroughly test your product to find and fix bugs before users see them.',
+  'automation-test': 'I set up automated testing to continuously verify your product works correctly.',
+  'performance-engineer': 'I make sure your product runs fast and handles traffic smoothly.',
+  'platform-engineer': 'I set up and manage the servers and infrastructure your product runs on.',
+  'devops-engineer': 'I automate the process of building, testing, and deploying your product.',
+  'integration-engineer': 'I connect your product with external services and APIs.',
+  'secrets-manager': 'I securely manage all passwords, keys, and sensitive credentials.',
+  'sre': 'I monitor your product 24/7 and respond immediately if anything goes wrong.',
+  'llm-gateway': 'I manage which AI models are used and optimize their performance.',
+  'prompt-engineer': 'I craft and optimize the prompts that make our AI tools work effectively.',
+  'cost-analyst': 'I track project spending and find ways to reduce costs without sacrificing quality.',
 };
 
 type FilterMode = 'all' | 'working' | 'idle';
@@ -382,7 +408,7 @@ export default function AgentsPage() {
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {groupConfig[selectedAgent.group].description}
+                  {agentRoleDescriptions[selectedAgent.id] || groupConfig[selectedAgent.group].description}
                 </p>
               </div>
 
@@ -417,7 +443,7 @@ export default function AgentsPage() {
               <div className="mb-6">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-blue-400" />
-                  Assigned Cards
+                  Currently Working On
                   <Badge variant="outline" className="text-[9px] h-4 bg-white/[0.04]">
                     {agentCards.length}
                   </Badge>
@@ -514,10 +540,10 @@ export default function AgentsPage() {
 
               {/* Agent Capabilities */}
               <div className="rounded-xl border border-border bg-[var(--surface)] p-4">
-                <h3 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Capabilities</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-3">What I Do</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {getAgentCapabilities(selectedAgent.id).map((cap, i) => (
-                    <Badge key={i} variant="outline" className="text-[10px] bg-white/[0.03] font-mono">
+                    <Badge key={i} variant="outline" className="text-[10px] bg-white/[0.03]">
                       {cap}
                     </Badge>
                   ))}
@@ -537,29 +563,29 @@ export default function AgentsPage() {
 
 function getAgentCapabilities(agentId: string): string[] {
   const caps: Record<string, string[]> = {
-    'orchestrator': ['task.route', 'agent.assign', 'event.emit', 'priority.manage'],
-    'state-controller': ['state.validate', 'transition.enforce', 'board.update', 'rollback.execute'],
-    'decision-controller': ['decision.create', 'option.analyze', 'risk.score', 'approval.route'],
-    'audit-gatekeeper': ['dod.validate', 'gate.check', 'compliance.verify', 'report.generate'],
-    'security-compliance': ['security.scan', 'vulnerability.check', 'policy.enforce', 'secret.audit'],
-    'business-analyst': ['brd.write', 'requirement.capture', 'stakeholder.interview', 'acceptance.define'],
-    'solution-architect': ['sdd.write', 'architecture.design', 'pattern.select', 'tech.evaluate'],
-    'ui-ux-designer': ['wireframe.create', 'prototype.build', 'ux.review', 'design-system.maintain'],
-    'product-manager': ['epic.define', 'feature.prioritize', 'roadmap.plan', 'kpi.track'],
-    'tech-lead': ['pr.review', 'code.approve', 'mentor.guide', 'standard.enforce'],
-    'junior-developer': ['code.write', 'test.unit', 'pr.create', 'doc.update'],
-    'senior-developer': ['code.review', 'refactor.execute', 'architecture.enforce', 'debug.complex'],
-    'qa-engineer': ['test.plan', 'test.execute', 'bug.report', 'regression.verify'],
-    'automation-test': ['test.automate', 'ci.integrate', 'coverage.analyze', 'e2e.write'],
-    'performance-engineer': ['perf.profile', 'bottleneck.identify', 'optimize.execute', 'benchmark.run'],
-    'platform-engineer': ['infra.provision', 'service.deploy', 'scale.configure', 'monitor.setup'],
-    'devops-engineer': ['ci.pipeline', 'cd.deploy', 'container.manage', 'env.configure'],
-    'integration-engineer': ['api.connect', 'webhook.setup', 'sync.configure', 'protocol.implement'],
-    'secrets-manager': ['secret.store', 'key.rotate', 'access.control', 'vault.manage'],
-    'sre': ['incident.respond', 'uptime.monitor', 'alert.configure', 'postmortem.write'],
-    'llm-gateway': ['model.route', 'token.count', 'fallback.manage', 'provider.switch'],
-    'prompt-engineer': ['prompt.craft', 'template.optimize', 'chain.design', 'eval.benchmark'],
-    'cost-analyst': ['cost.track', 'budget.forecast', 'usage.report', 'optimization.recommend'],
+    'orchestrator': ['Coordinates all team activity', 'Assigns tasks to the right specialist', 'Manages priorities and scheduling'],
+    'state-controller': ['Tracks progress of every task', 'Ensures quality at each stage', 'Prevents incomplete work from advancing'],
+    'decision-controller': ['Prepares decisions for your review', 'Analyzes options and risks', 'Implements your approved choices'],
+    'audit-gatekeeper': ['Checks quality before each milestone', 'Ensures nothing is missed', 'Generates progress reports'],
+    'security-compliance': ['Scans for security issues', 'Protects sensitive data', 'Ensures best practices'],
+    'business-analyst': ['Clarifies your requirements', 'Writes detailed specifications', 'Defines what "done" looks like'],
+    'solution-architect': ['Designs the technical approach', 'Chooses the right technologies', 'Plans the system structure'],
+    'ui-ux-designer': ['Creates interface designs', 'Builds interactive prototypes', 'Ensures great user experience'],
+    'product-manager': ['Defines features and priorities', 'Plans the development roadmap', 'Tracks key metrics'],
+    'tech-lead': ['Reviews all code quality', 'Mentors the development team', 'Enforces coding standards'],
+    'junior-developer': ['Writes new code and features', 'Creates automated tests', 'Updates documentation'],
+    'senior-developer': ['Handles complex technical work', 'Refactors and improves code', 'Debugs difficult issues'],
+    'qa-engineer': ['Plans testing strategy', 'Finds and reports bugs', 'Verifies fixes work correctly'],
+    'automation-test': ['Automates repetitive testing', 'Sets up continuous testing', 'Monitors test coverage'],
+    'performance-engineer': ['Optimizes speed and efficiency', 'Identifies bottlenecks', 'Ensures smooth performance'],
+    'platform-engineer': ['Sets up servers and hosting', 'Configures deployment pipelines', 'Monitors system health'],
+    'devops-engineer': ['Automates build and deploy', 'Manages environments', 'Ensures reliable releases'],
+    'integration-engineer': ['Connects external services', 'Sets up APIs and webhooks', 'Ensures data flows correctly'],
+    'secrets-manager': ['Protects passwords and keys', 'Manages access securely', 'Rotates credentials safely'],
+    'sre': ['Monitors uptime and health', 'Responds to incidents', 'Prevents future outages'],
+    'llm-gateway': ['Manages AI model access', 'Optimizes response quality', 'Handles provider switching'],
+    'prompt-engineer': ['Crafts effective AI prompts', 'Optimizes AI interactions', 'Tests AI response quality'],
+    'cost-analyst': ['Tracks spending and budgets', 'Forecasts project costs', 'Recommends cost savings'],
   };
-  return caps[agentId] || ['task.execute'];
+  return caps[agentId] || ['Handles assigned tasks'];
 }
