@@ -17,7 +17,7 @@ const footerLinks = [
     heading: 'Resources',
     links: [
       { label: 'Documentation', href: '#' },
-      { label: 'API Reference', href: '#' },
+      { label: 'Help Center', href: '#' },
       { label: 'Blog', href: '#' },
       { label: 'Community', href: '#' },
     ],
@@ -79,7 +79,7 @@ export function MarketingFooter() {
               <span className="text-base font-bold text-foreground">AI Team Studio</span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              AI-Powered Product Delivery Operating System. 23 agents, one mission: ship better software.
+              Your AI software delivery team. Describe what you need — 23 AI agents build, test, and launch it.
             </p>
           </div>
 

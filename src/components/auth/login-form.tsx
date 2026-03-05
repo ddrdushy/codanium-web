@@ -61,7 +61,7 @@ export function LoginForm() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Sign in to your AI Team Studio account
+          Sign in to check on your projects
         </p>
       </div>
 

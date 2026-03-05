@@ -33,6 +33,14 @@ const riskColors: Record<RiskRating, string> = {
   Critical: 'text-red-400 bg-red-500/20 border-red-500/30',
 };
 
+// Map frontend status back to DB enum
+const statusToDb: Record<string, string> = {
+  'Drafted': 'DRAFTED', 'Options Collected': 'OPTIONS_COLLECTED',
+  'Recommended': 'RECOMMENDED', 'Awaiting Approval': 'AWAITING_APPROVAL',
+  'Approved': 'APPROVED', 'Rejected': 'REJECTED',
+  'Implemented': 'IMPLEMENTED', 'Verified': 'VERIFIED',
+};
+
 export default function DecisionsPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -40,6 +48,7 @@ export default function DecisionsPage() {
   const [decisions, setDecisions] = useState<Decision[]>(mockDecisions);
   const [loading, setLoading] = useState(true);
   const [selectedDecision, setSelectedDecision] = useState<Decision | null>(mockDecisions[2]);
+  const [approving, setApproving] = useState(false);
 
   useEffect(() => {
     fetchDecisions(projectId)
@@ -51,6 +60,28 @@ export default function DecisionsPage() {
       .finally(() => setLoading(false));
   }, [projectId]);
 
+  const handleApprove = async (decisionId: string, optionName: string) => {
+    setApproving(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/decisions/${decisionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'APPROVED', approvedOption: optionName }),
+      });
+      if (!res.ok) throw new Error('Failed');
+
+      // Refresh decisions
+      const updated = await fetchDecisions(projectId);
+      setDecisions(updated);
+      const sel = updated.find(d => d.decision_id === decisionId);
+      if (sel) setSelectedDecision(sel);
+    } catch {
+      // silently fail
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const pendingCount = decisions.filter(d => d.status === 'Awaiting Approval').length;
 
   return (
@@ -59,7 +90,7 @@ export default function DecisionsPage() {
       <div className="w-[380px] border-r border-border flex flex-col shrink-0">
         <div className="px-4 py-4 border-b border-border">
           <div className="flex items-center justify-between mb-1">
-            <h1 className="text-lg font-bold tracking-tight">Decisions</h1>
+            <h1 className="text-lg font-bold tracking-tight">My Decisions</h1>
             {pendingCount > 0 && (
               <Badge className="bg-amber/15 text-amber border-amber/20 text-[10px]">
                 {pendingCount} pending
@@ -67,7 +98,7 @@ export default function DecisionsPage() {
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Every non-trivial change requires a formal decision
+            Important choices that need your approval
           </p>
         </div>
 
@@ -224,8 +255,13 @@ export default function DecisionsPage() {
                         {/* Approve button for pending decisions */}
                         {selectedDecision.status === 'Awaiting Approval' && !isApproved && (
                           <div className="mt-3 pt-3 border-t border-border">
-                            <Button size="sm" className="h-7 text-xs bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20">
-                              Approve this option
+                            <Button
+                              size="sm"
+                              disabled={approving}
+                              onClick={() => handleApprove(selectedDecision.decision_id, option.name)}
+                              className="h-7 text-xs bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20"
+                            >
+                              {approving ? 'Approving...' : 'Approve this option'}
                             </Button>
                           </div>
                         )}

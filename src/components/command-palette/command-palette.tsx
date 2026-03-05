@@ -15,8 +15,8 @@ const categoryLabels: Record<string, string> = {
   navigation: 'Pages',
   'admin-nav': 'Admin',
   project: 'Projects',
-  card: 'Cards',
-  agent: 'Agents',
+  card: 'Tasks',
+  agent: 'AI Team',
   decision: 'Decisions',
   'admin-user': 'Users',
 };
@@ -90,7 +90,7 @@ export function CommandPalette() {
                 <Search className="w-4 h-4 text-muted-foreground shrink-0" />
                 <Command.Input
                   ref={inputRef}
-                  placeholder="Search pages, projects, cards, agents..."
+                  placeholder="Search pages, projects, tasks, team..."
                   className={cn(
                     'flex-1 h-12 bg-transparent text-sm text-foreground',
                     'placeholder:text-muted-foreground/50',

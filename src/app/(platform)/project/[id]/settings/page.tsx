@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -207,9 +208,84 @@ const tabs: { key: SettingsTab; label: string; icon: React.ElementType }[] = [
   { key: 'general', label: 'General', icon: Settings },
 ];
 
+interface ProjectInfo {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function SettingsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const projectId = params.id as string;
+
   const [activeTab, setActiveTab] = useState<SettingsTab>('llm');
   const [expandedProvider, setExpandedProvider] = useState<string | null>('openai');
+
+  // Project info state
+  const [project, setProject] = useState<ProjectInfo | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const [descValue, setDescValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}`)
+      .then(r => r.json())
+      .then((data: ProjectInfo) => {
+        setProject(data);
+        setNameValue(data.name);
+        setDescValue(data.description ?? '');
+      })
+      .catch(() => {});
+  }, [projectId]);
+
+  const handleSave = useCallback(async (field: 'name' | 'description') => {
+    setSaving(true);
+    try {
+      const body = field === 'name' ? { name: nameValue } : { description: descValue };
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const updated = await res.json();
+      setProject(prev => prev ? { ...prev, ...updated } : prev);
+      if (field === 'name') setEditingName(false);
+      else setEditingDesc(false);
+    } catch { /* silently fail */ }
+    finally { setSaving(false); }
+  }, [projectId, nameValue, descValue]);
+
+  const handleArchive = useCallback(async () => {
+    setArchiving(true);
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ARCHIVED' }),
+      });
+      router.push('/projects');
+    } catch { setArchiving(false); }
+  }, [projectId, router]);
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+      router.push('/projects');
+    } catch { setDeleting(false); setShowDeleteConfirm(false); }
+  }, [projectId, router]);
 
   const totalCost = mockProviders.reduce((acc, p) => acc + p.costThisMonth, 0);
 
@@ -1083,12 +1159,32 @@ export default function SettingsPage() {
                   Project Name
                 </label>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <div className="flex-1 bg-black/20 border border-border rounded-lg px-3 py-2 text-xs font-medium">
-                    AI Team Studio
-                  </div>
-                  <Button size="sm" variant="outline" className="h-8 text-[11px]">
-                    <Edit3 className="w-3 h-3 mr-1" /> Rename
-                  </Button>
+                  {editingName ? (
+                    <>
+                      <input
+                        value={nameValue}
+                        onChange={e => setNameValue(e.target.value)}
+                        className="flex-1 bg-black/20 border border-amber/30 rounded-lg px-3 py-2 text-xs font-medium outline-none focus:border-amber/50"
+                        autoFocus
+                        onKeyDown={e => { if (e.key === 'Enter') handleSave('name'); if (e.key === 'Escape') { setEditingName(false); setNameValue(project?.name ?? ''); } }}
+                      />
+                      <Button size="sm" disabled={saving} onClick={() => handleSave('name')} className="h-8 text-[11px] bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20">
+                        {saving ? 'Saving...' : 'Save'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => { setEditingName(false); setNameValue(project?.name ?? ''); }} className="h-8 text-[11px]">
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1 bg-black/20 border border-border rounded-lg px-3 py-2 text-xs font-medium">
+                        {project?.name ?? 'Loading...'}
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => setEditingName(true)} className="h-8 text-[11px]">
+                        <Edit3 className="w-3 h-3 mr-1" /> Rename
+                      </Button>
+                    </>
+                  )}
                 </div>
               </motion.div>
               <motion.div
@@ -1100,12 +1196,35 @@ export default function SettingsPage() {
                   Description
                 </label>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <div className="flex-1 bg-black/20 border border-border rounded-lg px-3 py-2 text-xs text-muted-foreground/60">
-                    Multi-agent development platform for autonomous software delivery
-                  </div>
-                  <Button size="sm" variant="outline" className="h-8 text-[11px]">
-                    <Edit3 className="w-3 h-3 mr-1" /> Edit
-                  </Button>
+                  {editingDesc ? (
+                    <>
+                      <textarea
+                        value={descValue}
+                        onChange={e => setDescValue(e.target.value)}
+                        rows={2}
+                        className="flex-1 bg-black/20 border border-amber/30 rounded-lg px-3 py-2 text-xs outline-none focus:border-amber/50 resize-none"
+                        autoFocus
+                        onKeyDown={e => { if (e.key === 'Escape') { setEditingDesc(false); setDescValue(project?.description ?? ''); } }}
+                      />
+                      <div className="flex flex-col gap-1">
+                        <Button size="sm" disabled={saving} onClick={() => handleSave('description')} className="h-7 text-[11px] bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20">
+                          {saving ? '...' : 'Save'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setEditingDesc(false); setDescValue(project?.description ?? ''); }} className="h-7 text-[11px]">
+                          Cancel
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1 bg-black/20 border border-border rounded-lg px-3 py-2 text-xs text-muted-foreground/60">
+                        {project?.description ?? 'No description'}
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => setEditingDesc(true)} className="h-8 text-[11px]">
+                        <Edit3 className="w-3 h-3 mr-1" /> Edit
+                      </Button>
+                    </>
+                  )}
                 </div>
               </motion.div>
               <motion.div
@@ -1116,15 +1235,15 @@ export default function SettingsPage() {
               >
                 <div className="px-3 py-2.5 rounded-lg bg-white/[0.02]">
                   <p className="text-[10px] text-muted-foreground/40 uppercase tracking-wider font-medium">Created</p>
-                  <p className="text-xs font-medium mt-1">Nov 12, 2025</p>
+                  <p className="text-xs font-medium mt-1">{project ? new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '...'}</p>
                 </div>
                 <div className="px-3 py-2.5 rounded-lg bg-white/[0.02]">
                   <p className="text-[10px] text-muted-foreground/40 uppercase tracking-wider font-medium">Last Updated</p>
-                  <p className="text-xs font-medium mt-1">Mar 3, 2026</p>
+                  <p className="text-xs font-medium mt-1">{project ? new Date(project.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '...'}</p>
                 </div>
                 <div className="px-3 py-2.5 rounded-lg bg-white/[0.02]">
                   <p className="text-[10px] text-muted-foreground/40 uppercase tracking-wider font-medium">Project ID</p>
-                  <p className="text-xs font-mono text-muted-foreground/50 mt-1">proj_a1b2c3d4</p>
+                  <p className="text-xs font-mono text-muted-foreground/50 mt-1 truncate" title={project?.id}>{project?.id ?? '...'}</p>
                 </div>
               </motion.div>
             </div>
@@ -1239,8 +1358,8 @@ export default function SettingsPage() {
                     Disable the project and hide it from the dashboard. Can be restored later.
                   </p>
                 </div>
-                <Button size="sm" variant="outline" className="h-7 text-[11px] border-amber/20 text-amber hover:bg-amber/10">
-                  <Archive className="w-3 h-3 mr-1" /> Archive
+                <Button size="sm" variant="outline" disabled={archiving} onClick={handleArchive} className="h-7 text-[11px] border-amber/20 text-amber hover:bg-amber/10">
+                  <Archive className="w-3 h-3 mr-1" /> {archiving ? 'Archiving...' : 'Archive'}
                 </Button>
               </motion.div>
               <motion.div
@@ -1255,9 +1374,21 @@ export default function SettingsPage() {
                     Permanently delete this project and all associated data. This action cannot be undone.
                   </p>
                 </div>
-                <Button size="sm" variant="outline" className="h-7 text-[11px] border-red-500/20 text-red-400 hover:bg-red-500/10">
-                  <Trash2 className="w-3 h-3 mr-1" /> Delete
-                </Button>
+                {showDeleteConfirm ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-red-400">Are you sure?</span>
+                    <Button size="sm" variant="outline" disabled={deleting} onClick={handleDelete} className="h-7 text-[11px] border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20">
+                      {deleting ? 'Deleting...' : 'Confirm'}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowDeleteConfirm(false)} className="h-7 text-[11px]">
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => setShowDeleteConfirm(true)} className="h-7 text-[11px] border-red-500/20 text-red-400 hover:bg-red-500/10">
+                    <Trash2 className="w-3 h-3 mr-1" /> Delete
+                  </Button>
+                )}
               </motion.div>
             </div>
           </div>

@@ -6,10 +6,10 @@ import { LayoutDashboard, KanbanSquare, Workflow, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const tabs = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'board', label: 'Board', icon: KanbanSquare },
-  { id: 'pipeline', label: 'Pipeline', icon: Workflow },
-  { id: 'agents', label: 'Agents', icon: Bot },
+  { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+  { id: 'board', label: 'Progress', icon: KanbanSquare },
+  { id: 'pipeline', label: 'Delivery Stages', icon: Workflow },
+  { id: 'agents', label: 'AI Team', icon: Bot },
 ] as const;
 
 type TabId = (typeof tabs)[number]['id'];
@@ -17,9 +17,9 @@ type TabId = (typeof tabs)[number]['id'];
 /* ─── Dashboard Mockup ─── */
 function DashboardMockup() {
   const stats = [
-    { label: 'Cards', value: '47', color: 'text-blue-400' },
-    { label: 'Agents', value: '8', color: 'text-emerald-400' },
-    { label: 'Decisions', value: '1', color: 'text-purple-400' },
+    { label: 'Tasks', value: '47', color: 'text-blue-400' },
+    { label: 'Team', value: '8', color: 'text-emerald-400' },
+    { label: 'Approvals', value: '1', color: 'text-purple-400' },
     { label: 'Progress', value: '48%', color: 'text-amber-400' },
   ];
 
@@ -49,8 +49,8 @@ function DashboardMockup() {
       {/* SDLC Progress */}
       <div className="rounded-lg border border-border bg-[var(--surface-raised)] p-3">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[9px] font-medium text-muted-foreground">SDLC Progress</span>
-          <span className="text-[9px] text-amber font-semibold">Stage 5/10</span>
+          <span className="text-[9px] font-medium text-muted-foreground">Build Progress</span>
+          <span className="text-[9px] text-amber font-semibold">Step 5 of 10</span>
         </div>
         <div className="h-1.5 w-full rounded-full bg-[var(--surface-overlay)]">
           <div className="h-1.5 w-[48%] rounded-full bg-gradient-to-r from-amber-500 to-orange-500" />
@@ -74,7 +74,7 @@ function DashboardMockup() {
       <div className="grid grid-cols-2 gap-2">
         {/* Active Agents */}
         <div className="rounded-lg border border-border bg-[var(--surface-raised)] p-3">
-          <span className="text-[9px] font-medium text-muted-foreground mb-2 block">Active Agents</span>
+          <span className="text-[9px] font-medium text-muted-foreground mb-2 block">AI Team at Work</span>
           <div className="space-y-1.5">
             {agents.map((a) => (
               <div key={a.name} className="flex items-center gap-2">
@@ -222,7 +222,7 @@ function AgentsMockup() {
       {/* Agent list */}
       <div className="col-span-2 space-y-1">
         <span className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-          Agent Roster
+          AI Team
         </span>
         {agents.map((a, idx) => (
           <div
@@ -315,7 +315,7 @@ export function ScreenshotsSection() {
             See It In Action
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Explore the platform that 23 AI agents call home.
+            Watch your AI team build software in real time.
           </p>
         </motion.div>
 

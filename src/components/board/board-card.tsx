@@ -5,9 +5,10 @@ import { Card } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { mockAgents } from '@/lib/mock-data';
+import { useDraggable } from '@dnd-kit/core';
 import {
   Layers, Box, Wrench, FlaskConical, AlertOctagon,
-  Clock, AlertTriangle, Flame, ChevronRight
+  Clock, AlertTriangle, Flame, ChevronRight, GripVertical
 } from 'lucide-react';
 
 const typeConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
@@ -25,29 +26,37 @@ const priorityConfig: Record<string, { icon: React.ElementType; color: string; l
   critical: { icon: Flame, color: 'text-red-400', label: 'Crit' },
 };
 
-export function BoardCard({ card, index }: { card: Card; index: number }) {
+export function BoardCard({ card, index, isDragOverlay }: { card: Card; index: number; isDragOverlay?: boolean }) {
   const typeInfo = typeConfig[card.type] || typeConfig.Task;
   const priorityInfo = priorityConfig[card.priority] || priorityConfig.medium;
   const TypeIcon = typeInfo.icon;
   const PriorityIcon = priorityInfo.icon;
   const agent = mockAgents.find(a => a.id === card.owner_agent);
 
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: card.card_id,
+  });
+
   return (
     <motion.div
+      ref={setNodeRef}
       initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.03, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      className="card-lift"
+      animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
+      transition={{ delay: isDragOverlay ? 0 : index * 0.03, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      className={cn('card-lift', isDragging && 'opacity-40')}
+      {...attributes}
+      {...listeners}
     >
       <div
         className={cn(
-          'group rounded-lg border border-border bg-[var(--surface-raised)] p-3 cursor-pointer',
+          'group rounded-lg border border-border bg-[var(--surface-raised)] p-3 cursor-grab active:cursor-grabbing',
           'hover:border-white/10 transition-all duration-200',
           card.type === 'DecisionBlocker' && 'border-amber/20 bg-amber/[0.03]',
           card.type === 'Epic' && 'border-violet-500/15',
+          isDragOverlay && 'shadow-xl shadow-black/30 border-amber/30',
         )}
       >
-        {/* Top: Type badge + Priority */}
+        {/* Top: Type badge + Priority + Drag handle */}
         <div className="flex items-center justify-between mb-2">
           <Badge variant="outline" className={cn('text-[10px] font-semibold px-1.5 py-0 h-5 gap-1 border', typeInfo.bg, typeInfo.color)}>
             <TypeIcon className="w-2.5 h-2.5" />

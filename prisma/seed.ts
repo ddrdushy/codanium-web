@@ -30,6 +30,11 @@ async function main() {
     prisma.auditLog.deleteMany(),
     prisma.lLMUsage.deleteMany(),
     prisma.transaction.deleteMany(),
+    prisma.chatMessage.deleteMany(),
+    prisma.wireframe.deleteMany(),
+    prisma.gitRelease.deleteMany(),
+    prisma.gitPullRequest.deleteMany(),
+    prisma.gitBranch.deleteMany(),
     prisma.decisionOption.deleteMany(),
     prisma.decision.deleteMany(),
     prisma.card.deleteMany(),
@@ -315,7 +320,7 @@ async function main() {
     {
       id: 'prj-001',
       name: 'AI Team Studio',
-      description: 'AI-Powered Product Delivery OS',
+      description: 'Full-service AI platform that builds and delivers software from your ideas',
       status: 'ACTIVE' as const,
       currentStage: 'Development',
       completion: 48,
@@ -962,6 +967,58 @@ async function main() {
   await prisma.transaction.createMany({ data: transactions });
   console.log(`  Created ${transactions.length} transactions`);
 
+  // ── 12. Seed Git Branches (6 for prj-001) ────────────────────────────────
+
+  console.log('\nSeeding git branches...');
+  const gitBranches = [
+    { id: 'br-001', name: 'main', status: 'ACTIVE' as const, lastCommit: '2h ago', author: 'DevOps', behind: 0, ahead: 0, projectId: 'prj-001' },
+    { id: 'br-002', name: 'feature/decision-api', status: 'ACTIVE' as const, lastCommit: '15min ago', author: 'Junior Dev', behind: 2, ahead: 8, projectId: 'prj-001' },
+    { id: 'br-003', name: 'feature/state-machine', status: 'ACTIVE' as const, lastCommit: '1h ago', author: 'Senior Dev', behind: 1, ahead: 12, projectId: 'prj-001' },
+    { id: 'br-004', name: 'feature/llm-gateway', status: 'ACTIVE' as const, lastCommit: '3h ago', author: 'Sol. Architect', behind: 4, ahead: 6, projectId: 'prj-001' },
+    { id: 'br-005', name: 'fix/event-ordering', status: 'ACTIVE' as const, lastCommit: '4h ago', author: 'QA Engineer', behind: 3, ahead: 3, projectId: 'prj-001' },
+    { id: 'br-006', name: 'feature/auth-setup', status: 'STALE' as const, lastCommit: '3d ago', author: 'Junior Dev', behind: 15, ahead: 2, projectId: 'prj-001' },
+  ];
+  for (const b of gitBranches) { await prisma.gitBranch.create({ data: b }); }
+  console.log(`  Created ${gitBranches.length} git branches`);
+
+  // ── 13. Seed Git Pull Requests (5 for prj-001) ─────────────────────────
+
+  console.log('Seeding git pull requests...');
+  const gitPRs = [
+    { id: 'pr-043', number: 43, title: 'feat: implement decision approval workflow', branch: 'feature/decision-api', status: 'OPEN' as const, author: 'Junior Developer', avatar: '💻', reviewers: ['SD', 'TL'], checks: 'PASSING' as const, additions: 342, deletions: 28, comments: 5, projectId: 'prj-001' },
+    { id: 'pr-042', number: 42, title: 'feat: card state machine with transition validation', branch: 'feature/state-machine', status: 'OPEN' as const, author: 'Senior Developer', avatar: '🔍', reviewers: ['TL'], checks: 'PENDING' as const, additions: 890, deletions: 156, comments: 12, projectId: 'prj-001' },
+    { id: 'pr-041', number: 41, title: 'fix: event bus message ordering (FIFO)', branch: 'fix/event-ordering', status: 'OPEN' as const, author: 'QA Engineer', avatar: '🧪', reviewers: ['SD'], checks: 'PASSING' as const, additions: 67, deletions: 23, comments: 2, projectId: 'prj-001' },
+    { id: 'pr-040', number: 40, title: 'feat: board CRUD with atomic file writes', branch: 'feature/board-crud', status: 'MERGED' as const, author: 'Junior Developer', avatar: '💻', reviewers: ['SD', 'TL'], checks: 'PASSING' as const, additions: 456, deletions: 12, comments: 8, projectId: 'prj-001' },
+    { id: 'pr-039', number: 39, title: 'feat: event logging system (events.jsonl)', branch: 'feature/event-log', status: 'MERGED' as const, author: 'Junior Developer', avatar: '💻', reviewers: ['TL'], checks: 'PASSING' as const, additions: 234, deletions: 5, comments: 3, projectId: 'prj-001' },
+  ];
+  for (const pr of gitPRs) { await prisma.gitPullRequest.create({ data: pr }); }
+  console.log(`  Created ${gitPRs.length} git pull requests`);
+
+  // ── 14. Seed Git Releases (3 for prj-001) ──────────────────────────────
+
+  console.log('Seeding git releases...');
+  const gitReleases = [
+    { id: 'rel-001', version: 'v0.3.0', date: 'Today', status: 'DRAFT' as const, changes: 24, features: ['Decision engine', 'State machine', 'LLM gateway'], projectId: 'prj-001' },
+    { id: 'rel-002', version: 'v0.2.0', date: 'Feb 28', status: 'RELEASED' as const, changes: 18, features: ['Board CRUD', 'Event logging', 'Project scaffold'], projectId: 'prj-001' },
+    { id: 'rel-003', version: 'v0.1.0', date: 'Feb 15', status: 'RELEASED' as const, changes: 12, features: ['Initial scaffold', 'CLI setup', 'Basic routing'], projectId: 'prj-001' },
+  ];
+  for (const r of gitReleases) { await prisma.gitRelease.create({ data: r }); }
+  console.log(`  Created ${gitReleases.length} git releases`);
+
+  // ── 15. Seed Wireframes (6 for prj-001) ────────────────────────────────
+
+  console.log('Seeding wireframes...');
+  const wireframes = [
+    { id: 'wf-001', title: 'Dashboard Overview', screen: 'dashboard', status: 'APPROVED' as const, device: 'DESKTOP' as const, owner: 'UI/UX Designer', ownerAvatar: '🎨', components: 14, version: 3, projectId: 'prj-001', updatedAt: daysAgo(3) },
+    { id: 'wf-002', title: 'Kanban Board', screen: 'board', status: 'APPROVED' as const, device: 'DESKTOP' as const, owner: 'UI/UX Designer', ownerAvatar: '🎨', components: 22, version: 5, projectId: 'prj-001', updatedAt: daysAgo(2) },
+    { id: 'wf-003', title: 'Agent Chat Interface', screen: 'chat', status: 'REVIEW' as const, device: 'DESKTOP' as const, owner: 'UI/UX Designer', ownerAvatar: '🎨', components: 18, version: 2, projectId: 'prj-001', updatedAt: hoursAgo(6) },
+    { id: 'wf-004', title: 'Decision Panel', screen: 'decisions', status: 'APPROVED' as const, device: 'DESKTOP' as const, owner: 'UI/UX Designer', ownerAvatar: '🎨', components: 16, version: 4, projectId: 'prj-001', updatedAt: daysAgo(4) },
+    { id: 'wf-005', title: 'Mobile Dashboard', screen: 'dashboard-mobile', status: 'DRAFT' as const, device: 'MOBILE' as const, owner: 'UI/UX Designer', ownerAvatar: '🎨', components: 8, version: 1, projectId: 'prj-001', updatedAt: hoursAgo(1) },
+    { id: 'wf-006', title: 'Settings - LLM Config', screen: 'settings', status: 'DRAFT' as const, device: 'DESKTOP' as const, owner: 'UI/UX Designer', ownerAvatar: '🎨', components: 12, version: 1, projectId: 'prj-001', updatedAt: hoursAgo(2) },
+  ];
+  for (const w of wireframes) { await prisma.wireframe.create({ data: w }); }
+  console.log(`  Created ${wireframes.length} wireframes`);
+
   // ── Summary ──────────────────────────────────────────────────────────────
 
   console.log('\n========================================');
@@ -982,6 +1039,10 @@ async function main() {
     prisma.auditLog.count(),
     prisma.lLMUsage.count(),
     prisma.transaction.count(),
+    prisma.gitBranch.count(),
+    prisma.gitPullRequest.count(),
+    prisma.gitRelease.count(),
+    prisma.wireframe.count(),
   ]);
 
   const labels = [
@@ -998,6 +1059,10 @@ async function main() {
     'Audit Logs',
     'LLM Usage Records',
     'Transactions',
+    'Git Branches',
+    'Git Pull Requests',
+    'Git Releases',
+    'Wireframes',
   ];
 
   labels.forEach((label, i) => {

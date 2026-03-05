@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { fetchCards } from '@/lib/api';
 import { mockCards } from '@/lib/mock-data';
@@ -9,10 +9,25 @@ import { BoardColumn } from './board-column';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ColumnSkeleton } from '@/components/ui/skeleton';
 import {
   Filter, SlidersHorizontal, Layers, Box, Wrench,
   FlaskConical, AlertOctagon, LayoutGrid
 } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+  type DragOverEvent,
+} from '@dnd-kit/core';
+import { BoardCard } from './board-card';
+import { CreateCardModal } from '@/components/modals/create-card-modal';
 
 const STATES: CardState[] = ['Planned', 'In Progress', 'Under Review', 'Testing', 'Blocked', 'Done', 'Released'];
 
@@ -25,6 +40,17 @@ const typeFilters: { type: CardType | 'All'; icon: React.ElementType; label: str
   { type: 'DecisionBlocker', icon: AlertOctagon, label: 'Blockers' },
 ];
 
+// Map frontend state names to DB enum values
+const stateToDbEnum: Record<CardState, string> = {
+  'Planned': 'PLANNED',
+  'In Progress': 'IN_PROGRESS',
+  'Under Review': 'UNDER_REVIEW',
+  'Testing': 'TESTING',
+  'Blocked': 'BLOCKED',
+  'Done': 'DONE',
+  'Released': 'RELEASED',
+};
+
 export function BoardView() {
   const params = useParams();
   const projectId = params.id as string;
@@ -32,6 +58,9 @@ export function BoardView() {
   const [cards, setCards] = useState<Card[]>(mockCards);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<CardType | 'All'>('All');
+  const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [createCardOpen, setCreateCardOpen] = useState(false);
+  const [createCardState, setCreateCardState] = useState<CardState>('Planned');
 
   useEffect(() => {
     if (projectId) {
@@ -43,6 +72,47 @@ export function BoardView() {
       setLoading(false);
     }
   }, [projectId]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const card = cards.find(c => c.card_id === event.active.id);
+    setActiveCard(card ?? null);
+  }, [cards]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveCard(null);
+
+    if (!over) return;
+
+    const cardId = active.id as string;
+    const targetState = over.id as CardState;
+
+    // If dropping on the same state, do nothing
+    const card = cards.find(c => c.card_id === cardId);
+    if (!card || card.state === targetState) return;
+
+    // Optimistic update
+    setCards(prev => prev.map(c =>
+      c.card_id === cardId ? { ...c, state: targetState } : c
+    ));
+
+    // Persist to DB
+    fetch(`/api/projects/${projectId}/cards/${cardId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: stateToDbEnum[targetState] }),
+    }).catch(() => {
+      // Revert on failure
+      setCards(prev => prev.map(c =>
+        c.card_id === cardId ? { ...c, state: card.state } : c
+      ));
+    });
+  }, [cards, projectId]);
 
   const filteredCards = activeFilter === 'All'
     ? cards
@@ -63,9 +133,9 @@ export function BoardView() {
       <div className="px-6 py-4 border-b border-border bg-[var(--surface)]/30">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-lg font-bold text-foreground tracking-tight">Board</h1>
+            <h1 className="text-lg font-bold text-foreground tracking-tight">Work Board</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {totalCards} cards · {blockedCount > 0 && <span className="text-red-400">{blockedCount} blocked</span>}
+              {totalCards} tasks · {blockedCount > 0 && <span className="text-red-400">{blockedCount} blocked</span>}
               {blockedCount > 0 && ' · '}{doneCount} completed
             </p>
           </div>
@@ -108,16 +178,47 @@ export function BoardView() {
 
       {/* Kanban Columns */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden">
-        <div className="flex gap-3 p-4 h-full min-w-max">
-          {STATES.map(state => (
-            <BoardColumn
-              key={state}
-              state={state}
-              cards={cardsByState[state] || []}
-            />
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex gap-3 p-4 h-full min-w-max">
+            {STATES.slice(0, 5).map(state => (
+              <ColumnSkeleton key={state} />
+            ))}
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex gap-3 p-4 h-full min-w-max">
+              {STATES.map(state => (
+                <BoardColumn
+                  key={state}
+                  state={state}
+                  cards={cardsByState[state] || []}
+                  onAddCard={(s) => { setCreateCardState(s); setCreateCardOpen(true); }}
+                />
+              ))}
+            </div>
+            <DragOverlay>
+              {activeCard && (
+                <div className="w-[280px] opacity-90 rotate-2">
+                  <BoardCard card={activeCard} index={0} isDragOverlay />
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+        )}
       </div>
+
+      <CreateCardModal
+        open={createCardOpen}
+        onOpenChange={setCreateCardOpen}
+        projectId={projectId}
+        defaultState={createCardState}
+        onCardCreated={(card) => setCards(prev => [...prev, card])}
+      />
     </div>
   );
 }

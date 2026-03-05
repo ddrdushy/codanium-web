@@ -3,8 +3,10 @@
 import { useTheme } from 'next-themes';
 import { useEffect, useState, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { mockSDLCProgress, mockAgents } from '@/lib/mock-data';
+import { useProjectStore } from '@/lib/project-store';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -16,13 +18,32 @@ import { useNotificationStore, selectUnreadCount } from '@/lib/notification-stor
 export function Topbar() {
   const { theme, setTheme } = useTheme();
   const { data: session } = useSession();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const activeAgents = mockAgents.filter(a => a.status === 'working');
   const openPalette = useCommandPaletteStore((s) => s.open);
   const openNotifications = useNotificationStore((s) => s.open);
   const unreadCount = useNotificationStore(selectUnreadCount);
+
+  const { agents: storeAgents, sdlcStages: storeStages, fetchProjectContext } = useProjectStore();
+
+  // Extract current project ID from URL
+  const pathParts = pathname?.split('/') || [];
+  const projectIdx = pathParts.indexOf('project');
+  const currentProjectId = projectIdx !== -1 && pathParts[projectIdx + 1] ? pathParts[projectIdx + 1] : '';
+
+  // Fetch project context (agents + SDLC stages) when project changes
+  useEffect(() => {
+    if (currentProjectId) {
+      fetchProjectContext(currentProjectId);
+    }
+  }, [currentProjectId, fetchProjectContext]);
+
+  // Use store data if available, fall back to mocks
+  const sdlcProgress = storeStages.length > 0 ? storeStages : mockSDLCProgress;
+  const agents = storeAgents.length > 0 ? storeAgents : mockAgents;
+  const activeAgents = agents.filter(a => a.status === 'working');
 
   useEffect(() => setMounted(true), []);
 
@@ -48,11 +69,15 @@ export function Topbar() {
     .slice(0, 2);
   const isAdmin = (session?.user as { role?: string })?.role === 'admin';
 
+  // Determine current active stage label
+  const activeStage = sdlcProgress.find(s => s.status === 'active');
+  const stageLabel = activeStage?.stage ?? 'Pipeline';
+
   return (
     <header className="h-14 border-b border-border bg-[var(--surface)]/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0">
       {/* SDLC Stage Progress (mini) */}
       <div className="flex items-center gap-1">
-        {mockSDLCProgress.map((stage, i) => (
+        {sdlcProgress.map((stage, i) => (
           <Tooltip key={stage.stage}>
             <TooltipTrigger>
               <div className="flex items-center gap-0">
@@ -65,7 +90,7 @@ export function Topbar() {
                     stage.status === 'blocked' && 'bg-red-500',
                   )}
                 />
-                {i < mockSDLCProgress.length - 1 && <div className="w-0.5" />}
+                {i < sdlcProgress.length - 1 && <div className="w-0.5" />}
               </div>
             </TooltipTrigger>
             <TooltipContent className="text-xs">
@@ -74,7 +99,7 @@ export function Topbar() {
             </TooltipContent>
           </Tooltip>
         ))}
-        <span className="ml-2 text-xs text-muted-foreground font-medium">Development</span>
+        <span className="ml-2 text-xs text-muted-foreground font-medium">{stageLabel}</span>
       </div>
 
       {/* Right side controls */}

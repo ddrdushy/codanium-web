@@ -24,32 +24,32 @@ const groupConfig: Record<AgentGroup, {
   border: string;
 }> = {
   governance: {
-    label: 'Governance',
-    description: 'Orchestration, state management, decisions, audit & security',
+    label: 'Management',
+    description: 'Project coordination, quality checks, and decision management',
     icon: Shield,
     color: 'text-amber',
     bg: 'bg-amber/10',
     border: 'border-amber/20',
   },
   sdlc: {
-    label: 'SDLC',
-    description: 'Business analysis, architecture, design, planning & leadership',
+    label: 'Planning & Design',
+    description: 'Requirements, architecture, design, and project planning',
     icon: Activity,
     color: 'text-blue-400',
     bg: 'bg-blue-500/10',
     border: 'border-blue-500/20',
   },
   engineering: {
-    label: 'Engineering',
-    description: 'Development, review, testing, automation & performance',
+    label: 'Building & Testing',
+    description: 'Writing code, reviewing quality, testing, and optimization',
     icon: Code2,
     color: 'text-emerald-400',
     bg: 'bg-emerald-500/10',
     border: 'border-emerald-500/20',
   },
   platform: {
-    label: 'Platform',
-    description: 'Infrastructure, CI/CD, integrations, secrets & reliability',
+    label: 'Infrastructure',
+    description: 'Servers, deployment, integrations, and system reliability',
     icon: Cloud,
     color: 'text-violet-400',
     bg: 'bg-violet-500/10',
@@ -57,7 +57,7 @@ const groupConfig: Record<AgentGroup, {
   },
   ai_cost: {
     label: 'AI & Cost',
-    description: 'LLM gateway, prompt engineering & cost analytics',
+    description: 'AI model management and cost tracking',
     icon: BrainCircuit,
     color: 'text-pink-400',
     bg: 'bg-pink-500/10',
@@ -175,7 +175,7 @@ export default function AgentsPage() {
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
               <Bot className="w-5 h-5 text-amber" />
-              Agents
+              AI Team
             </h1>
             <div className="flex items-center gap-1.5">
               <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/20 text-[10px]">
@@ -312,7 +312,7 @@ export default function AgentsPage() {
         {/* Footer Stats */}
         <div className="px-4 py-3 border-t border-border bg-white/[0.01]">
           <div className="flex items-center justify-between text-[10px] text-muted-foreground/50">
-            <span>{agents.length} total agents</span>
+            <span>{agents.length} team members</span>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <Circle className="w-2 h-2 fill-emerald-500 text-emerald-500" /> {workingCount}

@@ -8,30 +8,30 @@ const steps = [
   {
     number: 1,
     icon: FolderPlus,
-    title: 'Define Your Product',
+    title: 'Describe Your Idea',
     description:
-      'Create a project, upload requirements, and set your SDLC preferences.',
+      'Tell us what you want built. It can be a rough idea, a detailed brief, or anything in between.',
   },
   {
     number: 2,
     icon: Bot,
-    title: 'Agents Activate',
+    title: 'Your AI Team Gets to Work',
     description:
-      '23 AI agents self-organize into squads. BA writes the BRD, Architect designs the system.',
+      'Our AI analysts clarify your requirements, architects design the solution, and developers start building.',
   },
   {
     number: 3,
     icon: Scale,
-    title: 'Review & Decide',
+    title: 'Review & Approve',
     description:
-      'Agents surface decisions for your approval. You stay in control of every critical choice.',
+      'Your AI team presents key decisions with clear recommendations. You approve what matters to you.',
   },
   {
     number: 4,
     icon: Rocket,
-    title: 'Ship with Confidence',
+    title: 'Receive Your Product',
     description:
-      'Automated testing, code review, and deployment. Quality gates ensure nothing ships broken.',
+      'Your software is tested, reviewed, and deployed. Quality checks at every step ensure it works right.',
   },
 ];
 
@@ -57,7 +57,7 @@ export function HowItWorksSection() {
             How It Works
           </span>
           <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-            From Idea to Production in 4 Steps
+            From Idea to Launch in 4 Steps
           </h2>
         </motion.div>
 

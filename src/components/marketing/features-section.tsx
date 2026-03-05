@@ -14,54 +14,54 @@ import {
 const features = [
   {
     icon: Bot,
-    title: '23 AI Agents',
+    title: 'A Full AI Team',
     description:
-      'From Business Analyst to QA Engineer, each agent has specialized skills and authority contracts.',
+      '23 specialists — from requirements analyst to quality tester — work around the clock to build your software.',
     color: 'text-emerald-400',
     bg: 'bg-emerald-400/10',
     border: 'border-emerald-400/20',
   },
   {
     icon: Workflow,
-    title: 'SDLC Pipeline',
+    title: 'End-to-End Delivery',
     description:
-      '10-stage pipeline from Business Analysis to Monitoring with automated quality gates between stages.',
+      'Your project moves through 10 stages from requirements to launch, with quality checks at every step.',
     color: 'text-amber-400',
     bg: 'bg-amber-400/10',
     border: 'border-amber-400/20',
   },
   {
     icon: KanbanSquare,
-    title: 'Kanban Board',
+    title: 'Live Progress Tracking',
     description:
-      'AI-managed task board with 7 state columns. Agents pick up cards, report progress, and request reviews.',
+      'See exactly what your AI team is working on, what\'s done, and what needs your attention — all in real time.',
     color: 'text-blue-400',
     bg: 'bg-blue-400/10',
     border: 'border-blue-400/20',
   },
   {
     icon: Scale,
-    title: 'Decision Engine',
+    title: 'You Stay In Control',
     description:
-      'Structured decision-making with options analysis, risk ratings, and human-in-the-loop approval.',
+      'When a key choice needs to be made, your AI team presents clear options with recommendations. You approve.',
     color: 'text-purple-400',
     bg: 'bg-purple-400/10',
     border: 'border-purple-400/20',
   },
   {
     icon: MessageSquare,
-    title: 'Real-time Chat',
+    title: 'Talk To Your AI Team',
     description:
-      'Talk to any agent. See their reasoning. Approve actions. Code blocks, artifacts, and inline tools.',
+      'Ask questions, give feedback, or request changes. Your AI team responds instantly and explains their thinking.',
     color: 'text-rose-400',
     bg: 'bg-rose-400/10',
     border: 'border-rose-400/20',
   },
   {
     icon: BarChart3,
-    title: 'KPI Dashboard',
+    title: 'Budget & Progress Dashboard',
     description:
-      'Track delivery velocity, LLM costs, agent performance, and quality metrics in real time.',
+      'Track how your project is progressing, what it\'s costing, and when it\'ll be ready — all in one place.',
     color: 'text-red-400',
     bg: 'bg-red-400/10',
     border: 'border-red-400/20',
@@ -87,10 +87,10 @@ export function FeaturesSection() {
             Features
           </span>
           <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-            Everything Your Team Needs
+            Everything Handled For You
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            A complete AI-powered operating system for modern product delivery.
+            From your first idea to a working product — our AI team manages every step.
           </p>
         </motion.div>
 

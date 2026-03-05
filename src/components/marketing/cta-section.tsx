@@ -25,16 +25,16 @@ export function CTASection() {
           </div>
 
           <h2 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            Ready to Transform Your{' '}
+            Ready to Bring Your{' '}
             <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
-              Product Delivery
+              Idea to Life
             </span>
             ?
           </h2>
 
           <p className="mx-auto max-w-xl text-lg text-muted-foreground">
-            Join thousands of teams shipping faster with AI. Set up your first
-            project in under 2 minutes.
+            Describe what you want built and let our AI team handle the rest.
+            Your first project takes under 2 minutes to start.
           </p>
 
           <div className="flex flex-col items-center gap-4 pt-4">
@@ -43,7 +43,7 @@ export function CTASection() {
                 size="lg"
                 className="bg-amber text-background hover:bg-amber/90 font-semibold text-base px-10 h-13 glow-amber"
               >
-                Get Started Free
+                Start Your Project Free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

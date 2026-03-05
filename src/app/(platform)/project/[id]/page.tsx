@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { fetchProject, fetchCards, fetchAgents, fetchDecisions } from '@/lib/api';
-import { mockProject, mockCards, mockAgents, mockDecisions, mockSDLCProgress } from '@/lib/mock-data';
+import { mockProject, mockCards, mockAgents, mockDecisions } from '@/lib/mock-data';
 import type { Project, Card, Agent, Decision } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import { MetricSkeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import {
@@ -23,7 +24,7 @@ function getStatCards(projectId: string, cards: Card[], agents: Agent[], decisio
 
   return [
     {
-      label: 'Total Cards',
+      label: 'Total Tasks',
       value: String(cards.length),
       sub: `${inProgressCount} in progress`,
       icon: Kanban,
@@ -32,25 +33,25 @@ function getStatCards(projectId: string, cards: Card[], agents: Agent[], decisio
       href: `/project/${projectId}/board`,
     },
     {
-      label: 'Active Agents',
+      label: 'AI Team Active',
       value: String(activeAgentCount),
-      sub: `of ${agents.length} total`,
+      sub: `of ${agents.length} specialists`,
       icon: Bot,
       color: 'text-emerald-400',
       bg: 'bg-emerald-500/10 border-emerald-500/20',
       href: `/project/${projectId}/agents`,
     },
     {
-      label: 'Pending Decisions',
+      label: 'Needs Your Approval',
       value: String(pendingCount),
-      sub: 'awaiting approval',
+      sub: 'waiting for you',
       icon: Scale,
       color: 'text-amber',
       bg: 'bg-amber/10 border-amber/20',
       href: `/project/${projectId}/decisions`,
     },
     {
-      label: 'Blocked Items',
+      label: 'Items Needing Attention',
       value: String(blockedCount),
       sub: 'need attention',
       icon: AlertTriangle,
@@ -61,6 +62,12 @@ function getStatCards(projectId: string, cards: Card[], agents: Agent[], decisio
   ];
 }
 
+interface SDLCStage {
+  name: string;
+  status: string;
+  gate_passed: boolean;
+}
+
 export default function ProjectDashboard() {
   const params = useParams();
   const projectId = params.id as string;
@@ -69,6 +76,7 @@ export default function ProjectDashboard() {
   const [cards, setCards] = useState<Card[]>(mockCards);
   const [agents, setAgents] = useState<Agent[]>(mockAgents);
   const [decisions, setDecisions] = useState<Decision[]>(mockDecisions);
+  const [sdlcStages, setSdlcStages] = useState<SDLCStage[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -77,12 +85,22 @@ export default function ProjectDashboard() {
       fetchCards(projectId).then(setCards).catch(() => {}),
       fetchAgents(projectId).then(setAgents).catch(() => {}),
       fetchDecisions(projectId).then(setDecisions).catch(() => {}),
+      fetch(`/api/projects/${projectId}/sdlc`)
+        .then(r => r.json())
+        .then((data: any[]) => setSdlcStages(data.map(s => ({
+          name: s.name,
+          status: s.status.toLowerCase(),
+          gate_passed: s.gatePassed,
+        }))))
+        .catch(() => {}),
     ])
       .catch(() => {/* keep mock data */})
       .finally(() => setLoading(false));
   }, [projectId]);
 
   const activeAgents = agents.filter(a => a.status === 'working');
+  const completedStages = sdlcStages.filter(s => s.status === 'completed').length;
+  const activeStage = sdlcStages.find(s => s.status === 'active');
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -105,34 +123,44 @@ export default function ProjectDashboard() {
       >
         <div className="flex items-center gap-2 mb-3">
           <Zap className="w-4 h-4 text-amber" />
-          <h2 className="text-sm font-semibold">SDLC Progress</h2>
-          <Badge className="bg-amber/15 text-amber border-amber/20 text-[10px]">Stage 5 of 10</Badge>
+          <h2 className="text-sm font-semibold">Delivery Progress</h2>
+          <Badge className="bg-amber/15 text-amber border-amber/20 text-[10px]">
+            {activeStage ? activeStage.name : `${completedStages} of ${sdlcStages.length} complete`}
+          </Badge>
         </div>
-        <div className="flex items-center gap-1">
-          {mockSDLCProgress.map((stage, i) => (
-            <div key={stage.stage} className="flex-1 flex items-center gap-1">
-              <div className="flex-1 flex flex-col items-center gap-1.5">
-                <div
-                  className={cn(
-                    'w-full h-2 rounded-full transition-all',
-                    stage.status === 'completed' && 'bg-emerald-500',
-                    stage.status === 'active' && 'bg-amber',
-                    stage.status === 'pending' && 'bg-white/[0.06]',
-                    stage.status === 'blocked' && 'bg-red-500',
-                  )}
-                />
-                <span className={cn(
-                  'text-[9px] font-medium whitespace-nowrap',
-                  stage.status === 'completed' && 'text-emerald-400',
-                  stage.status === 'active' && 'text-amber',
-                  stage.status === 'pending' && 'text-muted-foreground/40',
-                )}>
-                  {stage.stage}
-                </span>
+        {sdlcStages.length > 0 ? (
+          <div className="flex items-center gap-1">
+            {sdlcStages.map((stage) => (
+              <div key={stage.name} className="flex-1 flex items-center gap-1">
+                <div className="flex-1 flex flex-col items-center gap-1.5">
+                  <div
+                    className={cn(
+                      'w-full h-2 rounded-full transition-all',
+                      stage.status === 'completed' && 'bg-emerald-500',
+                      stage.status === 'active' && 'bg-amber',
+                      stage.status === 'pending' && 'bg-white/[0.06]',
+                      stage.status === 'blocked' && 'bg-red-500',
+                    )}
+                  />
+                  <span className={cn(
+                    'text-[9px] font-medium whitespace-nowrap',
+                    stage.status === 'completed' && 'text-emerald-400',
+                    stage.status === 'active' && 'text-amber',
+                    stage.status === 'pending' && 'text-muted-foreground/40',
+                  )}>
+                    {stage.name}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex-1 h-2 rounded-full bg-white/[0.06] animate-pulse" />
+            ))}
+          </div>
+        )}
       </motion.div>
 
       {/* Stat Cards */}
@@ -179,7 +207,7 @@ export default function ProjectDashboard() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <Bot className="w-4 h-4 text-emerald-400" />
-              Active Agents
+              AI Team at Work
             </h3>
             <Link href={`/project/${projectId}/agents`} className="text-[11px] text-amber hover:underline flex items-center gap-0.5">
               View all <ArrowRight className="w-3 h-3" />

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -25,11 +26,11 @@ interface Document {
 }
 
 const docTypeConfig: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
-  brd: { label: 'BRD', icon: BookOpen, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-  sdd: { label: 'SDD', icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  brd: { label: 'Requirements', icon: BookOpen, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
+  sdd: { label: 'Design Spec', icon: Code2, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
   'api-spec': { label: 'API Spec', icon: FileCode2, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
-  runbook: { label: 'Runbook', icon: ScrollText, color: 'text-amber', bg: 'bg-amber/10 border-amber/20' },
-  adr: { label: 'ADR', icon: Layers, color: 'text-pink-400', bg: 'bg-pink-500/10 border-pink-500/20' },
+  runbook: { label: 'Operations Guide', icon: ScrollText, color: 'text-amber', bg: 'bg-amber/10 border-amber/20' },
+  adr: { label: 'Decision Record', icon: Layers, color: 'text-pink-400', bg: 'bg-pink-500/10 border-pink-500/20' },
 };
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
@@ -111,17 +112,65 @@ const mockBRDContent = {
   ],
 };
 
+const dbTypeMap: Record<string, Document['type']> = {
+  BRD: 'brd', SDD: 'sdd', API_SPEC: 'api-spec', RUNBOOK: 'runbook', ADR: 'adr',
+};
+const dbStatusMap: Record<string, Document['status']> = {
+  DRAFT: 'draft', REVIEW: 'review', APPROVED: 'approved', PUBLISHED: 'published',
+};
+
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(diff / 86400000);
+  return `${days}d ago`;
+}
+
 export default function DocsPage() {
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const [documents, setDocuments] = useState<Document[]>(mockDocuments);
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(mockDocuments[0]);
   const [editMode, setEditMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/documents`)
+      .then(r => r.json())
+      .then((data: any[]) => {
+        if (data.length > 0) {
+          const mapped = data.map((d: any) => ({
+            id: d.id,
+            title: d.title,
+            type: dbTypeMap[d.type] ?? 'brd',
+            status: dbStatusMap[d.status] ?? 'draft',
+            owner: d.owner ?? 'Unknown',
+            ownerAvatar: d.ownerAvatar ?? '📋',
+            lastUpdated: formatRelative(d.updatedAt),
+            wordCount: d.wordCount ?? 0,
+            sections: d.sections ?? 0,
+            locked: d.locked ?? false,
+          }));
+          setDocuments(mapped);
+          setSelectedDoc(mapped[0]);
+        }
+      })
+      .catch(() => {/* keep mock data */})
+      .finally(() => setLoading(false));
+  }, [projectId]);
 
   const filteredDocs = searchQuery
-    ? mockDocuments.filter(d =>
+    ? documents.filter(d =>
       d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.type.toLowerCase().includes(searchQuery.toLowerCase())
     )
-    : mockDocuments;
+    : documents;
 
   return (
     <div className="flex h-full">
@@ -132,7 +181,7 @@ export default function DocsPage() {
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
               <FileText className="w-5 h-5 text-amber" />
-              Docs
+              Documents
             </h1>
             <Button size="sm" className="h-7 text-[11px] bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20">
               <Plus className="w-3 h-3 mr-1" /> New Doc
@@ -197,7 +246,7 @@ export default function DocsPage() {
 
         {/* Stats Footer */}
         <div className="px-4 py-3 border-t border-border text-[10px] text-muted-foreground/40">
-          {mockDocuments.length} documents · {mockDocuments.filter(d => d.status === 'draft').length} drafts
+          {documents.length} documents · {documents.filter(d => d.status === 'draft').length} drafts
         </div>
       </div>
 

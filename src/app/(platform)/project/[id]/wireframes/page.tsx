@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -188,9 +189,49 @@ function WireframePreview({ screen }: { screen: string }) {
   );
 }
 
+const dbWfStatus: Record<string, Wireframe['status']> = { DRAFT: 'draft', REVIEW: 'review', APPROVED: 'approved' };
+const dbDevice: Record<string, Wireframe['device']> = { DESKTOP: 'desktop', MOBILE: 'mobile', TABLET: 'tablet' };
+
+function formatRelative(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function WireframesPage() {
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const [wireframes, setWireframes] = useState<Wireframe[]>(mockWireframes);
   const [selectedWireframe, setSelectedWireframe] = useState<Wireframe | null>(mockWireframes[0]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/wireframes`)
+      .then(r => r.json())
+      .then((data: any[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((w: any) => ({
+            id: w.id,
+            title: w.title,
+            screen: w.screen ?? '',
+            status: dbWfStatus[w.status] ?? 'draft',
+            device: dbDevice[w.device] ?? 'desktop',
+            owner: w.owner ?? 'Unknown',
+            ownerAvatar: w.ownerAvatar ?? '🎨',
+            lastUpdated: formatRelative(w.updatedAt),
+            components: w.components ?? 0,
+            version: w.version ?? 1,
+          }));
+          setWireframes(mapped);
+          setSelectedWireframe(mapped[0]);
+        }
+      })
+      .catch(() => {});
+  }, [projectId]);
 
   return (
     <div className="flex h-full">
@@ -201,7 +242,7 @@ export default function WireframesPage() {
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
               <PenTool className="w-5 h-5 text-amber" />
-              Wireframes
+              Designs
             </h1>
             <Button size="sm" className="h-7 text-[11px] bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20">
               <Plus className="w-3 h-3 mr-1" /> New
@@ -234,7 +275,7 @@ export default function WireframesPage() {
         <div className="flex-1 overflow-y-auto p-2">
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-2 gap-2">
-              {mockWireframes.map((wf, i) => {
+              {wireframes.map((wf, i) => {
                 const isSelected = selectedWireframe?.id === wf.id;
                 const DevIcon = deviceIcon[wf.device];
                 return (
@@ -270,7 +311,7 @@ export default function WireframesPage() {
             </div>
           ) : (
             <div className="space-y-1">
-              {mockWireframes.map((wf, i) => {
+              {wireframes.map((wf, i) => {
                 const isSelected = selectedWireframe?.id === wf.id;
                 const DevIcon = deviceIcon[wf.device];
                 return (

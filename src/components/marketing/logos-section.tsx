@@ -31,7 +31,7 @@ export function LogosSection() {
           transition={{ duration: 0.5 }}
           className="mb-10 text-center text-sm font-medium text-muted-foreground uppercase tracking-widest"
         >
-          Trusted by innovative teams
+          Trusted by founders and businesses
         </motion.p>
         <motion.div
           initial={{ opacity: 0, y: 10 }}

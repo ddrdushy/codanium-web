@@ -2,15 +2,15 @@
 
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   LayoutDashboard, Kanban, Workflow, Scale, Bot,
   MessageSquare, FileText, PenTool, GitBranch, BarChart3,
   Settings, Users, FolderOpen, CreditCard, ScrollText,
   Layers, CircleDot
 } from 'lucide-react';
-import { mockProjects, mockCards, mockDecisions, mockAgents } from '@/lib/mock-data';
-import { mockAdminUsers } from '@/lib/mock-admin-data';
+import { fetchProjects, fetchCards, fetchAgents, fetchDecisions, fetchAdminUsers } from '@/lib/api';
+import type { Project, Card, Agent, Decision, AdminUser } from '@/types';
 import type { LucideIcon } from 'lucide-react';
 
 export interface CommandItem {
@@ -42,6 +42,31 @@ export function useCommandPaletteData(): CommandItem[] {
     return idx !== -1 && parts[idx + 1] ? parts[idx + 1] : null;
   }, [pathname]);
 
+  // Real data from API
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+
+  useEffect(() => {
+    fetchProjects().then(setProjects).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (currentProjectId) {
+      fetchCards(currentProjectId).then(setCards).catch(() => {});
+      fetchAgents(currentProjectId).then(setAgents).catch(() => {});
+      fetchDecisions(currentProjectId).then(setDecisions).catch(() => {});
+    }
+  }, [currentProjectId]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchAdminUsers({ limit: 50 }).then(r => setAdminUsers(r.users)).catch(() => {});
+    }
+  }, [isAdmin]);
+
   return useMemo(() => {
     const items: CommandItem[] = [];
 
@@ -49,16 +74,16 @@ export function useCommandPaletteData(): CommandItem[] {
     if (currentProjectId) {
       const pid = currentProjectId;
       const nav = [
-        { label: 'Dashboard', icon: LayoutDashboard, path: `/project/${pid}`, kw: ['home', 'overview'] },
-        { label: 'Board', icon: Kanban, path: `/project/${pid}/board`, kw: ['kanban', 'cards', 'tasks'] },
-        { label: 'Pipeline', icon: Workflow, path: `/project/${pid}/pipeline`, kw: ['flow', 'stages', 'sdlc'] },
-        { label: 'Decisions', icon: Scale, path: `/project/${pid}/decisions`, kw: ['approve', 'review'] },
-        { label: 'Agents', icon: Bot, path: `/project/${pid}/agents`, kw: ['ai', 'team'] },
+        { label: 'Overview', icon: LayoutDashboard, path: `/project/${pid}`, kw: ['home', 'overview'] },
+        { label: 'Work Board', icon: Kanban, path: `/project/${pid}/board`, kw: ['kanban', 'cards', 'tasks'] },
+        { label: 'Delivery Progress', icon: Workflow, path: `/project/${pid}/pipeline`, kw: ['flow', 'stages', 'sdlc'] },
+        { label: 'My Decisions', icon: Scale, path: `/project/${pid}/decisions`, kw: ['approve', 'review'] },
+        { label: 'AI Team', icon: Bot, path: `/project/${pid}/agents`, kw: ['ai', 'team'] },
         { label: 'Chat', icon: MessageSquare, path: `/project/${pid}/chat`, kw: ['message', 'talk'] },
-        { label: 'Docs', icon: FileText, path: `/project/${pid}/docs`, kw: ['documentation'] },
-        { label: 'Wireframes', icon: PenTool, path: `/project/${pid}/wireframes`, kw: ['design', 'ui', 'mockup'] },
-        { label: 'Git', icon: GitBranch, path: `/project/${pid}/git`, kw: ['code', 'repository'] },
-        { label: 'KPIs', icon: BarChart3, path: `/project/${pid}/kpi`, kw: ['metrics', 'analytics'] },
+        { label: 'Documents', icon: FileText, path: `/project/${pid}/docs`, kw: ['documentation'] },
+        { label: 'Designs', icon: PenTool, path: `/project/${pid}/wireframes`, kw: ['design', 'ui', 'mockup'] },
+        { label: 'Code & Releases', icon: GitBranch, path: `/project/${pid}/git`, kw: ['code', 'repository'] },
+        { label: 'Reports', icon: BarChart3, path: `/project/${pid}/kpi`, kw: ['metrics', 'analytics'] },
         { label: 'Settings', icon: Settings, path: `/project/${pid}/settings`, kw: ['config'] },
       ];
 
@@ -113,7 +138,7 @@ export function useCommandPaletteData(): CommandItem[] {
     }
 
     // ── Projects ──
-    mockProjects.forEach(project => {
+    projects.forEach(project => {
       items.push({
         id: `project-${project.id}`,
         label: project.name,
@@ -127,7 +152,7 @@ export function useCommandPaletteData(): CommandItem[] {
     });
 
     // ── Cards ──
-    mockCards.forEach(card => {
+    cards.forEach(card => {
       items.push({
         id: `card-${card.card_id}`,
         label: `${card.card_id}: ${card.title}`,
@@ -144,7 +169,7 @@ export function useCommandPaletteData(): CommandItem[] {
     });
 
     // ── Agents ──
-    mockAgents.forEach(agent => {
+    agents.forEach(agent => {
       items.push({
         id: `agent-${agent.id}`,
         label: agent.name,
@@ -162,7 +187,7 @@ export function useCommandPaletteData(): CommandItem[] {
     });
 
     // ── Decisions ──
-    mockDecisions.forEach(decision => {
+    decisions.forEach(decision => {
       items.push({
         id: `decision-${decision.decision_id}`,
         label: `${decision.decision_id}: ${decision.trigger}`,
@@ -180,7 +205,7 @@ export function useCommandPaletteData(): CommandItem[] {
 
     // ── Admin Users (only for admin) ──
     if (isAdmin) {
-      mockAdminUsers.forEach(user => {
+      adminUsers.forEach(user => {
         items.push({
           id: `admin-user-${user.id}`,
           label: user.name,
@@ -198,5 +223,5 @@ export function useCommandPaletteData(): CommandItem[] {
     }
 
     return items;
-  }, [currentProjectId, isAdmin]);
+  }, [currentProjectId, isAdmin, projects, cards, agents, decisions, adminUsers]);
 }

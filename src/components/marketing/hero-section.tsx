@@ -26,9 +26,9 @@ const agentAvatars = [
 ];
 
 const miniCards = [
-  { title: 'Auth Module', status: 'In Progress', color: 'text-amber-400 bg-amber-400/10' },
-  { title: 'API Design', status: 'Review', color: 'text-blue-400 bg-blue-400/10' },
-  { title: 'DB Schema', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
+  { title: 'Login System', status: 'In Progress', color: 'text-amber-400 bg-amber-400/10' },
+  { title: 'Backend Setup', status: 'Review', color: 'text-blue-400 bg-blue-400/10' },
+  { title: 'Database Design', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
 ];
 
 export function HeroSection() {
@@ -58,20 +58,19 @@ export function HeroSection() {
               variants={fadeUp}
               className="mt-4 text-5xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-6xl lg:text-7xl"
             >
-              Ship Products{' '}
+              Describe Your Idea.{' '}
               <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
-                10x Faster
-              </span>{' '}
-              with AI Agent Teams
+                We&apos;ll Build It.
+              </span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
               className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl"
             >
-              23 specialized AI agents work alongside your team to analyze, design,
-              build, test, and deploy software. One platform, every stage of your
-              SDLC automated.
+              Tell us what you need — even a rough idea. Our team of 23 AI agents
+              handles everything: clarifying requirements, designing, coding, testing,
+              and deploying your software.
             </motion.p>
 
             <motion.div variants={fadeUp} className="mt-10 flex flex-wrap items-center gap-4">
@@ -80,7 +79,7 @@ export function HeroSection() {
                   size="lg"
                   className="bg-amber text-background hover:bg-amber/90 font-semibold text-base px-8 h-12 glow-amber"
                 >
-                  Get Started Free
+                  Start Your Project Free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
@@ -106,7 +105,7 @@ export function HeroSection() {
               </span>
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Free tier available
+                No coding skills needed
               </span>
             </motion.div>
           </motion.div>
@@ -136,10 +135,10 @@ export function HeroSection() {
               {/* Stats row */}
               <div className="grid grid-cols-4 gap-3 mb-4">
                 {[
-                  { label: 'Active Cards', value: '47', icon: GitBranch, color: 'text-blue-400' },
-                  { label: 'Agents', value: '8', icon: Bot, color: 'text-emerald-400' },
-                  { label: 'Decisions', value: '3', icon: CheckCircle2, color: 'text-purple-400' },
-                  { label: 'Velocity', value: '94%', icon: BarChart3, color: 'text-amber-400' },
+                  { label: 'Active Tasks', value: '47', icon: GitBranch, color: 'text-blue-400' },
+                  { label: 'Team', value: '8', icon: Bot, color: 'text-emerald-400' },
+                  { label: 'Your Approvals', value: '3', icon: CheckCircle2, color: 'text-purple-400' },
+                  { label: 'Progress', value: '94%', icon: BarChart3, color: 'text-amber-400' },
                 ].map((stat) => (
                   <div
                     key={stat.label}
@@ -157,8 +156,8 @@ export function HeroSection() {
               {/* Progress bar */}
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-medium text-muted-foreground">SDLC Progress</span>
-                  <span className="text-[10px] text-amber font-semibold">Stage 6/10</span>
+                  <span className="text-[10px] font-medium text-muted-foreground">Build Progress</span>
+                  <span className="text-[10px] text-amber font-semibold">Step 6 of 10</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-[var(--surface-overlay)]">
                   <div className="h-2 w-[60%] rounded-full bg-gradient-to-r from-amber-500 to-orange-500" />
@@ -170,7 +169,7 @@ export function HeroSection() {
                 {/* Active Agents */}
                 <div className="rounded-lg border border-border bg-[var(--surface-raised)] p-3">
                   <span className="text-[10px] font-medium text-muted-foreground mb-2 block">
-                    Active Agents
+                    Your AI Team
                   </span>
                   <div className="flex -space-x-2">
                     {agentAvatars.map((agent) => (
@@ -190,7 +189,7 @@ export function HeroSection() {
                 {/* Mini task cards */}
                 <div className="rounded-lg border border-border bg-[var(--surface-raised)] p-3">
                   <span className="text-[10px] font-medium text-muted-foreground mb-2 block">
-                    Recent Tasks
+                    Current Work
                   </span>
                   <div className="space-y-1.5">
                     {miniCards.map((card) => (

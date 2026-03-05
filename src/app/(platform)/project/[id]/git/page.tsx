@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -89,10 +90,65 @@ const mockReleases: Release[] = [
 
 type ViewTab = 'branches' | 'prs' | 'releases';
 
-export default function GitPage() {
-  const [activeTab, setActiveTab] = useState<ViewTab>('prs');
+const dbBranchStatus: Record<string, Branch['status']> = { ACTIVE: 'active', MERGED: 'merged', STALE: 'stale' };
+const dbPRStatus: Record<string, PullRequest['status']> = { OPEN: 'open', MERGED: 'merged', CLOSED: 'closed' };
+const dbCheckStatus: Record<string, PullRequest['checks']> = { PASSING: 'passing', FAILING: 'failing', PENDING: 'pending' };
+const dbReleaseStatus: Record<string, Release['status']> = { RELEASED: 'released', DRAFT: 'draft', PRE_RELEASE: 'pre-release' };
 
-  const openPRs = mockPRs.filter(pr => pr.status === 'open').length;
+function formatRelative(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+export default function GitPage() {
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const [activeTab, setActiveTab] = useState<ViewTab>('prs');
+  const [branches, setBranches] = useState<Branch[]>(mockBranches);
+  const [pullRequests, setPullRequests] = useState<PullRequest[]>(mockPRs);
+  const [releases, setReleases] = useState<Release[]>(mockReleases);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/projects/${projectId}/git/branches`).then(r => r.json()),
+      fetch(`/api/projects/${projectId}/git/pull-requests`).then(r => r.json()),
+      fetch(`/api/projects/${projectId}/git/releases`).then(r => r.json()),
+    ])
+      .then(([branchData, prData, releaseData]) => {
+        if (Array.isArray(branchData) && branchData.length > 0) {
+          setBranches(branchData.map((b: any) => ({
+            name: b.name, status: dbBranchStatus[b.status] ?? 'active',
+            lastCommit: b.lastCommit ?? '', author: b.author ?? '',
+            behind: b.behind ?? 0, ahead: b.ahead ?? 0,
+          })));
+        }
+        if (Array.isArray(prData) && prData.length > 0) {
+          setPullRequests(prData.map((pr: any) => ({
+            id: pr.number, title: pr.title, branch: pr.branch,
+            status: dbPRStatus[pr.status] ?? 'open', author: pr.author ?? '',
+            avatar: pr.avatar ?? '', reviewers: pr.reviewers ?? [],
+            checks: dbCheckStatus[pr.checks] ?? 'pending',
+            additions: pr.additions ?? 0, deletions: pr.deletions ?? 0,
+            comments: pr.comments ?? 0, created: formatRelative(pr.createdAt),
+          })));
+        }
+        if (Array.isArray(releaseData) && releaseData.length > 0) {
+          setReleases(releaseData.map((r: any) => ({
+            version: r.version, date: r.date ?? '',
+            status: dbReleaseStatus[r.status] ?? 'released',
+            changes: r.changes ?? 0, features: r.features ?? [],
+          })));
+        }
+      })
+      .catch(() => {});
+  }, [projectId]);
+
+  const openPRs = pullRequests.filter(pr => pr.status === 'open').length;
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -105,9 +161,9 @@ export default function GitPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
             <GitBranch className="w-5 h-5 text-amber" />
-            Git & Releases
+            Code & Releases
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Branches, pull requests, and release management</p>
+          <p className="text-sm text-muted-foreground mt-1">Your project's codebase, updates, and version history</p>
         </div>
         <div className="flex items-center gap-2">
           {openPRs > 0 && (
@@ -121,10 +177,10 @@ export default function GitPage() {
       {/* Quick Stats */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Active Branches', value: mockBranches.filter(b => b.status === 'active').length.toString(), icon: GitBranch, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
+          { label: 'Active Branches', value: branches.filter(b => b.status === 'active').length.toString(), icon: GitBranch, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
           { label: 'Open PRs', value: openPRs.toString(), icon: GitPullRequest, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-          { label: 'Releases', value: mockReleases.length.toString(), icon: Tag, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
-          { label: 'Latest', value: mockReleases[0].version, icon: Rocket, color: 'text-amber', bg: 'bg-amber/10 border-amber/20' },
+          { label: 'Releases', value: releases.length.toString(), icon: Tag, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
+          { label: 'Latest', value: releases[0]?.version ?? '-', icon: Rocket, color: 'text-amber', bg: 'bg-amber/10 border-amber/20' },
         ].map((stat, i) => {
           const Icon = stat.icon;
           return (
@@ -151,8 +207,8 @@ export default function GitPage() {
       <div className="flex gap-1 bg-white/[0.02] rounded-xl p-1 border border-border">
         {[
           { key: 'prs' as ViewTab, label: 'Pull Requests', icon: GitPullRequest, count: openPRs },
-          { key: 'branches' as ViewTab, label: 'Branches', icon: GitBranch, count: mockBranches.length },
-          { key: 'releases' as ViewTab, label: 'Releases', icon: Tag, count: mockReleases.length },
+          { key: 'branches' as ViewTab, label: 'Branches', icon: GitBranch, count: branches.length },
+          { key: 'releases' as ViewTab, label: 'Releases', icon: Tag, count: releases.length },
         ].map(tab => {
           const Icon = tab.icon;
           return (
@@ -183,7 +239,7 @@ export default function GitPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2"
         >
-          {mockPRs.map((pr, i) => (
+          {pullRequests.map((pr, i) => (
             <motion.div
               key={pr.id}
               initial={{ opacity: 0, y: 10 }}
@@ -281,7 +337,7 @@ export default function GitPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2"
         >
-          {mockBranches.map((branch, i) => (
+          {branches.map((branch, i) => (
             <motion.div
               key={branch.name}
               initial={{ opacity: 0, y: 10 }}
@@ -337,7 +393,7 @@ export default function GitPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-3"
         >
-          {mockReleases.map((release, i) => (
+          {releases.map((release, i) => (
             <motion.div
               key={release.version}
               initial={{ opacity: 0, y: 10 }}

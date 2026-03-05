@@ -68,7 +68,7 @@ export function SignupForm() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Get started with AI Team Studio for free
+          Start building your idea with AI — for free
         </p>
       </div>
 

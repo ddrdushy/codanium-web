@@ -71,7 +71,7 @@ export function MarketingNav() {
               size="sm"
               className="bg-amber text-background hover:bg-amber/90 font-semibold"
             >
-              Get Started
+              Start a Project
             </Button>
           </Link>
         </div>
@@ -119,7 +119,7 @@ export function MarketingNav() {
                 </Link>
                 <Link href="/signup" onClick={() => setMobileOpen(false)}>
                   <Button className="w-full bg-amber text-background hover:bg-amber/90 font-semibold">
-                    Get Started
+                    Start a Project
                   </Button>
                 </Link>
               </div>

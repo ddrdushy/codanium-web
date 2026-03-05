@@ -1,12 +1,16 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { mockSDLCProgress, mockCards, mockAgents } from '@/lib/mock-data';
+import { mockSDLCProgress } from '@/lib/mock-data';
+import { SDLCProgress } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-  CheckCircle2, Circle, Loader2, AlertTriangle,
-  Lock, ArrowRight, ChevronRight, Zap, Shield
+  CheckCircle2, Loader2,
+  Zap, Shield
 } from 'lucide-react';
 
 const stageIcons: Record<string, string> = {
@@ -23,37 +27,86 @@ const stageIcons: Record<string, string> = {
 };
 
 const gateDescriptions: Record<string, string> = {
-  'Business Analysis': 'BRD approved by BA + user',
-  'Architecture': 'SDD approved, feasibility confirmed',
+  'Business Analysis': 'Requirements confirmed and approved',
+  'Architecture': 'Technical design reviewed and approved',
   'UI/UX Design': 'Wireframes approved',
-  'Planning': 'Epics, features, tasks created on board',
-  'Development': 'Code implemented per task DoD',
-  'Code Review': 'PR approved, quality confirmed',
+  'Planning': 'Work plan created and ready',
+  'Development': 'Development complete for each task',
+  'Code Review': 'Code reviewed and quality verified',
   'Testing': 'All test scenarios pass',
-  'Release': 'DoD met, rollback ready, deployed',
-  'Monitoring': 'Health checks pass, no critical incidents',
-  'Iteration': 'Next cycle begins from current state',
+  'Release': 'Ready for launch, safety net in place',
+  'Monitoring': 'System running smoothly, no issues',
+  'Iteration': 'Ready for next round of improvements',
 };
 
 export default function PipelinePage() {
+  const params = useParams();
+  const projectId = params.id as string;
+  const [stages, setStages] = useState<SDLCProgress[]>(mockSDLCProgress);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (projectId) {
+      fetch(`/api/projects/${projectId}/sdlc`)
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .then((data: any[]) => {
+          setStages(data.map(s => ({
+            stage: s.name as SDLCProgress['stage'],
+            status: s.status.toLowerCase() as SDLCProgress['status'],
+            gate_passed: s.gatePassed,
+          })));
+        })
+        .catch(() => {/* keep mock data */})
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  const completedCount = stages.filter(s => s.status === 'completed').length;
+  const activeCount = stages.filter(s => s.status === 'active').length;
+  const pendingCount = stages.filter(s => s.status === 'pending').length;
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-3 w-64" />
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-start gap-4 p-4 rounded-xl border border-border">
+              <Skeleton className="w-10 h-10 rounded-xl" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-56" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h1 className="text-lg font-bold tracking-tight">SDLC Pipeline</h1>
+        <h1 className="text-lg font-bold tracking-tight">Delivery Progress</h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          10-stage lifecycle · Quality gates enforced between every stage
+          {stages.length}-step delivery process — quality checks at every step
         </p>
       </motion.div>
 
       {/* Pipeline Flow */}
       <div className="space-y-3">
-        {mockSDLCProgress.map((stage, i) => {
+        {stages.map((stage, i) => {
           const icon = stageIcons[stage.stage] || '📋';
           const gate = gateDescriptions[stage.stage] || '';
-          const isLast = i === mockSDLCProgress.length - 1;
+          const isLast = i === stages.length - 1;
 
           return (
             <motion.div
@@ -105,7 +158,7 @@ export default function PipelinePage() {
                     )}
                     {stage.status === 'completed' && stage.gate_passed && (
                       <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/20 text-[10px]">
-                        Gate Passed
+                        Check Passed
                       </Badge>
                     )}
                   </div>
@@ -152,11 +205,11 @@ export default function PipelinePage() {
       >
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Zap className="w-3 h-3 text-amber" />
-          <span><strong className="text-foreground">4 of 10</strong> stages completed</span>
+          <span><strong className="text-foreground">{completedCount} of {stages.length}</strong> stages completed</span>
           <span className="text-border">·</span>
-          <span><strong className="text-amber">3</strong> stages active</span>
+          <span><strong className="text-amber">{activeCount}</strong> stages active</span>
           <span className="text-border">·</span>
-          <span><strong className="text-muted-foreground/50">3</strong> pending</span>
+          <span><strong className="text-muted-foreground/50">{pendingCount}</strong> pending</span>
         </div>
       </motion.div>
     </div>

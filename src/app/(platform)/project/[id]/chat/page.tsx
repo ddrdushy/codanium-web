@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fetchAgents } from '@/lib/api';
 import { mockAgents } from '@/lib/mock-data';
 import { Agent } from '@/types';
 import { cn } from '@/lib/utils';
@@ -11,7 +13,7 @@ import {
   Send, Bot, User, Sparkles, ChevronDown, Paperclip,
   Code2, FileText, CheckCircle2, AlertTriangle, Clock,
   MessageSquare, Zap, Eye, Terminal, Copy, ThumbsUp,
-  RotateCcw, ArrowRight
+  RotateCcw, ArrowRight, Loader2
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -26,124 +28,160 @@ interface ChatMessage {
   codeBlock?: { language: string; code: string };
 }
 
-const mockMessages: ChatMessage[] = [
-  {
-    id: '1',
-    role: 'system',
-    content: 'Session started — connected to project AI Team Studio',
-    timestamp: '10:30 AM',
-  },
-  {
-    id: '2',
-    role: 'user',
-    content: 'Review the current architecture for the LLM Gateway and suggest improvements for multi-provider support.',
-    timestamp: '10:31 AM',
-  },
-  {
-    id: '3',
-    role: 'agent',
-    agent: mockAgents.find(a => a.id === 'solution-architect'),
-    content: 'I\'ve analyzed the current LLM Gateway architecture. Here are my findings:\n\n**Current State:**\nThe gateway uses a single-provider pattern with OpenAI hardcoded. This limits flexibility and creates vendor lock-in.\n\n**Recommended Improvements:**\n1. **Abstract Provider Interface** — Create a base `LLMProvider` class with `complete()`, `stream()`, and `embed()` methods\n2. **Model Router** — Add configuration-driven routing that maps model aliases to specific providers\n3. **Fallback Chain** — Implement automatic fallback when a provider is unavailable\n4. **Token Budget Enforcement** — Add per-agent and per-session token limits',
-    timestamp: '10:31 AM',
-    thinking: 'Analyzing the current gateway.py implementation... The single-provider pattern violates the BYOM principle. Need to design an abstraction layer that supports OpenAI, Anthropic, Ollama, and custom endpoints while maintaining a unified API surface.',
-    artifacts: [
-      { name: 'gateway-refactor.md', type: 'document' },
-      { name: 'provider-interface.py', type: 'code' },
-    ],
-  },
-  {
-    id: '4',
-    role: 'agent',
-    agent: mockAgents.find(a => a.id === 'solution-architect'),
-    content: 'Here\'s the proposed provider interface:',
-    timestamp: '10:32 AM',
-    codeBlock: {
-      language: 'python',
-      code: `class LLMProvider(ABC):
-    """Abstract base class for LLM providers."""
-
-    @abstractmethod
-    async def complete(
-        self,
-        messages: list[Message],
-        model: str,
-        **kwargs
-    ) -> CompletionResponse:
-        ...
-
-    @abstractmethod
-    async def stream(
-        self,
-        messages: list[Message],
-        model: str,
-        **kwargs
-    ) -> AsyncIterator[StreamChunk]:
-        ...`,
+function getDemoMessages(agents: Agent[]): ChatMessage[] {
+  const sa = agents.find(a => a.shortName === 'SA') ?? agents[0];
+  return [
+    {
+      id: 'sys-1', role: 'system',
+      content: 'Session started — connected to project AI Team Studio',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
-    action: {
-      label: 'Create FEAT-014: Refactor LLM Gateway to multi-provider',
-      status: 'pending',
+    {
+      id: 'agent-1', role: 'agent', agent: sa,
+      content: 'I\'ve analyzed the current LLM Gateway architecture. Here are my findings:\n\n**Current State:**\nThe gateway uses a single-provider pattern with OpenAI hardcoded. This limits flexibility and creates vendor lock-in.\n\n**Recommended Improvements:**\n1. **Abstract Provider Interface** — Create a base `LLMProvider` class with `complete()`, `stream()`, and `embed()` methods\n2. **Model Router** — Add configuration-driven routing that maps model aliases to specific providers\n3. **Fallback Chain** — Implement automatic fallback when a provider is unavailable\n4. **Token Budget Enforcement** — Add per-agent and per-session token limits',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      thinking: 'Analyzing the current gateway implementation... The single-provider pattern violates the BYOM principle. Need to design an abstraction layer that supports OpenAI, Anthropic, Ollama, and custom endpoints while maintaining a unified API surface.',
+      artifacts: [
+        { name: 'gateway-refactor.md', type: 'document' },
+        { name: 'provider-interface.py', type: 'code' },
+      ],
     },
-  },
-  {
-    id: '5',
-    role: 'user',
-    content: 'Looks good. Approve the feature card creation. Also, what\'s the estimated effort?',
-    timestamp: '10:33 AM',
-  },
-  {
-    id: '6',
-    role: 'agent',
-    agent: mockAgents.find(a => a.id === 'solution-architect'),
-    content: 'Feature card FEAT-014 has been created and assigned to the Junior Developer.\n\n**Effort Estimate:**\n- Provider abstraction: ~4 hours\n- OpenAI adapter: ~2 hours\n- Anthropic adapter: ~2 hours\n- Ollama adapter: ~3 hours\n- Model router + config: ~3 hours\n- Token budget tracking: ~2 hours\n- **Total: ~16 hours (2 days)**\n\nI\'ve marked this as High priority given it blocks the BYOM requirement.',
-    timestamp: '10:34 AM',
-    action: {
-      label: 'Created FEAT-014 — assigned to Junior Developer',
-      status: 'approved',
-    },
-  },
-];
+  ];
+}
 
-const activeAgents = mockAgents.filter(a => a.status === 'working' || a.status === 'waiting');
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 export default function ChatPage() {
-  const [messages] = useState<ChatMessage[]>(mockMessages);
+  const params = useParams();
+  const projectId = params.id as string;
+
+  const [agents, setAgents] = useState<Agent[]>(mockAgents);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [sending, setSending] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showThinking, setShowThinking] = useState<string | null>(null);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    fetchAgents(projectId)
+      .then(setAgents)
+      .catch(() => {});
+
+    fetch(`/api/projects/${projectId}/chat`)
+      .then(r => r.json())
+      .then((data: any[]) => {
+        if (data.length > 0) {
+          setMessages(data.map(m => ({
+            id: m.id,
+            role: m.role.toLowerCase() as 'user' | 'agent' | 'system',
+            agent: m.agent ? {
+              id: m.agent.id, name: m.agent.name, shortName: m.agent.shortName,
+              avatar: m.agent.avatar, status: m.agent.status?.toLowerCase() ?? 'idle',
+              group: 'core' as any, currentTask: null,
+            } : undefined,
+            content: m.content,
+            thinking: m.thinking ?? undefined,
+            timestamp: formatTime(m.createdAt),
+          })));
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [projectId]);
+
+  useEffect(() => {
+    if (loaded && messages.length === 0 && agents.length > 0) {
+      setMessages(getDemoMessages(agents));
+    }
+  }, [agents, messages.length, loaded]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const activeAgents = agents.filter(a => a.status === 'working' || a.status === 'waiting');
+
+  const handleSend = useCallback(async () => {
+    const text = inputValue.trim();
+    if (!text || sending) return;
+
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const tempId = `temp-${Date.now()}`;
+    const userMsg: ChatMessage = { id: tempId, role: 'user', content: text, timestamp: now };
+    setMessages(prev => [...prev, userMsg]);
+    setInputValue('');
+    setSending(true);
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'USER', content: text }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: saved.id } : m));
+      }
+
+      setTimeout(() => {
+        const orchestrator = agents.find(a => a.shortName === 'ORC') ?? agents[0];
+        if (orchestrator) {
+          const ackMsg: ChatMessage = {
+            id: `ack-${Date.now()}`,
+            role: 'agent',
+            agent: orchestrator,
+            content: `Received your request. I'm routing this to the appropriate agent for analysis. Stand by...`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          setMessages(prev => [...prev, ackMsg]);
+
+          fetch(`/api/projects/${projectId}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              role: 'AGENT', content: ackMsg.content, agentId: orchestrator.id,
+            }),
+          }).catch(() => {});
+        }
+        setSending(false);
+      }, 1200);
+    } catch {
+      setSending(false);
+    }
+  }, [inputValue, sending, projectId, agents]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   return (
     <div className="flex h-full">
-      {/* Main Chat */}
       <div className="flex-1 flex flex-col">
-        {/* Chat Header */}
         <div className="px-6 py-3 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <MessageSquare className="w-4 h-4 text-amber" />
-            <h1 className="text-sm font-semibold">Agent Chat</h1>
+            <h1 className="text-sm font-semibold">Chat with AI Team</h1>
             <Badge variant="outline" className="text-[10px] bg-white/[0.04]">
               {activeAgents.length} agents online
             </Badge>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" className="h-7 text-[11px] text-muted-foreground">
-              <Clock className="w-3 h-3 mr-1" />
-              History
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-[11px] text-muted-foreground">
-              <FileText className="w-3 h-3 mr-1" />
-              Export
+              <Clock className="w-3 h-3 mr-1" /> History
             </Button>
           </div>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto space-y-4">
             {messages.map((msg, i) => (
@@ -151,9 +189,8 @@ export default function ChatPage() {
                 key={msg.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
+                transition={{ delay: i * 0.03 }}
               >
-                {/* System message */}
                 {msg.role === 'system' && (
                   <div className="flex items-center justify-center py-2">
                     <span className="text-[10px] text-muted-foreground/40 bg-white/[0.02] px-3 py-1 rounded-full">
@@ -162,16 +199,13 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                {/* User message */}
                 {msg.role === 'user' && (
                   <div className="flex items-start gap-3 justify-end">
                     <div className="max-w-[80%]">
                       <div className="bg-amber/10 border border-amber/20 rounded-2xl rounded-tr-sm px-4 py-3">
                         <p className="text-sm text-foreground">{msg.content}</p>
                       </div>
-                      <span className="text-[10px] text-muted-foreground/40 mt-1 block text-right">
-                        {msg.timestamp}
-                      </span>
+                      <span className="text-[10px] text-muted-foreground/40 mt-1 block text-right">{msg.timestamp}</span>
                     </div>
                     <div className="w-8 h-8 rounded-full bg-amber/20 flex items-center justify-center shrink-0">
                       <User className="w-4 h-4 text-amber" />
@@ -179,7 +213,6 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                {/* Agent message */}
                 {msg.role === 'agent' && (
                   <div className="flex items-start gap-3">
                     <div className="relative shrink-0">
@@ -189,17 +222,11 @@ export default function ChatPage() {
                       <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-background" />
                     </div>
                     <div className="max-w-[85%] space-y-2">
-                      {/* Agent name */}
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-semibold text-foreground">
-                          {msg.agent?.name}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/40">
-                          {msg.timestamp}
-                        </span>
+                        <span className="text-[11px] font-semibold text-foreground">{msg.agent?.name ?? 'Agent'}</span>
+                        <span className="text-[10px] text-muted-foreground/40">{msg.timestamp}</span>
                       </div>
 
-                      {/* Thinking toggle */}
                       {msg.thinking && (
                         <button
                           onClick={() => setShowThinking(showThinking === msg.id ? null : msg.id)}
@@ -219,18 +246,15 @@ export default function ChatPage() {
                             className="overflow-hidden"
                           >
                             <div className="bg-violet-500/[0.06] border border-violet-500/15 rounded-lg px-3 py-2 text-[11px] text-muted-foreground/70 italic">
-                              <span className="text-violet-400 font-semibold not-italic text-[10px] uppercase tracking-wider">
-                                Reasoning
-                              </span>
+                              <span className="text-violet-400 font-semibold not-italic text-[10px] uppercase tracking-wider">Reasoning</span>
                               <p className="mt-1">{msg.thinking}</p>
                             </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
 
-                      {/* Message content */}
                       <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
-                        <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed chat-content">
+                        <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
                           {msg.content.split('\n').map((line, j) => {
                             if (line.startsWith('**') && line.endsWith('**')) {
                               return <p key={j} className="font-semibold text-foreground mt-2 first:mt-0">{line.replace(/\*\*/g, '')}</p>;
@@ -247,24 +271,12 @@ export default function ChatPage() {
                                 );
                               }
                             }
-                            if (line.startsWith('- **')) {
-                              const parts = line.match(/^- \*\*(.+?)\*\*:?\s*(.*)/);
-                              if (parts) {
-                                return (
-                                  <p key={j} className="mt-1 pl-2 flex items-baseline gap-1">
-                                    <span className="text-amber text-[10px]">•</span>
-                                    <span><span className="font-semibold">{parts[1]}:</span> {parts[2]}</span>
-                                  </p>
-                                );
-                              }
-                            }
                             if (line === '') return <br key={j} />;
                             return <p key={j} className="mt-1 first:mt-0">{line}</p>;
                           })}
                         </div>
                       </div>
 
-                      {/* Code block */}
                       {msg.codeBlock && (
                         <div className="rounded-xl border border-border overflow-hidden">
                           <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] border-b border-border">
@@ -279,97 +291,60 @@ export default function ChatPage() {
                         </div>
                       )}
 
-                      {/* Artifacts */}
                       {msg.artifacts && msg.artifacts.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           {msg.artifacts.map((art, j) => (
-                            <Badge
-                              key={j}
-                              variant="outline"
-                              className="text-[10px] bg-white/[0.03] cursor-pointer hover:bg-white/[0.06] transition-colors"
-                            >
-                              {art.type === 'code' ? (
-                                <Code2 className="w-2.5 h-2.5 mr-1 text-emerald-400" />
-                              ) : (
-                                <FileText className="w-2.5 h-2.5 mr-1 text-blue-400" />
-                              )}
+                            <Badge key={j} variant="outline" className="text-[10px] bg-white/[0.03] cursor-pointer hover:bg-white/[0.06] transition-colors">
+                              {art.type === 'code' ? <Code2 className="w-2.5 h-2.5 mr-1 text-emerald-400" /> : <FileText className="w-2.5 h-2.5 mr-1 text-blue-400" />}
                               {art.name}
                             </Badge>
                           ))}
                         </div>
                       )}
 
-                      {/* Action */}
                       {msg.action && (
                         <div className={cn(
                           'rounded-lg border px-3 py-2 flex items-center gap-2',
-                          msg.action.status === 'pending' && 'border-amber/20 bg-amber/[0.04]',
                           msg.action.status === 'approved' && 'border-emerald-500/20 bg-emerald-500/[0.04]',
-                          msg.action.status === 'rejected' && 'border-red-500/20 bg-red-500/[0.04]',
+                          msg.action.status === 'pending' && 'border-amber/20 bg-amber/[0.04]',
                         )}>
-                          {msg.action.status === 'pending' && (
-                            <>
-                              <AlertTriangle className="w-3.5 h-3.5 text-amber shrink-0" />
-                              <span className="text-xs text-muted-foreground flex-1">{msg.action.label}</span>
-                              <Button size="sm" className="h-6 text-[10px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/20">
-                                <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> Approve
-                              </Button>
-                              <Button size="sm" variant="ghost" className="h-6 text-[10px] text-red-400 hover:text-red-300">
-                                Reject
-                              </Button>
-                            </>
-                          )}
                           {msg.action.status === 'approved' && (
-                            <>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                              <span className="text-xs text-emerald-400/80">{msg.action.label}</span>
-                            </>
+                            <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" /><span className="text-xs text-emerald-400/80">{msg.action.label}</span></>
+                          )}
+                          {msg.action.status === 'pending' && (
+                            <><AlertTriangle className="w-3.5 h-3.5 text-amber shrink-0" /><span className="text-xs text-muted-foreground flex-1">{msg.action.label}</span></>
                           )}
                         </div>
                       )}
-
-                      {/* Message actions */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="text-muted-foreground/30 hover:text-foreground p-1 rounded transition-colors">
-                          <ThumbsUp className="w-3 h-3" />
-                        </button>
-                        <button className="text-muted-foreground/30 hover:text-foreground p-1 rounded transition-colors">
-                          <Copy className="w-3 h-3" />
-                        </button>
-                        <button className="text-muted-foreground/30 hover:text-foreground p-1 rounded transition-colors">
-                          <RotateCcw className="w-3 h-3" />
-                        </button>
-                      </div>
                     </div>
                   </div>
                 )}
               </motion.div>
             ))}
+
+            {sending && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-xs text-muted-foreground/50">
+                <Loader2 className="w-3 h-3 animate-spin" /> Your AI team is working on it...
+              </motion.div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         </div>
 
-        {/* Input Area */}
         <div className="border-t border-border px-6 py-4">
           <div className="max-w-3xl mx-auto">
-            {/* Agent selector */}
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] text-muted-foreground/50">Talking to:</span>
+              <span className="text-[10px] text-muted-foreground/50">Speaking with:</span>
               <div className="relative">
                 <button
                   onClick={() => setShowAgentPicker(!showAgentPicker)}
                   className="flex items-center gap-1.5 text-[11px] font-medium text-foreground bg-white/[0.04] hover:bg-white/[0.08] px-2 py-1 rounded-md border border-border transition-colors"
                 >
                   {selectedAgent ? (
-                    <>
-                      <span>{selectedAgent.avatar}</span>
-                      <span>{selectedAgent.name}</span>
-                    </>
+                    <><span>{selectedAgent.avatar}</span><span>{selectedAgent.name}</span></>
                   ) : (
-                    <>
-                      <Sparkles className="w-3 h-3 text-amber" />
-                      <span>Auto-route (Orchestrator)</span>
-                    </>
+                    <><Sparkles className="w-3 h-3 text-amber" /><span>Auto (best available)</span></>
                   )}
                   <ChevronDown className="w-3 h-3 text-muted-foreground/40 ml-1" />
                 </button>
@@ -385,15 +360,12 @@ export default function ChatPage() {
                       <div className="p-2">
                         <button
                           onClick={() => { setSelectedAgent(null); setShowAgentPicker(false); }}
-                          className={cn(
-                            'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
-                            !selectedAgent ? 'bg-amber/10 text-amber' : 'hover:bg-white/[0.04]'
-                          )}
+                          className={cn('w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors', !selectedAgent ? 'bg-amber/10 text-amber' : 'hover:bg-white/[0.04]')}
                         >
                           <Sparkles className="w-4 h-4" />
                           <div>
                             <p className="text-[11px] font-medium">Auto-route</p>
-                            <p className="text-[9px] text-muted-foreground/50">Orchestrator picks the best agent</p>
+                            <p className="text-[9px] text-muted-foreground/50">We'll route your message to the right specialist</p>
                           </div>
                         </button>
                         <div className="h-px bg-border my-1" />
@@ -401,17 +373,12 @@ export default function ChatPage() {
                           <button
                             key={agent.id}
                             onClick={() => { setSelectedAgent(agent); setShowAgentPicker(false); }}
-                            className={cn(
-                              'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
-                              selectedAgent?.id === agent.id ? 'bg-amber/10' : 'hover:bg-white/[0.04]'
-                            )}
+                            className={cn('w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors', selectedAgent?.id === agent.id ? 'bg-amber/10' : 'hover:bg-white/[0.04]')}
                           >
                             <span className="text-base">{agent.avatar}</span>
                             <div>
                               <p className="text-[11px] font-medium">{agent.name}</p>
-                              <p className="text-[9px] text-muted-foreground/50 truncate">
-                                {agent.currentTask || 'Available'}
-                              </p>
+                              <p className="text-[9px] text-muted-foreground/50 truncate">{agent.currentTask || 'Available'}</p>
                             </div>
                           </button>
                         ))}
@@ -422,7 +389,6 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Input box */}
             <div className="relative">
               <div className="flex items-end gap-2 bg-[var(--surface)] border border-border rounded-2xl px-4 py-3 focus-within:border-amber/30 transition-colors">
                 <button className="text-muted-foreground/30 hover:text-muted-foreground transition-colors pb-0.5">
@@ -431,7 +397,8 @@ export default function ChatPage() {
                 <textarea
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  placeholder="Ask an agent, request an action, or review a decision..."
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask a question, give feedback, or request changes..."
                   className="flex-1 bg-transparent text-sm resize-none outline-none text-foreground placeholder:text-muted-foreground/30 min-h-[24px] max-h-[120px]"
                   rows={1}
                   onInput={(e) => {
@@ -440,50 +407,37 @@ export default function ChatPage() {
                     target.style.height = target.scrollHeight + 'px';
                   }}
                 />
-                <button className="text-muted-foreground/30 hover:text-muted-foreground transition-colors pb-0.5">
-                  <Terminal className="w-4 h-4" />
-                </button>
                 <Button
                   size="sm"
                   className="h-7 px-3 bg-amber text-background hover:bg-amber/90 rounded-xl"
-                  disabled={!inputValue.trim()}
+                  disabled={!inputValue.trim() || sending}
+                  onClick={handleSend}
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 </Button>
               </div>
               <div className="flex items-center justify-between mt-1.5 px-1">
-                <span className="text-[9px] text-muted-foreground/30">
-                  Press Enter to send · Shift+Enter for new line
-                </span>
-                <span className="text-[9px] text-muted-foreground/30">
-                  Powered by BYOM Gateway
-                </span>
+                <span className="text-[9px] text-muted-foreground/30">Press Enter to send · Shift+Enter for new line</span>
+                <span className="text-[9px] text-muted-foreground/30"></span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Right Sidebar — Context Panel */}
       <div className="w-[280px] border-l border-border flex flex-col shrink-0">
         <div className="px-4 py-3 border-b border-border">
           <h3 className="text-xs font-semibold text-muted-foreground">Context</h3>
         </div>
 
-        {/* Active Agents */}
         <div className="px-4 py-3 border-b border-border">
-          <h4 className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
-            Online Agents
-          </h4>
+          <h4 className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Online Team Members</h4>
           <div className="space-y-1.5">
             {activeAgents.slice(0, 6).map(agent => (
               <div key={agent.id} className="flex items-center gap-2">
                 <div className="relative">
                   <span className="text-sm">{agent.avatar}</span>
-                  <div className={cn(
-                    'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background',
-                    agent.status === 'working' ? 'bg-emerald-500' : 'bg-amber'
-                  )} />
+                  <div className={cn('absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background', agent.status === 'working' ? 'bg-emerald-500' : 'bg-amber')} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-[11px] font-medium">{agent.shortName}</span>
@@ -492,18 +446,13 @@ export default function ChatPage() {
               </div>
             ))}
             {activeAgents.length > 6 && (
-              <span className="text-[10px] text-muted-foreground/30">
-                +{activeAgents.length - 6} more
-              </span>
+              <span className="text-[10px] text-muted-foreground/30">+{activeAgents.length - 6} more</span>
             )}
           </div>
         </div>
 
-        {/* Referenced Items */}
         <div className="px-4 py-3 border-b border-border">
-          <h4 className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
-            Referenced in Chat
-          </h4>
+          <h4 className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Referenced in Chat</h4>
           <div className="space-y-1.5">
             {[
               { id: 'FEAT-014', label: 'Refactor LLM Gateway', type: 'feature' },
@@ -525,11 +474,8 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Generated Artifacts */}
         <div className="px-4 py-3">
-          <h4 className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
-            Generated Artifacts
-          </h4>
+          <h4 className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Generated Artifacts</h4>
           <div className="space-y-1.5">
             {[
               { name: 'gateway-refactor.md', icon: FileText, color: 'text-blue-400' },

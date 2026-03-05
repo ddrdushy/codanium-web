@@ -24,13 +24,13 @@ const tiers: PricingTier[] = [
     name: 'Starter',
     price: '$0',
     period: '/mo',
-    description: 'For personal projects',
+    description: 'For trying it out',
     features: [
-      '3 projects',
-      '5 agents',
-      'Basic pipeline',
+      '1 project',
+      '5 AI team members',
+      'Basic delivery pipeline',
       'Community support',
-      '10K tokens/mo',
+      '10K AI credits/mo',
     ],
     cta: 'Get Started Free',
     href: '/signup',
@@ -39,15 +39,15 @@ const tiers: PricingTier[] = [
     name: 'Pro',
     price: '$29',
     period: '/mo',
-    description: 'For growing teams',
+    description: 'For serious projects',
     features: [
       'Unlimited projects',
-      'All 23 agents',
-      'Full SDLC pipeline',
+      'Full 23-member AI team',
+      'Complete delivery pipeline',
       'Priority support',
-      '500K tokens/mo',
-      'Advanced analytics',
-      'Custom workflows',
+      '500K AI credits/mo',
+      'Detailed progress analytics',
+      'Custom delivery workflows',
     ],
     cta: 'Start Pro Trial',
     href: '/signup?plan=pro',
@@ -60,11 +60,11 @@ const tiers: PricingTier[] = [
     features: [
       'Everything in Pro',
       'SSO & SAML',
-      'Custom agents',
+      'Custom AI specialists',
       '99.9% SLA',
-      'Dedicated support',
-      'Unlimited tokens',
-      'Audit logs',
+      'Dedicated account manager',
+      'Unlimited AI credits',
+      'Full audit trail',
     ],
     cta: 'Contact Sales',
     href: '/signup?plan=enterprise',
@@ -96,7 +96,7 @@ export function PricingSection() {
             Simple, Transparent Pricing
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Start free and scale as your team grows. No hidden fees.
+            Start free and scale as your projects grow. No hidden fees.
           </p>
         </motion.div>
 
