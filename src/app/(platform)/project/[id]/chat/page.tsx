@@ -14,7 +14,7 @@ import {
   Send, Bot, User, Sparkles, ChevronDown, Paperclip,
   Code2, FileText, CheckCircle2, AlertTriangle, Clock,
   MessageSquare, Zap, Eye, Terminal, Copy, ThumbsUp,
-  RotateCcw, ArrowRight, Loader2, Square
+  RotateCcw, ArrowRight, Loader2, Square, Settings, TestTube
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -66,6 +66,7 @@ export default function ChatPage() {
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [showStreamThinking, setShowStreamThinking] = useState(true);
+  const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -108,6 +109,15 @@ export default function ChatPage() {
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
+  }, [projectId]);
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/artifacts`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setSidebarArtifacts(data.slice(0, 8)); // show max 8
+      })
+      .catch(() => {});
   }, [projectId]);
 
   useEffect(() => {
@@ -594,21 +604,28 @@ export default function ChatPage() {
         </div>
 
         <div className="px-4 py-3">
-          <h4 className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Generated Artifacts</h4>
+          <h4 className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
+            Generated Artifacts {sidebarArtifacts.length > 0 && <span className="text-amber">({sidebarArtifacts.length})</span>}
+          </h4>
           <div className="space-y-1.5">
-            {[
-              { name: 'gateway-refactor.md', icon: FileText, color: 'text-blue-400' },
-              { name: 'provider-interface.py', icon: Code2, color: 'text-emerald-400' },
-            ].map(art => {
-              const ArtIcon = art.icon;
-              return (
-                <div key={art.name} className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-white/[0.02] rounded px-1 py-0.5 -mx-1 transition-colors">
-                  <ArtIcon className={cn('w-3 h-3', art.color)} />
-                  <span className="text-muted-foreground font-mono truncate">{art.name}</span>
-                  <ArrowRight className="w-2.5 h-2.5 text-muted-foreground/20 ml-auto" />
-                </div>
-              );
-            })}
+            {sidebarArtifacts.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground/40 italic">No artifacts yet</p>
+            ) : (
+              sidebarArtifacts.map(art => {
+                const isCode = art.type === 'CODE';
+                const isConfig = art.type === 'CONFIG';
+                const isTest = art.type === 'TEST';
+                const ArtIcon = isCode ? Code2 : isTest ? TestTube : isConfig ? Settings : FileText;
+                const color = isCode ? 'text-emerald-400' : isTest ? 'text-blue-400' : isConfig ? 'text-amber' : 'text-purple-400';
+                return (
+                  <a key={art.id} href={`/project/${projectId}/code?file=${art.id}`} className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-white/[0.02] rounded px-1 py-0.5 -mx-1 transition-colors">
+                    <ArtIcon className={cn('w-3 h-3', color)} />
+                    <span className="text-muted-foreground font-mono truncate">{art.name}</span>
+                    <ArrowRight className="w-2.5 h-2.5 text-muted-foreground/20 ml-auto" />
+                  </a>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

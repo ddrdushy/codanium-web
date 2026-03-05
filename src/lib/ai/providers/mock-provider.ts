@@ -112,6 +112,56 @@ const orcGenerator: AgentGenerator = (msg) => {
 
 // ---- BA — Business Analyst ----
 const baGenerator: AgentGenerator = (msg) => {
+  if (hasKeyword(msg, ['requirements', 'spec', 'user stories', 'brd'])) {
+    return {
+      thinking:
+        'Requirements specification request. I will produce a structured business requirements document.',
+      response:
+        'I have drafted the business requirements document based on our discussions:\n\n' +
+        '[ARTIFACT:requirements.md]' +
+        '# Business Requirements Document\n\n' +
+        '## 1. Project Overview\n' +
+        'This document captures the functional and non-functional requirements gathered from stakeholder discussions.\n\n' +
+        '## 2. Functional Requirements\n\n' +
+        '### FR-1: User Registration\n' +
+        '- Users can create accounts using email and password\n' +
+        '- Email verification required before first login\n' +
+        '- Password must meet complexity requirements (8+ chars, mixed case, number)\n\n' +
+        '### FR-2: User Authentication\n' +
+        '- Login with email and password\n' +
+        '- "Remember me" option extends session to 30 days\n' +
+        '- Forgot password flow with email reset link\n' +
+        '- Account lockout after 5 failed attempts (15-minute cooldown)\n\n' +
+        '### FR-3: Dashboard\n' +
+        '- Overview of all active projects\n' +
+        '- Quick-access recent items\n' +
+        '- Notification center with unread count\n' +
+        '- Real-time status updates for running AI tasks\n\n' +
+        '### FR-4: Project Management\n' +
+        '- Create, edit, and archive projects\n' +
+        '- Invite team members with role-based permissions\n' +
+        '- Project-level settings and preferences\n\n' +
+        '## 3. Non-Functional Requirements\n\n' +
+        '### NFR-1: Performance\n' +
+        '- Page load time under 2 seconds (p95)\n' +
+        '- API response time under 500ms (p95)\n' +
+        '- Support 100 concurrent users\n\n' +
+        '### NFR-2: Security\n' +
+        '- All data encrypted at rest (AES-256)\n' +
+        '- TLS 1.3 for all connections\n' +
+        '- OWASP Top 10 compliance\n\n' +
+        '### NFR-3: Availability\n' +
+        '- 99.9% uptime SLA\n' +
+        '- Automated failover for database\n' +
+        '- Zero-downtime deployments\n\n' +
+        '## 4. Acceptance Criteria\n' +
+        '- All functional requirements pass automated testing\n' +
+        '- Performance benchmarks met under load testing\n' +
+        '- Security audit completed with no critical findings\n' +
+        '[/ARTIFACT]\n\n' +
+        'The document is ready for stakeholder review. Shall I schedule a walkthrough session?',
+    };
+  }
   if (hasKeyword(msg, ['requirement', 'feature', 'user story', 'scope'])) {
     return {
       thinking:
@@ -162,6 +212,61 @@ const baGenerator: AgentGenerator = (msg) => {
 
 // ---- SA — Solution Architect ----
 const saGenerator: AgentGenerator = (msg) => {
+  if (hasKeyword(msg, ['architecture', 'design', 'schema', 'structure'])) {
+    return {
+      thinking:
+        'Architecture/design request. I will produce a structured system architecture document covering all layers.',
+      response:
+        'I have designed the system architecture. Here is the full specification:\n\n' +
+        '[ARTIFACT:architecture.yaml]' +
+        '# System Architecture — High-Level Design\n' +
+        'system:\n' +
+        '  name: Application Platform\n' +
+        '  version: "1.0"\n\n' +
+        'layers:\n' +
+        '  presentation:\n' +
+        '    technology: "Next.js 16 / React 19"\n' +
+        '    pattern: "Server Components + Client Islands"\n' +
+        '    responsibilities:\n' +
+        '      - SSR for initial page loads\n' +
+        '      - Client-side interactivity for forms and dashboards\n' +
+        '      - Real-time updates via SSE\n\n' +
+        '  application:\n' +
+        '    technology: "Node.js / TypeScript"\n' +
+        '    pattern: "Service Layer + Repository Pattern"\n' +
+        '    responsibilities:\n' +
+        '      - Business logic orchestration\n' +
+        '      - Input validation and transformation\n' +
+        '      - Authentication and authorization\n\n' +
+        '  data:\n' +
+        '    technology: "PostgreSQL 16 / Prisma ORM"\n' +
+        '    pattern: "Repository with Unit of Work"\n' +
+        '    responsibilities:\n' +
+        '      - Data persistence and retrieval\n' +
+        '      - Transaction management\n' +
+        '      - Migration versioning\n\n' +
+        '  infrastructure:\n' +
+        '    technology: "Docker / Cloud Provider"\n' +
+        '    pattern: "Container Orchestration"\n' +
+        '    components:\n' +
+        '      - Load balancer (nginx)\n' +
+        '      - Application containers (auto-scaling)\n' +
+        '      - Database cluster (primary + replica)\n' +
+        '      - Redis cache layer\n' +
+        '      - Object storage (S3-compatible)\n\n' +
+        'communication:\n' +
+        '  internal: "Direct function calls within layers"\n' +
+        '  external: "REST API with OpenAPI spec"\n' +
+        '  async: "Server-Sent Events for real-time updates"\n\n' +
+        'security:\n' +
+        '  authentication: "JWT with refresh token rotation"\n' +
+        '  authorization: "Role-based access control (RBAC)"\n' +
+        '  encryption: "AES-256-GCM for secrets at rest"\n' +
+        '  transport: "TLS 1.3 minimum"\n' +
+        '[/ARTIFACT]\n\n' +
+        'This architecture supports horizontal scaling at each layer independently. Shall I drill into any specific layer?',
+    };
+  }
   if (hasKeyword(msg, ['architecture', 'design', 'system', 'diagram'])) {
     return {
       thinking:
@@ -257,6 +362,81 @@ const saGenerator: AgentGenerator = (msg) => {
 
 // ---- UX — UI/UX Designer ----
 const uxGenerator: AgentGenerator = (msg) => {
+  if (hasKeyword(msg, ['wireframe', 'component', 'layout', 'design', 'ui'])) {
+    return {
+      thinking:
+        'UI component/wireframe request. I will produce a component specification with layout, styling, and interaction states.',
+      response:
+        'I have designed the component specification. Here is the full spec:\n\n' +
+        '[ARTIFACT:LoginForm.tsx]' +
+        '// UI Component Specification — Login Form\n' +
+        '// This spec defines the component structure and styling requirements\n\n' +
+        'interface LoginFormProps {\n' +
+        '  onSubmit: (email: string, password: string) => Promise<void>;\n' +
+        '  onForgotPassword: () => void;\n' +
+        '  onSignUp: () => void;\n' +
+        '  isLoading?: boolean;\n' +
+        '  error?: string;\n' +
+        '}\n\n' +
+        '/**\n' +
+        ' * Login Form Component Specification\n' +
+        ' * \n' +
+        ' * Layout:\n' +
+        ' * ┌──────────────────────────────────┐\n' +
+        ' * │         [App Logo]               │\n' +
+        ' * │      "Welcome Back"              │\n' +
+        ' * │  "Sign in to your account"       │\n' +
+        ' * │                                  │\n' +
+        ' * │  ┌────────────────────────────┐  │\n' +
+        ' * │  │ Email                      │  │\n' +
+        ' * │  └────────────────────────────┘  │\n' +
+        ' * │  ┌────────────────────────────┐  │\n' +
+        ' * │  │ Password          [eye]    │  │\n' +
+        ' * │  └────────────────────────────┘  │\n' +
+        ' * │                                  │\n' +
+        ' * │  [Remember me]  [Forgot pass?]   │\n' +
+        ' * │                                  │\n' +
+        ' * │  ┌────────────────────────────┐  │\n' +
+        ' * │  │      Sign In               │  │\n' +
+        ' * │  └────────────────────────────┘  │\n' +
+        ' * │                                  │\n' +
+        ' * │  ───── or continue with ──────   │\n' +
+        ' * │                                  │\n' +
+        ' * │  [Google]  [GitHub]  [Apple]     │\n' +
+        ' * │                                  │\n' +
+        ' * │  Don\'t have an account? Sign up  │\n' +
+        ' * └──────────────────────────────────┘\n' +
+        ' * \n' +
+        ' * Styling:\n' +
+        ' * - Dark background (#0a0a0a)\n' +
+        ' * - Card: bg-zinc-900, rounded-2xl, border-zinc-800\n' +
+        ' * - Inputs: bg-zinc-800/50, focus:ring-amber-500\n' +
+        ' * - Button: bg-amber-500, hover:bg-amber-400, text-black\n' +
+        ' * - Social buttons: bg-zinc-800, hover:bg-zinc-700\n' +
+        ' * \n' +
+        ' * States:\n' +
+        ' * - Loading: Button shows spinner, inputs disabled\n' +
+        ' * - Error: Red banner above form with error message\n' +
+        ' * - Success: Redirect to /projects\n' +
+        ' */\n\n' +
+        'export default function LoginForm({\n' +
+        '  onSubmit,\n' +
+        '  onForgotPassword,\n' +
+        '  onSignUp,\n' +
+        '  isLoading = false,\n' +
+        '  error,\n' +
+        '}: LoginFormProps) {\n' +
+        '  // Implementation uses:\n' +
+        '  // - React Hook Form for validation\n' +
+        '  // - Framer Motion for entrance animation\n' +
+        '  // - Tailwind CSS for styling\n' +
+        '  // - Lucide icons for eye toggle and social icons\n' +
+        '  return null; // Placeholder for implementation\n' +
+        '}\n' +
+        '[/ARTIFACT]\n\n' +
+        'The spec includes layout, styling tokens, and all interaction states. Ready for SD to implement.',
+    };
+  }
   if (hasKeyword(msg, ['wireframe', 'layout', 'mockup', 'screen'])) {
     return {
       thinking:
@@ -456,19 +636,65 @@ const tlGenerator: AgentGenerator = (msg) => {
 
 // ---- JD — Junior Developer ----
 const jdGenerator: AgentGenerator = (msg) => {
-  if (hasKeyword(msg, ['implement', 'build', 'create', 'code'])) {
+  if (hasKeyword(msg, ['implement', 'build', 'code', 'create', 'write'])) {
     return {
       thinking:
-        'Implementation task. I should report on my progress, show what I have built, and flag any areas where I need guidance.',
+        'Implementation task. I will write clean, well-commented code and flag any areas where I need guidance.',
       response:
-        'I have started implementing the feature. Here is my progress so far:\n\n' +
-        '- [x] Created the component file with the basic structure\n' +
-        '- [x] Added TypeScript interfaces for the props\n' +
-        '- [x] Wired up the event handlers\n' +
-        '- [ ] Need to add error handling for edge cases\n' +
-        '- [ ] Unit tests still pending\n\n' +
-        'I ran into one question: should the loading state show a skeleton or a spinner? I went with a skeleton for now based on the existing patterns, but I can change it.\n\n' +
-        'I will have the remaining items done within the next cycle.',
+        'I have implemented the feature. Here is what I built:\n\n' +
+        '[ARTIFACT:handler.ts]' +
+        '// Handler for processing user requests\n' +
+        '// Each function handles a specific operation type\n\n' +
+        'interface RequestPayload {\n' +
+        '  action: string;\n' +
+        '  data: Record<string, unknown>;\n' +
+        '}\n\n' +
+        'interface ResponsePayload {\n' +
+        '  success: boolean;\n' +
+        '  message: string;\n' +
+        '  data?: unknown;\n' +
+        '}\n\n' +
+        '// Main handler function — processes incoming requests\n' +
+        'export async function handleRequest(payload: RequestPayload): Promise<ResponsePayload> {\n' +
+        '  // Validate the incoming payload\n' +
+        '  if (!payload.action) {\n' +
+        '    return { success: false, message: \'Action is required\' };\n' +
+        '  }\n\n' +
+        '  try {\n' +
+        '    // Route to the appropriate handler based on action type\n' +
+        '    switch (payload.action) {\n' +
+        '      case \'create\':\n' +
+        '        return await handleCreate(payload.data);\n' +
+        '      case \'update\':\n' +
+        '        return await handleUpdate(payload.data);\n' +
+        '      case \'delete\':\n' +
+        '        return await handleDelete(payload.data);\n' +
+        '      default:\n' +
+        '        return { success: false, message: `Unknown action: ${payload.action}` };\n' +
+        '    }\n' +
+        '  } catch (error) {\n' +
+        '    // Always catch errors to prevent unhandled rejections\n' +
+        '    console.error(\'Handler error:\', error);\n' +
+        '    return { success: false, message: \'Internal server error\' };\n' +
+        '  }\n' +
+        '}\n\n' +
+        '// Handle create operations\n' +
+        'async function handleCreate(data: Record<string, unknown>): Promise<ResponsePayload> {\n' +
+        '  // TODO: Implement create logic\n' +
+        '  return { success: true, message: \'Created successfully\', data };\n' +
+        '}\n\n' +
+        '// Handle update operations\n' +
+        'async function handleUpdate(data: Record<string, unknown>): Promise<ResponsePayload> {\n' +
+        '  // TODO: Implement update logic\n' +
+        '  return { success: true, message: \'Updated successfully\', data };\n' +
+        '}\n\n' +
+        '// Handle delete operations\n' +
+        'async function handleDelete(data: Record<string, unknown>): Promise<ResponsePayload> {\n' +
+        '  // TODO: Implement delete logic\n' +
+        '  return { success: true, message: \'Deleted successfully\' };\n' +
+        '}\n' +
+        '[/ARTIFACT]\n\n' +
+        'I added comments throughout the code to make it easy to follow. The TODO markers show where the actual business logic needs to go. Could someone review this before I continue?',
     };
   }
   if (hasKeyword(msg, ['error', 'bug', 'fix', 'issue'])) {
@@ -516,6 +742,48 @@ const jdGenerator: AgentGenerator = (msg) => {
 
 // ---- SD — Senior Developer ----
 const sdGenerator: AgentGenerator = (msg) => {
+  if (hasKeyword(msg, ['implement', 'build', 'code', 'create', 'write'])) {
+    return {
+      thinking: 'Implementation request. I will design a clean solution following best practices and produce the code.',
+      response:
+        'I have implemented the requested functionality. Here is the code:\n\n' +
+        'Key design decisions:\n' +
+        '- Used the adapter pattern for provider abstraction\n' +
+        '- Added comprehensive error handling with typed errors\n' +
+        '- Included JSDoc comments for public API methods\n\n' +
+        '[ARTIFACT:service.ts]' +
+        'import { prisma } from \'@/lib/prisma\';\n\n' +
+        'export interface ServiceConfig {\n' +
+        '  retryAttempts: number;\n' +
+        '  timeoutMs: number;\n' +
+        '}\n\n' +
+        'export class AppService {\n' +
+        '  private config: ServiceConfig;\n\n' +
+        '  constructor(config: Partial<ServiceConfig> = {}) {\n' +
+        '    this.config = {\n' +
+        '      retryAttempts: config.retryAttempts ?? 3,\n' +
+        '      timeoutMs: config.timeoutMs ?? 5000,\n' +
+        '    };\n' +
+        '  }\n\n' +
+        '  async execute<T>(operation: () => Promise<T>): Promise<T> {\n' +
+        '    let lastError: Error | undefined;\n' +
+        '    for (let attempt = 0; attempt < this.config.retryAttempts; attempt++) {\n' +
+        '      try {\n' +
+        '        return await operation();\n' +
+        '      } catch (err) {\n' +
+        '        lastError = err instanceof Error ? err : new Error(String(err));\n' +
+        '        if (attempt < this.config.retryAttempts - 1) {\n' +
+        '          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));\n' +
+        '        }\n' +
+        '      }\n' +
+        '    }\n' +
+        '    throw lastError ?? new Error(\'All retry attempts failed\');\n' +
+        '  }\n' +
+        '}\n' +
+        '[/ARTIFACT]\n\n' +
+        'The service is ready for integration. Shall I also create the corresponding tests?',
+    };
+  }
   if (hasKeyword(msg, ['review', 'pr', 'pull request', 'code review'])) {
     return {
       thinking:
@@ -572,6 +840,58 @@ const sdGenerator: AgentGenerator = (msg) => {
 
 // ---- QA — QA Engineer ----
 const qaGenerator: AgentGenerator = (msg) => {
+  if (hasKeyword(msg, ['test', 'spec', 'write test', 'coverage'])) {
+    return {
+      thinking:
+        'Test writing request. I will produce comprehensive test cases with proper setup, assertions, and edge case coverage.',
+      response:
+        'I have written the test suite. Here are the tests:\n\n' +
+        '[ARTIFACT:auth.test.ts]' +
+        'import { describe, it, expect, beforeEach, vi } from \'vitest\';\n\n' +
+        'describe(\'AuthService\', () => {\n' +
+        '  let authService: AuthService;\n\n' +
+        '  beforeEach(() => {\n' +
+        '    authService = new AuthService({ jwtSecret: \'test-secret\' });\n' +
+        '    vi.clearAllMocks();\n' +
+        '  });\n\n' +
+        '  describe(\'login\', () => {\n' +
+        '    it(\'should return a valid token for correct credentials\', async () => {\n' +
+        '      const result = await authService.login(\'user@test.com\', \'password123\');\n' +
+        '      expect(result.success).toBe(true);\n' +
+        '      expect(result.token).toBeDefined();\n' +
+        '      expect(typeof result.token).toBe(\'string\');\n' +
+        '    });\n\n' +
+        '    it(\'should reject invalid credentials\', async () => {\n' +
+        '      const result = await authService.login(\'user@test.com\', \'wrong\');\n' +
+        '      expect(result.success).toBe(false);\n' +
+        '      expect(result.error).toBe(\'Invalid credentials\');\n' +
+        '    });\n\n' +
+        '    it(\'should rate limit after 5 failed attempts\', async () => {\n' +
+        '      for (let i = 0; i < 5; i++) {\n' +
+        '        await authService.login(\'user@test.com\', \'wrong\');\n' +
+        '      }\n' +
+        '      const result = await authService.login(\'user@test.com\', \'password123\');\n' +
+        '      expect(result.success).toBe(false);\n' +
+        '      expect(result.error).toContain(\'rate limit\');\n' +
+        '    });\n' +
+        '  });\n\n' +
+        '  describe(\'validateToken\', () => {\n' +
+        '    it(\'should validate a valid token\', async () => {\n' +
+        '      const { token } = await authService.login(\'user@test.com\', \'password123\');\n' +
+        '      const valid = await authService.validateToken(token!);\n' +
+        '      expect(valid).toBe(true);\n' +
+        '    });\n\n' +
+        '    it(\'should reject an expired token\', async () => {\n' +
+        '      const expiredToken = \'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.expired\';\n' +
+        '      const valid = await authService.validateToken(expiredToken);\n' +
+        '      expect(valid).toBe(false);\n' +
+        '    });\n' +
+        '  });\n' +
+        '});\n' +
+        '[/ARTIFACT]\n\n' +
+        'The tests cover the happy path, error cases, and rate limiting. Want me to add more edge cases or integration tests?',
+    };
+  }
   if (hasKeyword(msg, ['test plan', 'strategy', 'coverage'])) {
     return {
       thinking:
@@ -640,6 +960,46 @@ const qaGenerator: AgentGenerator = (msg) => {
 
 // ---- AT — Automation Test Engineer ----
 const atGenerator: AgentGenerator = (msg) => {
+  if (hasKeyword(msg, ['automate', 'e2e', 'playwright', 'integration'])) {
+    return {
+      thinking:
+        'E2E test automation request. I will write Playwright tests covering the critical user flows.',
+      response:
+        'I have written the end-to-end tests using Playwright. Here is the test file:\n\n' +
+        '[ARTIFACT:login.e2e.ts]' +
+        'import { test, expect } from \'@playwright/test\';\n\n' +
+        'test.describe(\'Login Flow\', () => {\n' +
+        '  test.beforeEach(async ({ page }) => {\n' +
+        '    await page.goto(\'/login\');\n' +
+        '  });\n\n' +
+        '  test(\'should display login form\', async ({ page }) => {\n' +
+        '    await expect(page.getByRole(\'heading\', { name: \'Sign In\' })).toBeVisible();\n' +
+        '    await expect(page.getByLabel(\'Email\')).toBeVisible();\n' +
+        '    await expect(page.getByLabel(\'Password\')).toBeVisible();\n' +
+        '    await expect(page.getByRole(\'button\', { name: \'Sign In\' })).toBeVisible();\n' +
+        '  });\n\n' +
+        '  test(\'should login with valid credentials\', async ({ page }) => {\n' +
+        '    await page.getByLabel(\'Email\').fill(\'user@demo.com\');\n' +
+        '    await page.getByLabel(\'Password\').fill(\'password123\');\n' +
+        '    await page.getByRole(\'button\', { name: \'Sign In\' }).click();\n' +
+        '    await expect(page).toHaveURL(\'/projects\');\n' +
+        '    await expect(page.getByText(\'Welcome back\')).toBeVisible();\n' +
+        '  });\n\n' +
+        '  test(\'should show error for invalid credentials\', async ({ page }) => {\n' +
+        '    await page.getByLabel(\'Email\').fill(\'user@demo.com\');\n' +
+        '    await page.getByLabel(\'Password\').fill(\'wrongpassword\');\n' +
+        '    await page.getByRole(\'button\', { name: \'Sign In\' }).click();\n' +
+        '    await expect(page.getByText(\'Invalid email or password\')).toBeVisible();\n' +
+        '  });\n\n' +
+        '  test(\'should navigate to signup page\', async ({ page }) => {\n' +
+        '    await page.getByRole(\'link\', { name: \'Create an account\' }).click();\n' +
+        '    await expect(page).toHaveURL(\'/signup\');\n' +
+        '  });\n' +
+        '});\n' +
+        '[/ARTIFACT]\n\n' +
+        'The tests follow the Page Object pattern and use Playwright best practices (role-based selectors, no arbitrary waits). Shall I add more flows?',
+    };
+  }
   if (hasKeyword(msg, ['automate', 'script', 'playwright', 'cypress', 'e2e'])) {
     return {
       thinking:
@@ -763,6 +1123,78 @@ const pfGenerator: AgentGenerator = (msg) => {
 
 // ---- PE — Platform Engineer ----
 const peGenerator: AgentGenerator = (msg) => {
+  if (hasKeyword(msg, ['infrastructure', 'terraform', 'k8s', 'kubernetes', 'cloud'])) {
+    return {
+      thinking:
+        'Infrastructure-as-code request. I will produce a Terraform configuration for the cloud platform.',
+      response:
+        'I have created the Terraform configuration for the infrastructure. Here is the main module:\n\n' +
+        '[ARTIFACT:main.tf]' +
+        'terraform {\n' +
+        '  required_version = ">= 1.5"\n' +
+        '  required_providers {\n' +
+        '    aws = {\n' +
+        '      source  = "hashicorp/aws"\n' +
+        '      version = "~> 5.0"\n' +
+        '    }\n' +
+        '  }\n' +
+        '}\n\n' +
+        'provider "aws" {\n' +
+        '  region = var.aws_region\n' +
+        '}\n\n' +
+        'variable "aws_region" {\n' +
+        '  default = "us-east-1"\n' +
+        '}\n\n' +
+        'variable "app_name" {\n' +
+        '  default = "ai-team-studio"\n' +
+        '}\n\n' +
+        'variable "environment" {\n' +
+        '  default = "production"\n' +
+        '}\n\n' +
+        '# VPC\n' +
+        'resource "aws_vpc" "main" {\n' +
+        '  cidr_block           = "10.0.0.0/16"\n' +
+        '  enable_dns_hostnames = true\n' +
+        '  tags = { Name = "${var.app_name}-vpc" }\n' +
+        '}\n\n' +
+        '# Subnets\n' +
+        'resource "aws_subnet" "public" {\n' +
+        '  count                   = 2\n' +
+        '  vpc_id                  = aws_vpc.main.id\n' +
+        '  cidr_block              = "10.0.${count.index + 1}.0/24"\n' +
+        '  availability_zone       = data.aws_availability_zones.available.names[count.index]\n' +
+        '  map_public_ip_on_launch = true\n' +
+        '  tags = { Name = "${var.app_name}-public-${count.index + 1}" }\n' +
+        '}\n\n' +
+        'data "aws_availability_zones" "available" {\n' +
+        '  state = "available"\n' +
+        '}\n\n' +
+        '# ECS Cluster\n' +
+        'resource "aws_ecs_cluster" "main" {\n' +
+        '  name = "${var.app_name}-cluster"\n' +
+        '}\n\n' +
+        '# RDS PostgreSQL\n' +
+        'resource "aws_db_instance" "postgres" {\n' +
+        '  identifier           = "${var.app_name}-db"\n' +
+        '  engine               = "postgres"\n' +
+        '  engine_version       = "16"\n' +
+        '  instance_class       = "db.t3.medium"\n' +
+        '  allocated_storage    = 20\n' +
+        '  db_name              = "ai_team_studio"\n' +
+        '  username             = "admin"\n' +
+        '  skip_final_snapshot  = true\n' +
+        '  tags = { Name = "${var.app_name}-db" }\n' +
+        '}\n\n' +
+        'output "cluster_name" {\n' +
+        '  value = aws_ecs_cluster.main.name\n' +
+        '}\n\n' +
+        'output "db_endpoint" {\n' +
+        '  value = aws_db_instance.postgres.endpoint\n' +
+        '}\n' +
+        '[/ARTIFACT]\n\n' +
+        'The configuration provisions VPC, subnets, ECS cluster, and RDS PostgreSQL. Run `terraform plan` to preview the changes.',
+    };
+  }
   if (hasKeyword(msg, ['infrastructure', 'infra', 'cloud', 'deploy'])) {
     return {
       thinking:
@@ -818,6 +1250,43 @@ const peGenerator: AgentGenerator = (msg) => {
 
 // ---- DO — DevOps Engineer ----
 const doGenerator: AgentGenerator = (msg) => {
+  if (hasKeyword(msg, ['deploy', 'docker', 'pipeline', 'ci', 'cd'])) {
+    return {
+      thinking:
+        'Deployment/containerization request. I will produce a production-ready Dockerfile with multi-stage builds.',
+      response:
+        'I have created the production Dockerfile with multi-stage builds for optimal image size:\n\n' +
+        '[ARTIFACT:Dockerfile]' +
+        'FROM node:20-alpine AS base\n' +
+        'WORKDIR /app\n\n' +
+        '# Install dependencies\n' +
+        'FROM base AS deps\n' +
+        'COPY package.json package-lock.json ./\n' +
+        'RUN npm ci --only=production\n\n' +
+        '# Build application\n' +
+        'FROM base AS builder\n' +
+        'COPY package.json package-lock.json ./\n' +
+        'RUN npm ci\n' +
+        'COPY . .\n' +
+        'RUN npx prisma generate\n' +
+        'RUN npm run build\n\n' +
+        '# Production image\n' +
+        'FROM base AS runner\n' +
+        'ENV NODE_ENV=production\n' +
+        'RUN addgroup --system --gid 1001 nodejs\n' +
+        'RUN adduser --system --uid 1001 nextjs\n\n' +
+        'COPY --from=deps /app/node_modules ./node_modules\n' +
+        'COPY --from=builder /app/.next/standalone ./\n' +
+        'COPY --from=builder /app/.next/static ./.next/static\n' +
+        'COPY --from=builder /app/public ./public\n\n' +
+        'USER nextjs\n' +
+        'EXPOSE 3000\n' +
+        'ENV PORT=3000\n' +
+        'CMD ["node", "server.js"]\n' +
+        '[/ARTIFACT]\n\n' +
+        'The image uses multi-stage builds to keep the final size under 100MB. Ready to integrate into the CI pipeline.',
+    };
+  }
   if (hasKeyword(msg, ['ci/cd', 'pipeline', 'deploy', 'github actions'])) {
     return {
       thinking:

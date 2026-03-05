@@ -9,7 +9,7 @@ import {
   Users, FileText, PenTool, BarChart3, Settings,
   ChevronLeft, ChevronRight, Workflow, Scale,
   ChevronDown, ChevronUp, Zap, Bot, FolderOpen,
-  Check, Plus
+  Check, Plus, Code2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -26,6 +26,7 @@ const getNavItems = (projectId: string) => [
   { label: 'My Decisions', icon: Scale, href: `/project/${projectId}/decisions`, section: 'main' },
   { label: 'AI Team', icon: Bot, href: `/project/${projectId}/agents`, section: 'main' },
   { label: 'Chat', icon: MessageSquare, href: `/project/${projectId}/chat`, section: 'collab' },
+  { label: 'Generated Code', icon: Code2, href: `/project/${projectId}/code`, section: 'collab' },
   { label: 'Documents', icon: FileText, href: `/project/${projectId}/docs`, section: 'collab' },
   { label: 'Designs', icon: PenTool, href: `/project/${projectId}/wireframes`, section: 'collab' },
   { label: 'Code & Releases', icon: GitBranch, href: `/project/${projectId}/git`, section: 'dev' },

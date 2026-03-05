@@ -251,7 +251,13 @@ export class OrchestrationEngine {
         targetShortName,
         parsed.message,
         fullThinking || undefined,
+        parsed.artifacts,
       );
+
+      // Persist artifacts
+      for (const artifact of parsed.artifacts) {
+        await this.persistArtifact(artifact, projectId, targetShortName, savedMessage.id);
+      }
 
       // ── Step 9: Reset agent status ────────────────────────────────────
       await agentStateManager.setIdle(projectId, targetShortName);
@@ -399,16 +405,17 @@ export class OrchestrationEngine {
       await this.executeSideEffects(parsed.actions, projectId, userId, agentRecord?.id);
 
       // Persist agent response
-      await this.saveAgentMessage(
+      const savedMessage = await this.saveAgentMessage(
         projectId,
         shortName,
         parsed.message,
         llmResponse.thinking,
+        parsed.artifacts,
       );
 
-      // Persist artifacts as documents if applicable
+      // Persist artifacts with smart routing
       for (const artifact of parsed.artifacts) {
-        await this.persistArtifact(artifact, projectId, shortName);
+        await this.persistArtifact(artifact, projectId, shortName, savedMessage.id);
       }
 
       // Reset agent status
@@ -720,6 +727,7 @@ export class OrchestrationEngine {
     shortName: string,
     content: string,
     thinking?: string,
+    artifacts?: Array<{ name: string; type: string }>,
   ): Promise<{ id: string }> {
     // Resolve the agent's DB ID for the relation
     const agentRecord = await prisma.agent.findFirst({
@@ -734,42 +742,105 @@ export class OrchestrationEngine {
         thinking: thinking ?? null,
         agentId: agentRecord?.id ?? null,
         projectId,
+        artifacts: artifacts && artifacts.length > 0
+          ? JSON.stringify(artifacts.map(a => ({ name: a.name, type: a.type })))
+          : null,
       },
       select: { id: true },
     });
   }
 
   /**
-   * Persist a code/document artifact as a Document record if it has
-   * meaningful content. Small artifacts (< 20 chars) are skipped.
+   * Persist a code/document artifact with smart routing based on category.
+   * - CODE, CONFIG, TEST → prisma.artifact.create()
+   * - DOCUMENT → prisma.document.create() (legacy behavior)
+   * Small artifacts (< 20 chars) are skipped.
    */
   private async persistArtifact(
     artifact: { name: string; type: string; content: string },
     projectId: string,
     agentShortName: string,
+    messageId?: string,
   ): Promise<void> {
     if (!artifact.content || artifact.content.length < 20) return;
 
-    const docType = this.inferDocumentType(artifact.type);
-    const wordCount = artifact.content.split(/\s+/).filter(Boolean).length;
+    const category = this.inferArtifactCategory(artifact.type, artifact.name, agentShortName);
 
     try {
-      await prisma.document.create({
-        data: {
-          title: artifact.name,
-          type: docType,
-          content: artifact.content,
-          wordCount,
-          owner: agentShortName,
-          projectId,
-        },
-      });
+      if (category === 'DOCUMENT') {
+        // Legacy path: save to Document table
+        const docType = this.inferDocumentType(artifact.type);
+        const wordCount = artifact.content.split(/\s+/).filter(Boolean).length;
+
+        await prisma.document.create({
+          data: {
+            title: artifact.name,
+            type: docType,
+            content: artifact.content,
+            wordCount,
+            owner: agentShortName,
+            projectId,
+          },
+        });
+      } else {
+        // New path: save to Artifact table with typed category
+        await prisma.artifact.create({
+          data: {
+            name: artifact.name,
+            type: category as 'CODE' | 'CONFIG' | 'TEST',
+            content: artifact.content,
+            ownerAgent: agentShortName,
+            projectId,
+            messageId: messageId ?? null,
+          },
+        });
+      }
     } catch (err) {
       console.error(
-        `[OrchestrationEngine] Failed to persist artifact "${artifact.name}":`,
+        `[OrchestrationEngine] Failed to persist artifact "${artifact.name}" (${category}):`,
         err,
       );
     }
+  }
+
+  /**
+   * Infer the artifact category based on type, filename, and producing agent.
+   * Used to route artifacts to the correct persistence table.
+   */
+  private inferArtifactCategory(
+    artifactType: string,
+    artifactName: string,
+    agentShortName: string,
+  ): 'CODE' | 'CONFIG' | 'TEST' | 'DOCUMENT' {
+    const lower = artifactType.toLowerCase();
+    const nameLower = artifactName.toLowerCase();
+
+    // Test detection: QA/AT agents or test-related filenames
+    if (['QA', 'AT'].includes(agentShortName) ||
+        nameLower.includes('test') || nameLower.includes('spec') || nameLower.includes('e2e')) {
+      return 'TEST';
+    }
+
+    // Config detection
+    const configTypes = ['json', 'yaml', 'toml', 'env', 'dockerfile', 'terraform', 'prisma', 'graphql', 'protobuf', 'xml'];
+    if (configTypes.some(t => lower.includes(t))) return 'CONFIG';
+
+    // Document detection: markdown from doc-producing agents
+    const docAgents = ['BA', 'PM', 'SA', 'DEC', 'AUD'];
+    if ((lower.includes('markdown') || lower === 'text') && docAgents.includes(agentShortName)) {
+      return 'DOCUMENT';
+    }
+
+    // Code detection
+    const codeTypes = ['typescript', 'javascript', 'python', 'java', 'go', 'rust', 'ruby', 'html', 'css', 'scss', 'shell', 'sql'];
+    if (codeTypes.some(t => lower.includes(t))) return 'CODE';
+
+    // Default: if it has a code-like extension, it's code; otherwise document
+    const ext = artifactName.split('.').pop()?.toLowerCase() ?? '';
+    const codeExtensions = ['ts', 'tsx', 'js', 'jsx', 'py', 'java', 'go', 'rs', 'rb', 'sh', 'sql', 'html', 'css', 'scss'];
+    if (codeExtensions.includes(ext)) return 'CODE';
+
+    return 'DOCUMENT';
   }
 
   // =========================================================================
