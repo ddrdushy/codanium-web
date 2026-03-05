@@ -20,24 +20,24 @@ import { ProjectSelectorSkeleton } from '@/components/ui/skeleton';
 import { CreateProjectModal } from '@/components/modals/create-project-modal';
 
 const getNavItems = (projectId: string) => [
+  { label: 'Chat', icon: MessageSquare, href: `/project/${projectId}/chat`, section: 'main' },
   { label: 'Overview', icon: LayoutDashboard, href: `/project/${projectId}`, section: 'main' },
   { label: 'Work Board', icon: Kanban, href: `/project/${projectId}/board`, section: 'main' },
-  { label: 'Delivery Progress', icon: Workflow, href: `/project/${projectId}/pipeline`, section: 'main' },
   { label: 'My Decisions', icon: Scale, href: `/project/${projectId}/decisions`, section: 'main' },
   { label: 'AI Team', icon: Bot, href: `/project/${projectId}/agents`, section: 'main' },
-  { label: 'Chat', icon: MessageSquare, href: `/project/${projectId}/chat`, section: 'collab' },
-  { label: 'Generated Code', icon: Code2, href: `/project/${projectId}/code`, section: 'collab' },
-  { label: 'Documents', icon: FileText, href: `/project/${projectId}/docs`, section: 'collab' },
-  { label: 'Designs', icon: PenTool, href: `/project/${projectId}/wireframes`, section: 'collab' },
-  { label: 'Code & Releases', icon: GitBranch, href: `/project/${projectId}/git`, section: 'dev' },
-  { label: 'Reports', icon: BarChart3, href: `/project/${projectId}/kpi`, section: 'dev' },
+  { label: 'Generated Code', icon: Code2, href: `/project/${projectId}/code`, section: 'deliverables' },
+  { label: 'Documents', icon: FileText, href: `/project/${projectId}/docs`, section: 'deliverables' },
+  { label: 'Designs', icon: PenTool, href: `/project/${projectId}/wireframes`, section: 'deliverables' },
+  { label: 'Delivery Progress', icon: Workflow, href: `/project/${projectId}/pipeline`, section: 'reports' },
+  { label: 'Code & Releases', icon: GitBranch, href: `/project/${projectId}/git`, section: 'reports' },
+  { label: 'Reports', icon: BarChart3, href: `/project/${projectId}/kpi`, section: 'reports' },
   { label: 'Settings', icon: Settings, href: `/project/${projectId}/settings`, section: 'settings' },
 ];
 
 const sections = [
   { key: 'main', label: 'Project' },
-  { key: 'collab', label: 'Communicate' },
-  { key: 'dev', label: 'Technical' },
+  { key: 'deliverables', label: 'Deliverables' },
+  { key: 'reports', label: 'Progress' },
   { key: 'settings', label: '' },
 ];
 

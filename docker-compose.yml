@@ -34,6 +34,8 @@ services:
       DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
       NEXTAUTH_URL: http://localhost:14001
       NEXTAUTH_SECRET: docker-dev-secret-change-in-production
+      AUTH_SECRET: docker-dev-secret-change-in-production
+      AUTH_TRUST_HOST: "true"
       NODE_ENV: production
     depends_on:
       db:

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { fetchProjects } from '@/lib/api';
 import { motion } from 'framer-motion';
@@ -16,6 +16,7 @@ import {
   Pause, Archive, TrendingUp, ArrowRight, BarChart3,
   FolderOpen, LayoutGrid, List, Filter
 } from 'lucide-react';
+import { CreateProjectModal } from '@/components/modals/create-project-modal';
 
 const statusConfig: Record<ProjectStatus, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   active: { label: 'Active', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', icon: Zap },
@@ -34,6 +35,7 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     fetchProjects()
@@ -93,7 +95,7 @@ export default function ProjectsPage() {
               {projects.length} projects · {activeCount} active · {totalAgents} AI specialists assigned
             </p>
           </div>
-          <Button className="bg-amber text-background hover:bg-amber/90 font-semibold h-10 px-5">
+          <Button onClick={() => setShowCreateModal(true)} className="bg-amber text-background hover:bg-amber/90 font-semibold h-10 px-5">
             <Plus className="w-4 h-4 mr-2" />
             New Project
           </Button>
@@ -175,7 +177,7 @@ export default function ProjectsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: filteredProjects.length * 0.06 }}
             >
-              <button className="w-full h-full min-h-[200px] rounded-2xl border-2 border-dashed border-border hover:border-amber/30 bg-[var(--surface)]/50 flex flex-col items-center justify-center gap-3 transition-all hover:bg-amber/[0.02] group">
+              <button onClick={() => setShowCreateModal(true)} className="w-full h-full min-h-[200px] rounded-2xl border-2 border-dashed border-border hover:border-amber/30 bg-[var(--surface)]/50 flex flex-col items-center justify-center gap-3 transition-all hover:bg-amber/[0.02] group">
                 <div className="w-12 h-12 rounded-2xl bg-foreground/[0.04] group-hover:bg-amber/10 flex items-center justify-center transition-colors">
                   <Plus className="w-6 h-6 text-muted-foreground/30 group-hover:text-amber transition-colors" />
                 </div>
@@ -194,6 +196,8 @@ export default function ProjectsPage() {
           </div>
         )}
       </main>
+
+      <CreateProjectModal open={showCreateModal} onOpenChange={setShowCreateModal} />
     </div>
   );
 }
