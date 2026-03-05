@@ -26,6 +26,10 @@ async function main() {
 
   console.log('Clearing existing data...');
   await prisma.$transaction([
+    prisma.orchestrationRun.deleteMany(),
+    prisma.artifact.deleteMany(),
+    prisma.event.deleteMany(),
+    prisma.lLMProviderConfig.deleteMany(),
     prisma.notification.deleteMany(),
     prisma.auditLog.deleteMany(),
     prisma.lLMUsage.deleteMany(),
@@ -1019,6 +1023,98 @@ async function main() {
   for (const w of wireframes) { await prisma.wireframe.create({ data: w }); }
   console.log(`  Created ${wireframes.length} wireframes`);
 
+  // ── 16. Seed LLM Provider Configs (BYOM) ─────────────────────────────────
+
+  console.log('\nSeeding LLM provider configs...');
+  const llmProviderConfigs = [
+    {
+      id: 'llm-cfg-001',
+      provider: 'mock',
+      displayName: 'Demo Mode (Built-in)',
+      defaultModel: 'mock-standard',
+      isActive: true,
+      scope: 'USER' as const,
+      userId: 'usr-001',
+    },
+    {
+      id: 'llm-cfg-002',
+      provider: 'mock',
+      displayName: 'Demo Mode (Built-in)',
+      defaultModel: 'mock-standard',
+      isActive: true,
+      scope: 'USER' as const,
+      userId: 'usr-002',
+    },
+    {
+      id: 'llm-cfg-003',
+      provider: 'openai',
+      displayName: 'OpenAI — GPT-4o',
+      defaultModel: 'gpt-4o',
+      isActive: false,
+      scope: 'PROJECT' as const,
+      projectId: 'prj-001',
+    },
+    {
+      id: 'llm-cfg-004',
+      provider: 'anthropic',
+      displayName: 'Anthropic — Claude 3.5',
+      defaultModel: 'claude-3-5-sonnet-20241022',
+      isActive: false,
+      scope: 'PROJECT' as const,
+      projectId: 'prj-002',
+    },
+  ];
+  for (const cfg of llmProviderConfigs) { await prisma.lLMProviderConfig.create({ data: cfg }); }
+  console.log(`  Created ${llmProviderConfigs.length} LLM provider configs`);
+
+  // ── 17. Seed Orchestration Events ───────────────────────────────────────
+
+  console.log('Seeding orchestration events...');
+  const orchestrationEvents = [
+    { id: 'evt-001', type: 'MessageProcessed', actor: 'ORC', payload: JSON.stringify({ intent: 'new_requirement', routedTo: 'BA' }), projectId: 'prj-001', createdAt: hoursAgo(2) },
+    { id: 'evt-002', type: 'TaskCreated', actor: 'BA', payload: JSON.stringify({ cardId: 'card-001', title: 'Gather login requirements' }), projectId: 'prj-001', createdAt: hoursAgo(2) },
+    { id: 'evt-003', type: 'AgentDelegated', actor: 'BA', payload: JSON.stringify({ from: 'BA', to: 'SA', context: 'Architecture review for auth module' }), projectId: 'prj-001', createdAt: hoursAgo(1.5) },
+    { id: 'evt-004', type: 'DecisionRequested', actor: 'SA', payload: JSON.stringify({ trigger: 'Auth approach selection', options: ['JWT', 'Session-based', 'OAuth2'] }), projectId: 'prj-001', createdAt: hoursAgo(1) },
+    { id: 'evt-005', type: 'MessageProcessed', actor: 'ORC', payload: JSON.stringify({ intent: 'status_query', routedTo: 'ORC' }), projectId: 'prj-001', createdAt: hoursAgo(0.5) },
+    { id: 'evt-006', type: 'TaskCreated', actor: 'PM', payload: JSON.stringify({ cardId: 'card-002', title: 'Define MVP scope' }), projectId: 'prj-002', createdAt: hoursAgo(4) },
+    { id: 'evt-007', type: 'MessageProcessed', actor: 'ORC', payload: JSON.stringify({ intent: 'ui_feedback', routedTo: 'UX' }), projectId: 'prj-002', createdAt: hoursAgo(3) },
+    { id: 'evt-008', type: 'MessageProcessed', actor: 'ORC', payload: JSON.stringify({ intent: 'bug_report', routedTo: 'QA' }), projectId: 'prj-003', createdAt: hoursAgo(5) },
+    { id: 'evt-009', type: 'AgentDelegated', actor: 'QA', payload: JSON.stringify({ from: 'QA', to: 'SD', context: 'Fix critical login bug' }), projectId: 'prj-003', createdAt: hoursAgo(4.5) },
+    { id: 'evt-010', type: 'MessageProcessed', actor: 'ORC', payload: JSON.stringify({ intent: 'cost_query', routedTo: 'CA' }), projectId: 'prj-005', createdAt: hoursAgo(6) },
+  ];
+  await prisma.event.createMany({ data: orchestrationEvents });
+  console.log(`  Created ${orchestrationEvents.length} orchestration events`);
+
+  // ── 18. Seed Artifacts ──────────────────────────────────────────────────
+
+  console.log('Seeding artifacts...');
+  const artifacts = [
+    { id: 'art-001', name: 'requirements-auth.md', type: 'DOCUMENT' as const, content: '# Authentication Requirements\n\n## Functional Requirements\n- FR-1: Users can register with email/password\n- FR-2: Users can log in with email/password\n- FR-3: Session management with JWT tokens\n- FR-4: Password reset via email\n\n## Non-Functional Requirements\n- NFR-1: Passwords hashed with bcrypt (min 10 rounds)\n- NFR-2: JWT expiry: 24h access, 7d refresh\n- NFR-3: Rate limiting: 5 failed attempts → 15min lockout', ownerAgent: 'BA', version: 1, projectId: 'prj-001', createdAt: hoursAgo(2) },
+    { id: 'art-002', name: 'auth-architecture.md', type: 'DOCUMENT' as const, content: '# Auth Architecture Decision Record\n\n## Context\nNeed to implement user authentication for the web app.\n\n## Decision\nJWT-based auth with refresh tokens.\n\n## Rationale\n- Stateless → easier horizontal scaling\n- Works well with Next.js middleware\n- Industry standard for SPA architectures', ownerAgent: 'SA', version: 1, projectId: 'prj-001', createdAt: hoursAgo(1.5) },
+    { id: 'art-003', name: 'auth-middleware.ts', type: 'CODE' as const, content: '// Auth middleware placeholder\nexport function withAuth(handler) {\n  return async (req, res) => {\n    const token = req.headers.authorization?.split(" ")[1];\n    if (!token) return res.status(401).json({ error: "Unauthorized" });\n    // Verify JWT token\n    handler(req, res);\n  };\n}', ownerAgent: 'SD', version: 1, projectId: 'prj-001', createdAt: hoursAgo(1) },
+    { id: 'art-004', name: 'api-test-plan.md', type: 'TEST' as const, content: '# API Test Plan — Auth Endpoints\n\n## Test Cases\n1. POST /api/register — valid payload → 201\n2. POST /api/register — duplicate email → 409\n3. POST /api/login — valid credentials → 200 + JWT\n4. POST /api/login — wrong password → 401\n5. GET /api/me — valid token → 200\n6. GET /api/me — expired token → 401', ownerAgent: 'QA', version: 1, projectId: 'prj-001', createdAt: hoursAgo(0.5) },
+    { id: 'art-005', name: 'docker-compose.yml', type: 'CONFIG' as const, content: 'version: "3.8"\nservices:\n  app:\n    build: .\n    ports:\n      - "3000:3000"\n    environment:\n      - DATABASE_URL=postgresql://user:pass@db:5432/app\n  db:\n    image: postgres:16\n    volumes:\n      - pgdata:/var/lib/postgresql/data\nvolumes:\n  pgdata:', ownerAgent: 'DO', version: 2, projectId: 'prj-001', createdAt: daysAgo(1) },
+    { id: 'art-006', name: 'mvp-scope.md', type: 'DOCUMENT' as const, content: '# MVP Scope — E-Commerce Platform\n\n## In Scope\n- Product listing page\n- Shopping cart\n- Checkout with Stripe\n- User accounts\n- Order history\n\n## Out of Scope (v2)\n- Wish lists\n- Product reviews\n- Admin dashboard\n- Inventory management', ownerAgent: 'PM', version: 1, projectId: 'prj-002', createdAt: hoursAgo(4) },
+  ];
+  for (const art of artifacts) { await prisma.artifact.create({ data: art }); }
+  console.log(`  Created ${artifacts.length} artifacts`);
+
+  // ── 19. Seed Orchestration Runs ─────────────────────────────────────────
+
+  console.log('Seeding orchestration runs...');
+  const orchestrationRuns = [
+    { id: 'run-001', status: 'COMPLETED' as const, userMessage: 'I want to build a web app with user authentication', routedTo: 'BA', autoRouted: true, delegations: ['BA', 'SA'], tokensTotal: 3200, costTotal: 0.048, latencyMs: 2400, projectId: 'prj-001', userId: 'usr-001', createdAt: hoursAgo(2), completedAt: hoursAgo(1.9) },
+    { id: 'run-002', status: 'COMPLETED' as const, userMessage: 'What architecture should we use for the auth system?', routedTo: 'SA', autoRouted: true, delegations: [], tokensTotal: 4100, costTotal: 0.062, latencyMs: 3100, projectId: 'prj-001', userId: 'usr-001', createdAt: hoursAgo(1.5), completedAt: hoursAgo(1.4) },
+    { id: 'run-003', status: 'COMPLETED' as const, userMessage: 'What is the current project status?', routedTo: 'ORC', autoRouted: true, delegations: [], tokensTotal: 1800, costTotal: 0.027, latencyMs: 1200, projectId: 'prj-001', userId: 'usr-001', createdAt: hoursAgo(0.5), completedAt: hoursAgo(0.45) },
+    { id: 'run-004', status: 'COMPLETED' as const, userMessage: 'Define the MVP scope for the e-commerce platform', routedTo: 'PM', autoRouted: true, delegations: ['PM'], tokensTotal: 2900, costTotal: 0.044, latencyMs: 2800, projectId: 'prj-002', userId: 'usr-001', createdAt: hoursAgo(4), completedAt: hoursAgo(3.9) },
+    { id: 'run-005', status: 'COMPLETED' as const, userMessage: 'The login page has a layout bug on mobile', routedTo: 'QA', autoRouted: true, delegations: ['QA', 'SD'], tokensTotal: 3600, costTotal: 0.054, latencyMs: 3400, projectId: 'prj-003', userId: 'usr-001', createdAt: hoursAgo(5), completedAt: hoursAgo(4.8) },
+    { id: 'run-006', status: 'COMPLETED' as const, userMessage: 'How much are we spending on LLM calls this month?', routedTo: 'CA', autoRouted: true, delegations: [], tokensTotal: 1500, costTotal: 0.023, latencyMs: 1100, projectId: 'prj-005', userId: 'usr-002', createdAt: hoursAgo(6), completedAt: hoursAgo(5.9) },
+    { id: 'run-007', status: 'FAILED' as const, userMessage: 'Generate the full deployment pipeline', routedTo: 'DO', autoRouted: true, delegations: [], tokensTotal: 800, costTotal: 0.012, latencyMs: 30000, errorMessage: 'LLM request timed out after 30s', projectId: 'prj-003', userId: 'usr-001', createdAt: hoursAgo(8), completedAt: hoursAgo(7.9) },
+    { id: 'run-008', status: 'COMPLETED' as const, userMessage: 'Review the code quality of the auth module', routedTo: 'SD', autoRouted: false, delegations: [], tokensTotal: 5200, costTotal: 0.078, latencyMs: 4200, projectId: 'prj-001', userId: 'usr-001', createdAt: hoursAgo(3), completedAt: hoursAgo(2.8) },
+  ];
+  await prisma.orchestrationRun.createMany({ data: orchestrationRuns });
+  console.log(`  Created ${orchestrationRuns.length} orchestration runs`);
+
   // ── Summary ──────────────────────────────────────────────────────────────
 
   console.log('\n========================================');
@@ -1043,6 +1139,10 @@ async function main() {
     prisma.gitPullRequest.count(),
     prisma.gitRelease.count(),
     prisma.wireframe.count(),
+    prisma.lLMProviderConfig.count(),
+    prisma.event.count(),
+    prisma.artifact.count(),
+    prisma.orchestrationRun.count(),
   ]);
 
   const labels = [
@@ -1063,6 +1163,10 @@ async function main() {
     'Git Pull Requests',
     'Git Releases',
     'Wireframes',
+    'LLM Provider Configs',
+    'Orchestration Events',
+    'Artifacts',
+    'Orchestration Runs',
   ];
 
   labels.forEach((label, i) => {
