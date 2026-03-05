@@ -18,6 +18,9 @@ import {
   ProviderConfig,
 } from './providers/types';
 import { MockProvider } from './providers/mock-provider';
+import { OpenAIAdapter } from './providers/openai-adapter';
+import { AnthropicAdapter } from './providers/anthropic-adapter';
+import { OllamaAdapter } from './providers/ollama-adapter';
 import { prisma } from '@/lib/prisma';
 
 // ---------------------------------------------------------------------------
@@ -33,8 +36,9 @@ export class LLMGateway {
     this.providers = new Map();
     this.mockProvider = new MockProvider();
     this.providers.set('mock', this.mockProvider);
-    // Real provider adapters (OpenAI, Anthropic, Ollama) will be registered
-    // here once their adapter classes are implemented.
+    this.providers.set('openai', new OpenAIAdapter());
+    this.providers.set('anthropic', new AnthropicAdapter());
+    this.providers.set('ollama', new OllamaAdapter());
     this.mockConfig = { provider: 'mock', defaultModel: 'mock-v1' };
   }
 
@@ -50,27 +54,65 @@ export class LLMGateway {
    *   2. Project-level config (if projectId is provided)
    *   3. User-level / workspace default
    *   4. Mock fallback (always available)
-   *
-   * Once the LLMProviderConfig table is added to the schema, this method
-   * will query the DB for real provider configs. Until then it returns mock.
    */
   async resolve(
     projectId?: string,
     agentId?: string,
   ): Promise<{ provider: LLMProvider; config: ProviderConfig; isMock: boolean }> {
-    // TODO: Query LLMProviderConfig from DB when the schema is updated.
-    //
-    // Planned implementation:
-    //   1. If agentId -> look up agent-scoped config
-    //   2. Else if projectId -> look up project-scoped config
-    //   3. Else -> look up user/workspace default
-    //   4. Fallback -> mock
-    //
-    // For now, suppress unused-var warnings:
-    void projectId;
-    void agentId;
+    if (projectId) {
+      // Try agent-level config first
+      if (agentId) {
+        try {
+          const agentConfig = await prisma.lLMProviderConfig.findFirst({
+            where: { projectId, agentShortName: agentId, scope: 'AGENT', isActive: true },
+          });
+          if (agentConfig) {
+            return this.resolveConfig(agentConfig);
+          }
+        } catch {
+          // DB query failed — fall through to next level
+        }
+      }
 
+      // Try project-level config
+      try {
+        const projectConfig = await prisma.lLMProviderConfig.findFirst({
+          where: { projectId, scope: 'PROJECT', isActive: true },
+        });
+        if (projectConfig) {
+          return this.resolveConfig(projectConfig);
+        }
+      } catch {
+        // DB query failed — fall through to mock
+      }
+    }
+
+    // TODO: Try user-level / workspace default config
+
+    // Fall back to mock
     return { provider: this.mockProvider, config: this.mockConfig, isMock: true };
+  }
+
+  /**
+   * Convert a DB-stored LLMProviderConfig record into the gateway's
+   * { provider, config, isMock } tuple.
+   */
+  private resolveConfig(dbConfig: {
+    provider: string;
+    apiKeyEncrypted: string | null;
+    baseUrl: string | null;
+    organizationId: string | null;
+    defaultModel: string;
+  }): { provider: LLMProvider; config: ProviderConfig; isMock: boolean } {
+    const provider = this.providers.get(dbConfig.provider) ?? this.mockProvider;
+    const config: ProviderConfig = {
+      provider: dbConfig.provider,
+      apiKey: dbConfig.apiKeyEncrypted ?? undefined, // TODO: decrypt when encryption is wired
+      baseUrl: dbConfig.baseUrl ?? undefined,
+      organizationId: dbConfig.organizationId ?? undefined,
+      defaultModel: dbConfig.defaultModel,
+    };
+    return { provider, config, isMock: dbConfig.provider === 'mock' };
   }
 
   // -------------------------------------------------------------------------
