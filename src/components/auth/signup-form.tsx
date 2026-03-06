@@ -42,9 +42,28 @@ export function SignupForm() {
 
     setLoading(true);
 
-    // In demo mode, just sign in with existing credentials
-    // A real app would create the user first
     try {
+      // Register the user via API
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      if (res.status === 409) {
+        setError('An account with this email already exists');
+        setLoading(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed to create account');
+        setLoading(false);
+        return;
+      }
+
+      // Auto sign in after successful registration
       const result = await signIn('credentials', {
         email,
         password,
@@ -52,8 +71,7 @@ export function SignupForm() {
       });
 
       if (result?.error) {
-        // If sign-in fails after "signup", show helpful message
-        setError('Account created! For the demo, use the existing demo credentials to sign in.');
+        setError('Account created but sign-in failed. Please go to login.');
         setLoading(false);
       } else {
         setLoading(false);

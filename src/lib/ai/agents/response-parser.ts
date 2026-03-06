@@ -170,6 +170,59 @@ function parseAction(actionType: string, rawJson: string): AgentAction | null {
         stageName: String(parsed.stageName ?? ''),
       };
 
+    case 'create_branch':
+      if (!parsed.name) return null;
+      return {
+        type: 'create_branch',
+        data: {
+          name: String(parsed.name),
+          baseBranch: parsed.baseBranch != null ? String(parsed.baseBranch) : undefined,
+        },
+      };
+
+    case 'create_pr':
+      if (!parsed.title || !parsed.branch) return null;
+      return {
+        type: 'create_pr',
+        data: {
+          title: String(parsed.title),
+          branch: String(parsed.branch),
+          description: parsed.description != null ? String(parsed.description) : undefined,
+        },
+      };
+
+    case 'create_release':
+      if (!parsed.version) return null;
+      return {
+        type: 'create_release',
+        data: {
+          version: String(parsed.version),
+          features: Array.isArray(parsed.features) ? parsed.features.map(String) : undefined,
+        },
+      };
+
+    case 'trigger_deploy':
+      return {
+        type: 'trigger_deploy',
+        data: {
+          pipelineName: parsed.pipelineName != null ? String(parsed.pipelineName) : undefined,
+          environment: parsed.environment != null ? String(parsed.environment) : undefined,
+          branch: parsed.branch != null ? String(parsed.branch) : undefined,
+        },
+      };
+
+    case 'create_pipeline':
+      if (!parsed.name || !parsed.environment || !parsed.trigger) return null;
+      return {
+        type: 'create_pipeline',
+        data: {
+          name: String(parsed.name),
+          environment: String(parsed.environment),
+          trigger: String(parsed.trigger),
+          config: parsed.config != null ? String(parsed.config) : undefined,
+        },
+      };
+
     default:
       console.warn(
         `[ResponseParser] Unrecognized action type: "${actionType}", skipping.`,

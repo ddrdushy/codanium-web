@@ -1,5 +1,5 @@
 # ─── AI Team Studio — Docker Compose ───
-# PostgreSQL + Next.js App
+# PostgreSQL + Redis + Next.js App + BullMQ Worker
 
 services:
   # ─── PostgreSQL Database ─────────────────────────────────────────────────────
@@ -21,6 +21,22 @@ services:
       timeout: 5s
       retries: 10
 
+  # ─── Redis (Cache, Queue, Pub/Sub) ──────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ats-redis
+    restart: unless-stopped
+    ports:
+      - "14003:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # ─── Next.js Application ─────────────────────────────────────────────────────
   app:
     build:
@@ -32,13 +48,48 @@ services:
       - "14001:3000"
     environment:
       DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
+      REDIS_URL: redis://redis:6379
       NEXTAUTH_URL: http://localhost:14001
       NEXTAUTH_SECRET: docker-dev-secret-change-in-production
       AUTH_SECRET: docker-dev-secret-change-in-production
       AUTH_TRUST_HOST: "true"
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
+      STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
+      APP_URL: http://localhost:14001
       NODE_ENV: production
     depends_on:
       db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─── BullMQ Worker (Background Job Processor) ───────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ats-worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
+      REDIS_URL: redis://redis:6379
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
+      STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
+      APP_URL: http://localhost:14001
+      NODE_ENV: production
+    command: ["node", "worker.mjs"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # ─── Prisma Studio (Dev Only) ────────────────────────────────────────────────
@@ -61,4 +112,6 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
     driver: local

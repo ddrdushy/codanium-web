@@ -213,6 +213,7 @@ export class OrchestrationEngine {
         temperature: agentDef.temperature,
         agentId: targetShortName,
         projectId,
+        metadata: { userId },
       })) {
         if (chunk.thinking) {
           fullThinking += chunk.thinking;
@@ -395,6 +396,7 @@ export class OrchestrationEngine {
         temperature: agentDef.temperature,
         agentId: shortName,
         projectId,
+        metadata: { userId },
       });
 
       // Parse response
@@ -673,6 +675,96 @@ export class OrchestrationEngine {
           case 'delegate': {
             // Delegation is handled at the orchestration level, not as a side effect.
             // This case exists to prevent the default warning from firing.
+            break;
+          }
+
+          case 'create_branch': {
+            const branchData = action.data as { name: string; baseBranch?: string };
+            await prisma.gitBranch.create({
+              data: {
+                name: branchData.name,
+                status: 'ACTIVE',
+                author: 'AI Agent',
+                projectId,
+              },
+            });
+            console.log(`[OrchestrationEngine] Created branch: ${branchData.name}`);
+            break;
+          }
+
+          case 'create_pr': {
+            const prData = action.data as { title: string; branch: string; description?: string };
+            // Auto-increment PR number
+            const maxPr = await prisma.gitPullRequest.findFirst({
+              where: { projectId },
+              orderBy: { number: 'desc' },
+              select: { number: true },
+            });
+            const nextNumber = (maxPr?.number ?? 0) + 1;
+            await prisma.gitPullRequest.create({
+              data: {
+                number: nextNumber,
+                title: prData.title,
+                branch: prData.branch,
+                status: 'OPEN',
+                author: 'AI Agent',
+                projectId,
+              },
+            });
+            console.log(`[OrchestrationEngine] Created PR #${nextNumber}: ${prData.title}`);
+            break;
+          }
+
+          case 'create_release': {
+            const releaseData = action.data as { version: string; features?: string[] };
+            await prisma.gitRelease.create({
+              data: {
+                version: releaseData.version,
+                status: 'DRAFT',
+                features: releaseData.features ?? [],
+                projectId,
+              },
+            });
+            console.log(`[OrchestrationEngine] Created release: ${releaseData.version}`);
+            break;
+          }
+
+          case 'trigger_deploy': {
+            const deployData = action.data as { pipelineName?: string; environment?: string; branch?: string };
+            const pipeline = await prisma.deploymentPipeline.findFirst({
+              where: {
+                projectId,
+                ...(deployData.pipelineName ? { name: deployData.pipelineName } : {}),
+              },
+            });
+            if (pipeline) {
+              await prisma.deploymentRun.create({
+                data: {
+                  pipelineId: pipeline.id,
+                  status: 'PENDING',
+                  currentStage: 'BUILD',
+                  triggeredBy: agentDbId ?? 'system',
+                  branch: deployData.branch ?? 'main',
+                  projectId,
+                },
+              });
+              console.log(`[OrchestrationEngine] Triggered deploy on pipeline: ${pipeline.name}`);
+            }
+            break;
+          }
+
+          case 'create_pipeline': {
+            const pipelineData = action.data as { name: string; environment: string; trigger: string; config?: string };
+            await prisma.deploymentPipeline.create({
+              data: {
+                name: pipelineData.name,
+                environment: (pipelineData.environment?.toUpperCase() ?? 'STAGING') as any,
+                trigger: (pipelineData.trigger?.toUpperCase() ?? 'MANUAL') as any,
+                config: pipelineData.config ?? '{}',
+                projectId,
+              },
+            });
+            console.log(`[OrchestrationEngine] Created pipeline: ${pipelineData.name}`);
             break;
           }
 
@@ -1011,3 +1103,530 @@ export class OrchestrationEngine {
 // ---------------------------------------------------------------------------
 
 export const orchestrationEngine = new OrchestrationEngine();
+
+// Register event handlers for persistence
+import './event-handlers';
+
+// =============================================================================
+// STANDALONE EXPORTED FUNCTIONS
+// =============================================================================
+// These are extracted from the OrchestrationEngine class so that both the legacy
+// engine and the new LangGraph-based graph can share them without duplication.
+// =============================================================================
+
+/**
+ * Save the user's message to the ChatMessage table.
+ */
+export async function saveUserMessage(
+  projectId: string,
+  content: string,
+): Promise<{ id: string }> {
+  return prisma.chatMessage.create({
+    data: {
+      role: 'USER',
+      content,
+      projectId,
+    },
+    select: { id: true },
+  });
+}
+
+/**
+ * Save an agent's response to the ChatMessage table.
+ * Resolves the agent's DB record to link via agentId.
+ */
+export async function saveAgentMessage(
+  projectId: string,
+  shortName: string,
+  content: string,
+  thinking?: string,
+  artifacts?: Array<{ name: string; type: string }>,
+): Promise<{ id: string }> {
+  const agentRecord = await prisma.agent.findFirst({
+    where: { projectId, shortName },
+    select: { id: true },
+  });
+
+  return prisma.chatMessage.create({
+    data: {
+      role: 'AGENT',
+      content,
+      thinking: thinking ?? null,
+      agentId: agentRecord?.id ?? null,
+      projectId,
+      artifacts: artifacts && artifacts.length > 0
+        ? JSON.stringify(artifacts.map(a => ({ name: a.name, type: a.type })))
+        : null,
+    },
+    select: { id: true },
+  });
+}
+
+/**
+ * Persist a code/document artifact with smart routing based on category.
+ * - CODE, CONFIG, TEST → prisma.artifact.create()
+ * - DOCUMENT → prisma.document.create() (legacy behavior)
+ * Small artifacts (< 20 chars) are skipped.
+ */
+export async function persistArtifact(
+  artifact: { name: string; type: string; content: string },
+  projectId: string,
+  agentShortName: string,
+  messageId?: string,
+): Promise<void> {
+  if (!artifact.content || artifact.content.length < 20) return;
+
+  const category = inferArtifactCategory(artifact.type, artifact.name, agentShortName);
+
+  try {
+    if (category === 'DOCUMENT') {
+      const docType = inferDocumentType(artifact.type);
+      const wordCount = artifact.content.split(/\s+/).filter(Boolean).length;
+
+      await prisma.document.create({
+        data: {
+          title: artifact.name,
+          type: docType,
+          content: artifact.content,
+          wordCount,
+          owner: agentShortName,
+          projectId,
+        },
+      });
+    } else {
+      await prisma.artifact.create({
+        data: {
+          name: artifact.name,
+          type: category as 'CODE' | 'CONFIG' | 'TEST',
+          content: artifact.content,
+          ownerAgent: agentShortName,
+          projectId,
+          messageId: messageId ?? null,
+        },
+      });
+    }
+  } catch (err) {
+    console.error(
+      `[persistArtifact] Failed to persist "${artifact.name}" (${category}):`,
+      err,
+    );
+  }
+}
+
+/**
+ * Execute all side effects from parsed agent actions.
+ * Each action type maps to a specific Prisma operation.
+ * Errors in individual actions are logged but do not block other actions.
+ */
+export async function executeSideEffects(
+  actions: AgentAction[],
+  projectId: string,
+  userId: string,
+  agentDbId?: string | null,
+): Promise<void> {
+  for (const action of actions) {
+    try {
+      switch (action.type) {
+        case 'create_card': {
+          const cardType = mapCardType(action.data.type);
+          const priority = mapPriority(action.data.priority);
+          await prisma.card.create({
+            data: {
+              title: action.data.title,
+              description: action.data.description ?? '',
+              type: cardType,
+              priority,
+              projectId,
+              ownerAgentId: agentDbId ?? undefined,
+              parentId: action.data.parentId ?? undefined,
+            },
+          });
+
+          await eventBus.emit({
+            type: 'action.executed',
+            actor: 'system',
+            projectId,
+            payload: {
+              actionType: 'create_card',
+              title: action.data.title,
+            },
+          });
+          break;
+        }
+
+        case 'update_card': {
+          const updateData: Record<string, unknown> = {};
+          if (action.data.state) {
+            updateData.state = mapCardState(action.data.state);
+          }
+          if (action.data.title) {
+            updateData.title = action.data.title;
+          }
+          if (action.data.priority) {
+            updateData.priority = mapPriority(action.data.priority);
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await prisma.card.update({
+              where: { id: action.cardId },
+              data: updateData,
+            });
+          }
+
+          await eventBus.emit({
+            type: 'action.executed',
+            actor: 'system',
+            projectId,
+            payload: {
+              actionType: 'update_card',
+              cardId: action.cardId,
+              changes: updateData,
+            },
+          });
+          break;
+        }
+
+        case 'create_decision': {
+          const riskRating = mapRiskRating(action.data.riskRating);
+          await prisma.decision.create({
+            data: {
+              trigger: action.data.trigger,
+              context: action.data.context ?? '',
+              riskRating,
+              recommendation: action.data.recommendation ?? '',
+              ownerId: userId,
+              projectId,
+              options: action.data.options?.length
+                ? {
+                    create: action.data.options.map((opt) => ({
+                      name: opt.name,
+                      description: opt.description ?? '',
+                      pros: opt.pros ?? [],
+                      cons: opt.cons ?? [],
+                      risk: mapRiskRating(opt.risk),
+                      effort: mapEffort(opt.effort),
+                    })),
+                  }
+                : undefined,
+            },
+          });
+
+          await eventBus.emit({
+            type: 'action.executed',
+            actor: 'system',
+            projectId,
+            payload: {
+              actionType: 'create_decision',
+              trigger: action.data.trigger,
+            },
+          });
+          break;
+        }
+
+        case 'create_document': {
+          const docType = mapDocumentType(action.data.type);
+          const wordCount = action.data.content
+            ? action.data.content.split(/\s+/).filter(Boolean).length
+            : 0;
+          await prisma.document.create({
+            data: {
+              title: action.data.title,
+              type: docType,
+              content: action.data.content ?? '',
+              wordCount,
+              owner: action.data.owner ?? 'AI Team',
+              projectId,
+            },
+          });
+
+          await eventBus.emit({
+            type: 'action.executed',
+            actor: 'system',
+            projectId,
+            payload: {
+              actionType: 'create_document',
+              title: action.data.title,
+            },
+          });
+          break;
+        }
+
+        case 'advance_sdlc': {
+          const stages = await prisma.sDLCStage.findMany({
+            where: { projectId },
+            orderBy: { order: 'asc' },
+          });
+
+          const targetStage = stages.find(
+            (s) => s.name.toLowerCase() === action.stageName.toLowerCase(),
+          );
+
+          if (targetStage) {
+            const stagesToComplete = stages.filter(
+              (s) => s.order <= targetStage.order && s.status !== 'COMPLETED',
+            );
+            for (const stage of stagesToComplete) {
+              await prisma.sDLCStage.update({
+                where: { id: stage.id },
+                data: { status: 'COMPLETED', gatePassed: true },
+              });
+            }
+
+            const nextStage = stages.find((s) => s.order === targetStage.order + 1);
+            if (nextStage) {
+              await prisma.sDLCStage.update({
+                where: { id: nextStage.id },
+                data: { status: 'ACTIVE' },
+              });
+
+              await prisma.project.update({
+                where: { id: projectId },
+                data: { currentStage: nextStage.name },
+              });
+            }
+          }
+
+          await eventBus.emit({
+            type: 'action.executed',
+            actor: 'system',
+            projectId,
+            payload: {
+              actionType: 'advance_sdlc',
+              stageName: action.stageName,
+            },
+          });
+          break;
+        }
+
+        case 'update_agent_status': {
+          const validStatuses = ['IDLE', 'WORKING', 'WAITING', 'BLOCKED'] as const;
+          const status = validStatuses.find(
+            (s) => s === action.status.toUpperCase(),
+          );
+
+          if (status) {
+            await agentStateManager.setStatus(
+              projectId,
+              action.agentId,
+              status,
+              action.task ?? null,
+            );
+          }
+          break;
+        }
+
+        case 'delegate': {
+          // Delegation is handled at the orchestration level, not as a side effect.
+          break;
+        }
+
+        case 'create_branch': {
+          const branchData = action.data as { name: string; baseBranch?: string };
+          await prisma.gitBranch.create({
+            data: {
+              name: branchData.name,
+              status: 'ACTIVE',
+              author: 'AI Agent',
+              projectId,
+            },
+          });
+          break;
+        }
+
+        case 'create_pr': {
+          const prData = action.data as { title: string; branch: string; description?: string };
+          const maxPr = await prisma.gitPullRequest.findFirst({
+            where: { projectId },
+            orderBy: { number: 'desc' },
+            select: { number: true },
+          });
+          const nextNumber = (maxPr?.number ?? 0) + 1;
+          await prisma.gitPullRequest.create({
+            data: {
+              number: nextNumber,
+              title: prData.title,
+              branch: prData.branch,
+              status: 'OPEN',
+              author: 'AI Agent',
+              projectId,
+            },
+          });
+          break;
+        }
+
+        case 'create_release': {
+          const releaseData = action.data as { version: string; features?: string[] };
+          await prisma.gitRelease.create({
+            data: {
+              version: releaseData.version,
+              status: 'DRAFT',
+              features: releaseData.features ?? [],
+              projectId,
+            },
+          });
+          break;
+        }
+
+        case 'trigger_deploy': {
+          const deployData = action.data as { pipelineName?: string; environment?: string; branch?: string };
+          const pipeline = await prisma.deploymentPipeline.findFirst({
+            where: {
+              projectId,
+              ...(deployData.pipelineName ? { name: deployData.pipelineName } : {}),
+            },
+          });
+          if (pipeline) {
+            await prisma.deploymentRun.create({
+              data: {
+                pipelineId: pipeline.id,
+                status: 'PENDING',
+                currentStage: 'BUILD',
+                triggeredBy: agentDbId ?? 'system',
+                branch: deployData.branch ?? 'main',
+                projectId,
+              },
+            });
+          }
+          break;
+        }
+
+        case 'create_pipeline': {
+          const pipelineData = action.data as { name: string; environment: string; trigger: string; config?: string };
+          await prisma.deploymentPipeline.create({
+            data: {
+              name: pipelineData.name,
+              environment: (pipelineData.environment?.toUpperCase() ?? 'STAGING') as any,
+              trigger: (pipelineData.trigger?.toUpperCase() ?? 'MANUAL') as any,
+              config: pipelineData.config ?? '{}',
+              projectId,
+            },
+          });
+          break;
+        }
+
+        default: {
+          const _exhaustive: never = action;
+          console.warn(
+            '[executeSideEffects] Unhandled action type:',
+            (_exhaustive as AgentAction).type,
+          );
+        }
+      }
+    } catch (err) {
+      console.error(
+        `[executeSideEffects] Side effect "${action.type}" failed:`,
+        err,
+      );
+    }
+  }
+}
+
+// =============================================================================
+// STANDALONE ENUM MAPPERS
+// =============================================================================
+
+export function mapCardType(
+  type?: string,
+): 'EPIC' | 'FEATURE' | 'TASK' | 'QA' | 'DECISION_BLOCKER' {
+  const map: Record<string, 'EPIC' | 'FEATURE' | 'TASK' | 'QA' | 'DECISION_BLOCKER'> = {
+    EPIC: 'EPIC', FEATURE: 'FEATURE', TASK: 'TASK', QA: 'QA', DECISION_BLOCKER: 'DECISION_BLOCKER',
+    epic: 'EPIC', feature: 'FEATURE', task: 'TASK', qa: 'QA', decision_blocker: 'DECISION_BLOCKER',
+  };
+  return map[type ?? ''] ?? 'TASK';
+}
+
+export function mapCardState(
+  state: string,
+): 'PLANNED' | 'IN_PROGRESS' | 'UNDER_REVIEW' | 'TESTING' | 'BLOCKED' | 'DONE' | 'RELEASED' {
+  const map: Record<string, 'PLANNED' | 'IN_PROGRESS' | 'UNDER_REVIEW' | 'TESTING' | 'BLOCKED' | 'DONE' | 'RELEASED'> = {
+    PLANNED: 'PLANNED', IN_PROGRESS: 'IN_PROGRESS', UNDER_REVIEW: 'UNDER_REVIEW',
+    TESTING: 'TESTING', BLOCKED: 'BLOCKED', DONE: 'DONE', RELEASED: 'RELEASED',
+    planned: 'PLANNED', in_progress: 'IN_PROGRESS', under_review: 'UNDER_REVIEW',
+    testing: 'TESTING', blocked: 'BLOCKED', done: 'DONE', released: 'RELEASED',
+  };
+  return map[state] ?? 'PLANNED';
+}
+
+export function mapPriority(priority?: string): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+  const map: Record<string, 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'> = {
+    LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH', CRITICAL: 'CRITICAL',
+    low: 'LOW', medium: 'MEDIUM', high: 'HIGH', critical: 'CRITICAL',
+  };
+  return map[priority ?? ''] ?? 'MEDIUM';
+}
+
+export function mapRiskRating(rating?: string): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+  const map: Record<string, 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'> = {
+    LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH', CRITICAL: 'CRITICAL',
+    low: 'LOW', medium: 'MEDIUM', high: 'HIGH', critical: 'CRITICAL',
+  };
+  return map[rating ?? ''] ?? 'MEDIUM';
+}
+
+export function mapEffort(effort?: string): 'LOW' | 'MEDIUM' | 'HIGH' {
+  const map: Record<string, 'LOW' | 'MEDIUM' | 'HIGH'> = {
+    LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH',
+    low: 'LOW', medium: 'MEDIUM', high: 'HIGH',
+  };
+  return map[effort ?? ''] ?? 'MEDIUM';
+}
+
+export function mapDocumentType(
+  type: string,
+): 'BRD' | 'SDD' | 'API_SPEC' | 'RUNBOOK' | 'ADR' {
+  const map: Record<string, 'BRD' | 'SDD' | 'API_SPEC' | 'RUNBOOK' | 'ADR'> = {
+    BRD: 'BRD', SDD: 'SDD', API_SPEC: 'API_SPEC', RUNBOOK: 'RUNBOOK', ADR: 'ADR',
+    brd: 'BRD', sdd: 'SDD', api_spec: 'API_SPEC', runbook: 'RUNBOOK', adr: 'ADR',
+  };
+  return map[type] ?? 'BRD';
+}
+
+export function inferArtifactCategory(
+  artifactType: string,
+  artifactName: string,
+  agentShortName: string,
+): 'CODE' | 'CONFIG' | 'TEST' | 'DOCUMENT' {
+  const lower = artifactType.toLowerCase();
+  const nameLower = artifactName.toLowerCase();
+
+  if (['QA', 'AT'].includes(agentShortName) ||
+      nameLower.includes('test') || nameLower.includes('spec') || nameLower.includes('e2e')) {
+    return 'TEST';
+  }
+
+  const configTypes = ['json', 'yaml', 'toml', 'env', 'dockerfile', 'terraform', 'prisma', 'graphql', 'protobuf', 'xml'];
+  if (configTypes.some(t => lower.includes(t))) return 'CONFIG';
+
+  const docAgents = ['BA', 'PM', 'SA', 'DEC', 'AUD'];
+  if ((lower.includes('markdown') || lower === 'text') && docAgents.includes(agentShortName)) {
+    return 'DOCUMENT';
+  }
+
+  const codeTypes = ['typescript', 'javascript', 'python', 'java', 'go', 'rust', 'ruby', 'html', 'css', 'scss', 'shell', 'sql'];
+  if (codeTypes.some(t => lower.includes(t))) return 'CODE';
+
+  const ext = artifactName.split('.').pop()?.toLowerCase() ?? '';
+  const codeExtensions = ['ts', 'tsx', 'js', 'jsx', 'py', 'java', 'go', 'rs', 'rb', 'sh', 'sql', 'html', 'css', 'scss'];
+  if (codeExtensions.includes(ext)) return 'CODE';
+
+  return 'DOCUMENT';
+}
+
+export function inferDocumentType(
+  artifactType: string,
+): 'BRD' | 'SDD' | 'API_SPEC' | 'RUNBOOK' | 'ADR' {
+  const lower = artifactType.toLowerCase();
+  if (lower.includes('api') || lower.includes('openapi') || lower.includes('swagger')) {
+    return 'API_SPEC';
+  }
+  if (lower.includes('architecture') || lower.includes('design') || lower.includes('sdd')) {
+    return 'SDD';
+  }
+  if (lower.includes('runbook') || lower.includes('ops') || lower.includes('deploy')) {
+    return 'RUNBOOK';
+  }
+  if (lower.includes('adr') || lower.includes('decision')) {
+    return 'ADR';
+  }
+  return 'BRD';
+}

@@ -172,11 +172,6 @@ export function CreateProjectModal({ open, onOpenChange }: CreateProjectModalPro
     setError('');
 
     try {
-      const usersRes = await fetch('/api/admin/users?limit=1');
-      const usersData = await usersRes.json();
-      const ownerId = usersData.users?.[0]?.id;
-      if (!ownerId) throw new Error('No users found');
-
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -184,7 +179,6 @@ export function CreateProjectModal({ open, onOpenChange }: CreateProjectModalPro
           name: name.trim(),
           description: buildDescription(),
           color,
-          ownerId,
         }),
       });
 

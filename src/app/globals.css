@@ -212,6 +212,9 @@
 .glow-green {
   box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), 0 0 40px rgba(16, 185, 129, 0.05);
 }
+.glow-teal {
+  box-shadow: 0 0 15px rgba(45, 212, 191, 0.15), 0 0 30px rgba(45, 212, 191, 0.05);
+}
 
 /* Kanban column animations */
 .kanban-column {
@@ -314,10 +317,18 @@
   backdrop-filter: blur(8px);
 }
 
-/* ─── Admin Accent ─── */
+/* ─── Admin Accent (Teal Brand — Phase 4) ─── */
 :root {
-  --admin-accent: #4f46e5;
+  --admin-accent: #0d9488;
+  --admin-accent-hover: #0f766e;
+  --admin-accent-light: #99f6e4;
+  --admin-accent-muted: rgba(13, 148, 136, 0.08);
+  --admin-surface: #f0fdfa;
 }
 .dark {
-  --admin-accent: #6366f1;
+  --admin-accent: #2dd4bf;
+  --admin-accent-hover: #5eead4;
+  --admin-accent-light: #134e4a;
+  --admin-accent-muted: rgba(45, 212, 191, 0.08);
+  --admin-surface: #042f2e;
 }

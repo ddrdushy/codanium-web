@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAdmin } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,8 +8,10 @@ export const dynamic = 'force-dynamic';
  * GET /api/admin/billing
  * Returns billing metrics, plan distribution, and recent transactions.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { session, error } = await requireAdmin();
+    if (error) return error;
     const [
       transactions,
       usersByPlan,

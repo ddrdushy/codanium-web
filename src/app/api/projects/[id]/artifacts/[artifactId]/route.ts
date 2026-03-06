@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-guard';
 import { ArtifactType } from '@/generated/prisma/client';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,8 @@ export async function GET(
 ) {
   try {
     const { id: projectId, artifactId } = await params;
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     const artifact = await prisma.artifact.findFirst({
       where: { id: artifactId, projectId },
@@ -44,6 +47,8 @@ export async function PATCH(
 ) {
   try {
     const { id: projectId, artifactId } = await params;
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const body = await request.json();
 
     const artifact = await prisma.artifact.findFirst({

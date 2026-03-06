@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth-guard';
+import { seedProject, autoKickoffBA } from '@/lib/project-seed';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/projects
- * List all projects with member count, card count, and active agent count.
+ * List projects the current user is a member of.
+ * Filtered by ProjectMember table — users only see their own projects.
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
+    const userId = (session.user as any)?.id;
 
     const projects = await prisma.project.findMany({
+      where: {
+        members: { some: { userId } },
+      },
       orderBy: { updatedAt: 'desc' },
       include: {
         owner: {
@@ -62,25 +70,21 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/projects
  * Create a new project.
- * Body: { name, description?, color?, ownerId }
+ * Body: { name, description?, color? }
+ * Owner is automatically set to the authenticated user.
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const body = await request.json();
 
-    const { name, description, color, ownerId } = body;
+    const userId = (session.user as any)?.id;
+    const { name, description, color } = body;
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json(
         { error: 'Project name is required' },
-        { status: 400 }
-      );
-    }
-
-    if (!ownerId || typeof ownerId !== 'string') {
-      return NextResponse.json(
-        { error: 'Owner ID is required' },
         { status: 400 }
       );
     }
@@ -90,10 +94,10 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         description: description?.trim() ?? '',
         color: color ?? '#f59e0b',
-        ownerId,
+        ownerId: userId,
         members: {
           create: {
-            userId: ownerId,
+            userId,
             role: 'owner',
           },
         },
@@ -107,6 +111,21 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Seed agents + SDLC stages (synchronous, fast batch inserts)
+    try {
+      const seed = await seedProject(project.id);
+      console.log(`[Project ${project.id}] Seeded ${seed.agentCount} agents, ${seed.stageCount} stages`);
+    } catch (seedError) {
+      console.error('Project seed failed (non-fatal):', seedError);
+    }
+
+    // Auto-kickoff BA agent (async background job)
+    if (description?.trim()) {
+      autoKickoffBA(project.id, description.trim(), userId)
+        .then((runId) => console.log(`[Project ${project.id}] BA kickoff queued: ${runId}`))
+        .catch((err) => console.error('BA auto-kickoff failed (non-fatal):', err));
+    }
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {

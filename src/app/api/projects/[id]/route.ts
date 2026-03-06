@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,14 +8,32 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+/** Check if user is a member of the given project. */
+async function isMember(userId: string, projectId: string): Promise<boolean> {
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+  });
+  return !!member;
+}
+
 /**
  * GET /api/projects/:id
  * Get a single project with full details: members, card counts by state, agent summary.
+ * Only accessible to project members.
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
+    const userId = (session.user as any)?.id;
+    if (!(await isMember(userId, id))) {
+      return NextResponse.json(
+        { error: 'You do not have access to this project' },
+        { status: 403 }
+      );
+    }
 
     const project = await prisma.project.findUnique({
       where: { id },
@@ -123,7 +141,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
+    const userId = (session.user as any)?.id;
+    if (!(await isMember(userId, id))) {
+      return NextResponse.json(
+        { error: 'You do not have access to this project' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
 
     // Validate project exists
@@ -184,7 +212,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
+    const userId = (session.user as any)?.id;
+    if (!(await isMember(userId, id))) {
+      return NextResponse.json(
+        { error: 'You do not have access to this project' },
+        { status: 403 }
+      );
+    }
 
     const existing = await prisma.project.findUnique({ where: { id } });
     if (!existing) {

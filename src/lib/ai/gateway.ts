@@ -21,6 +21,7 @@ import { MockProvider } from './providers/mock-provider';
 import { OpenAIAdapter } from './providers/openai-adapter';
 import { AnthropicAdapter } from './providers/anthropic-adapter';
 import { OllamaAdapter } from './providers/ollama-adapter';
+import { decrypt, isEncrypted } from './encryption';
 import { prisma } from '@/lib/prisma';
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,7 @@ export class LLMGateway {
   async resolve(
     projectId?: string,
     agentId?: string,
+    userId?: string,
   ): Promise<{ provider: LLMProvider; config: ProviderConfig; isMock: boolean }> {
     if (projectId) {
       // Try agent-level config first
@@ -83,11 +85,23 @@ export class LLMGateway {
           return this.resolveConfig(projectConfig);
         }
       } catch {
-        // DB query failed — fall through to mock
+        // DB query failed — fall through to user-level
       }
     }
 
-    // TODO: Try user-level / workspace default config
+    // Try user-level / workspace default config
+    if (userId) {
+      try {
+        const userConfig = await prisma.lLMProviderConfig.findFirst({
+          where: { userId, scope: 'USER', isActive: true },
+        });
+        if (userConfig) {
+          return this.resolveConfig(userConfig);
+        }
+      } catch {
+        // DB query failed — fall through to mock
+      }
+    }
 
     // Fall back to mock
     return { provider: this.mockProvider, config: this.mockConfig, isMock: true };
@@ -105,9 +119,23 @@ export class LLMGateway {
     defaultModel: string;
   }): { provider: LLMProvider; config: ProviderConfig; isMock: boolean } {
     const provider = this.providers.get(dbConfig.provider) ?? this.mockProvider;
+
+    // Decrypt the API key — supports both encrypted and legacy plaintext values
+    let apiKey: string | undefined;
+    if (dbConfig.apiKeyEncrypted) {
+      try {
+        apiKey = isEncrypted(dbConfig.apiKeyEncrypted)
+          ? decrypt(dbConfig.apiKeyEncrypted)
+          : dbConfig.apiKeyEncrypted; // backwards compat: plaintext from before encryption was wired
+      } catch (err) {
+        console.error('[LLMGateway] Failed to decrypt API key, skipping:', err);
+        apiKey = undefined;
+      }
+    }
+
     const config: ProviderConfig = {
       provider: dbConfig.provider,
-      apiKey: dbConfig.apiKeyEncrypted ?? undefined, // TODO: decrypt when encryption is wired
+      apiKey,
       baseUrl: dbConfig.baseUrl ?? undefined,
       organizationId: dbConfig.organizationId ?? undefined,
       defaultModel: dbConfig.defaultModel,
@@ -126,9 +154,11 @@ export class LLMGateway {
    * the full LLMResponse.
    */
   async complete(options: LLMRequestOptions): Promise<LLMResponse> {
+    const userId = options.metadata?.userId;
     const { provider, config, isMock } = await this.resolve(
       options.projectId,
       options.agentId,
+      userId,
     );
 
     const startTime = Date.now();
@@ -169,12 +199,35 @@ export class LLMGateway {
    * The final chunk (done === true) includes accumulated token counts.
    */
   async *stream(options: LLMRequestOptions): AsyncIterable<LLMStreamChunk> {
-    const { provider, config } = await this.resolve(
+    const userId = options.metadata?.userId;
+    const { provider, config, isMock } = await this.resolve(
       options.projectId,
       options.agentId,
+      userId,
     );
 
-    yield* provider.stream(options, config);
+    let lastTokensUsed: LLMResponse['tokensUsed'] | undefined;
+
+    for await (const chunk of provider.stream(options, config)) {
+      if (chunk.done && chunk.tokensUsed) {
+        lastTokensUsed = chunk.tokensUsed;
+      }
+      yield chunk;
+    }
+
+    // Log usage for real providers after stream completes (fire-and-forget)
+    if (!isMock && lastTokensUsed && options.projectId) {
+      this.logUsage(options, {
+        content: '',
+        tokensUsed: lastTokensUsed,
+        model: options.model ?? config.defaultModel,
+        provider: config.provider,
+        latencyMs: 0,
+        finishReason: 'stop',
+      }).catch((logErr) => {
+        console.error('[LLMGateway] Failed to log stream usage:', logErr);
+      });
+    }
   }
 
   // -------------------------------------------------------------------------

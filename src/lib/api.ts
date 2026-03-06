@@ -299,14 +299,98 @@ export async function fetchBilling(): Promise<{
 
 // ─── Analytics ───────────────────────────────────────────────────────────────
 
-export async function fetchAnalytics(): Promise<LLMUsageData[]> {
-  const data = await apiFetch<any>('/api/admin/analytics');
-  return (data.usage ?? []).map((u: any) => ({
-    date: u.date,
-    tokens_used: u.tokens_used ?? 0,
-    cost: u.cost ?? 0,
-    provider: u.provider as any,
-    project_id: u.project_id ?? '',
-    project_name: u.project_name ?? '',
+export async function fetchAnalytics(params?: {
+  page?: number;
+  limit?: number;
+  from?: string;
+  to?: string;
+  provider?: string;
+}): Promise<{ usage: LLMUsageData[]; pagination?: { page: number; limit: number; total: number; totalPages: number } }> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+  if (params?.from) searchParams.set('from', params.from);
+  if (params?.to) searchParams.set('to', params.to);
+  if (params?.provider) searchParams.set('provider', params.provider);
+
+  const data = await apiFetch<any>(`/api/admin/analytics?${searchParams}`);
+  return {
+    usage: (data.usage ?? []).map((u: any) => ({
+      date: u.date,
+      tokens_used: u.tokens_used ?? 0,
+      cost: u.cost ?? 0,
+      provider: u.provider as any,
+      project_id: u.project_id ?? '',
+      project_name: u.project_name ?? '',
+    })),
+    pagination: data.pagination,
+  };
+}
+
+// ─── Admin User Actions ─────────────────────────────────────────────────────
+
+export async function adminUpdateUser(params: {
+  userId: string;
+  action: 'suspend' | 'unsuspend' | 'changeRole' | 'changePlan' | 'resetPassword';
+  value?: string;
+}): Promise<{ success: boolean; user?: any }> {
+  const res = await fetch('/api/admin/users', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to update user');
+  }
+  return res.json();
+}
+
+// ─── Admin Settings ──────────────────────────────────────────────────────────
+
+export async function fetchAdminSettings(): Promise<Record<string, any>> {
+  return apiFetch('/api/admin/settings');
+}
+
+export async function saveAdminSettings(settings: Record<string, any>): Promise<{ success: boolean }> {
+  const res = await fetch('/api/admin/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) throw new Error('Failed to save settings');
+  return res.json();
+}
+
+// ─── System Health ───────────────────────────────────────────────────────────
+
+export async function fetchSystemHealth(): Promise<any> {
+  return apiFetch('/api/admin/health');
+}
+
+// ─── Recent Activity (from audit logs) ───────────────────────────────────────
+
+export async function fetchRecentActivity(limit = 10): Promise<any[]> {
+  const data = await apiFetch<any>(`/api/admin/audit?limit=${limit}`);
+  return (data.logs ?? []).map((l: any) => ({
+    id: l.id,
+    type: mapAuditToActivityType(l.action),
+    actor: l.actor ?? l.user?.name ?? 'System',
+    action: l.details || `${l.action} on ${l.target}`,
+    timestamp: l.createdAt ?? l.timestamp,
   }));
+}
+
+function mapAuditToActivityType(action: string): string {
+  if (!action) return 'settings_change';
+  if (action.startsWith('user.signup') || action.startsWith('user.invite')) return 'user_signup';
+  if (action.startsWith('user.suspend') || action.startsWith('admin.suspend')) return 'user_suspended';
+  if (action.startsWith('project.deploy')) return 'project_deploy';
+  if (action.startsWith('project.create')) return 'project_create';
+  if (action.startsWith('project.archive')) return 'project_archived';
+  if (action.startsWith('billing.upgrade') || action.startsWith('admin.changePlan')) return 'billing_upgrade';
+  if (action.startsWith('agent.')) return 'agent_created';
+  if (action.startsWith('api_key.') || action.startsWith('settings.security')) return 'security_update';
+  if (action.startsWith('settings.')) return 'settings_change';
+  return 'settings_change';
 }

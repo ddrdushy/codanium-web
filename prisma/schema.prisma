@@ -24,6 +24,15 @@ model User {
   lastLogin     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  emailVerified DateTime?          // null = not verified, DateTime = when verified
+
+  // Stripe billing
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  stripePriceId        String?
+  subscriptionStatus   SubscriptionStatus @default(NONE)
+  currentPeriodEnd     DateTime?
+  trialEndsAt          DateTime?
 
   // Relations
   ownedProjects   Project[]       @relation("ProjectOwner")
@@ -32,8 +41,15 @@ model User {
   decisions       Decision[]      @relation("DecisionOwner")
   auditLogs       AuditLog[]
   notifications   Notification[]
+  presence        UserPresence[]
   sessions        Session[]
   accounts        Account[]
+  emailTokens     EmailToken[]
+  sentInvitations ProjectInvitation[] @relation("SentInvitations")
+  apiKeys         ApiKey[]
+  ownedOrgs       Organization[]  @relation("OrgOwner")
+  orgMemberships  OrgMember[]
+  transactions    Transaction[]
 
   @@map("users")
 }
@@ -95,6 +111,15 @@ enum UserPlan {
   ENTERPRISE
 }
 
+enum SubscriptionStatus {
+  NONE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
 // ─── Projects ───────────────────────────────────────────────────────────────
 
 model Project {
@@ -105,12 +130,25 @@ model Project {
   currentStage String        @default("Business Analysis")
   completion   Int           @default(0) // 0-100
   color        String        @default("#f59e0b")
+
+  // Git integration
+  gitProvider       String?   // "github" (future: "gitlab", "bitbucket")
+  gitRepoOwner      String?   // e.g. "acme-corp"
+  gitRepoName       String?   // e.g. "my-app"
+  gitDefaultBranch  String?   @default("main")
+  gitTokenEncrypted String?   // AES-256-GCM encrypted PAT
+  gitWebhookSecret  String?   // HMAC secret for inbound webhook verification
+  gitSyncEnabled    Boolean   @default(false)
+  gitLastSyncAt     DateTime?
+
+  orgId        String?
   ownerId      String
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   // Relations
   owner         User             @relation("ProjectOwner", fields: [ownerId], references: [id])
+  organization  Organization?    @relation(fields: [orgId], references: [id])
   members       ProjectMember[]
   cards         Card[]
   decisions     Decision[]
@@ -127,7 +165,11 @@ model Project {
   wireframes        Wireframe[]
   events            Event[]
   artifacts         Artifact[]
-  orchestrationRuns OrchestrationRun[]
+  orchestrationRuns     OrchestrationRun[]
+  deploymentPipelines  DeploymentPipeline[]
+  userPresence         UserPresence[]
+  invitations          ProjectInvitation[]
+  webhookEndpoints     WebhookEndpoint[]
 
   @@map("projects")
 }
@@ -448,14 +490,20 @@ model LLMUsage {
 // ─── Billing / Transactions ─────────────────────────────────────────────────
 
 model Transaction {
-  id        String            @id @default(cuid())
-  userName  String
-  userEmail String
-  amount    Float
-  plan      UserPlan
-  status    TransactionStatus @default(COMPLETED)
-  createdAt DateTime          @default(now())
+  id                    String            @id @default(cuid())
+  userName              String
+  userEmail             String
+  amount                Float
+  plan                  UserPlan
+  status                TransactionStatus @default(COMPLETED)
+  userId                String?
+  stripePaymentIntentId String?           @unique
+  stripeInvoiceId       String?
+  createdAt             DateTime          @default(now())
 
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
   @@map("transactions")
 }
 
@@ -698,7 +746,7 @@ enum ArtifactType {
 
 model OrchestrationRun {
   id           String    @id @default(cuid())
-  status       RunStatus @default(RUNNING)
+  status       RunStatus @default(PENDING)
   userMessage  String
   routedTo     String    // Agent shortName
   autoRouted   Boolean   @default(false)
@@ -712,16 +760,285 @@ model OrchestrationRun {
   createdAt    DateTime  @default(now())
   completedAt  DateTime?
 
+  // Queue fields
+  priority     Int       @default(0)       // Higher = process first
+  retryCount   Int       @default(0)
+  maxRetries   Int       @default(3)
+  scheduledAt  DateTime  @default(now())   // For delayed execution
+  startedAt    DateTime?                   // When processing began
+  isBackground Boolean   @default(false)   // false = SSE interactive, true = background
+  parentRunId  String?                     // For sub-tasks from delegation
+
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([createdAt])
+  @@index([status, scheduledAt])
+  @@index([projectId, status])
   @@map("orchestration_runs")
 }
 
 enum RunStatus {
+  PENDING
   RUNNING
   COMPLETED
   FAILED
   TIMEOUT
+  CANCELLED
+}
+
+// ─── Deployment Pipelines ──────────────────────────────────────────────────
+
+model DeploymentPipeline {
+  id          String            @id @default(cuid())
+  name        String
+  environment DeployEnvironment @default(STAGING)
+  trigger     PipelineTrigger   @default(MANUAL)
+  config      String            @default("{}") // JSON: build cmd, deploy cmd, etc.
+  projectId   String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs    DeploymentRun[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("deployment_pipelines")
+}
+
+model DeploymentRun {
+  id           String          @id @default(cuid())
+  pipelineId   String
+  status       DeployRunStatus @default(PENDING)
+  currentStage DeployStage     @default(BUILD)
+  triggeredBy  String          // "user", agent shortName, or "auto"
+  commitHash   String          @default("")
+  branch       String          @default("")
+  buildLogs    String          @default("")
+  testLogs     String          @default("")
+  deployLogs   String          @default("")
+  errorMessage String?
+  durationMs   Int             @default(0)
+  projectId    String
+  createdAt    DateTime        @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  pipeline DeploymentPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineId])
+  @@index([projectId])
+  @@index([createdAt])
+  @@map("deployment_runs")
+}
+
+enum DeployEnvironment {
+  DEVELOPMENT
+  STAGING
+  PRODUCTION
+}
+
+enum PipelineTrigger {
+  MANUAL
+  AGENT
+  AUTO_ON_MERGE
+  SCHEDULED
+}
+
+enum DeployRunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum DeployStage {
+  BUILD
+  TEST
+  DEPLOY
+  COMPLETE
+}
+
+// ─── User Presence (Real-time Collaboration) ─────────────────────────────────
+
+model UserPresence {
+  id         String   @id @default(cuid())
+  userId     String
+  projectId  String
+  lastSeenAt DateTime @default(now())
+  status     String   @default("online") // online, idle, away
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([projectId, lastSeenAt])
+  @@map("user_presence")
+}
+
+// ─── Email Tokens (Verification + Password Reset) ──────────────────────────
+
+model EmailToken {
+  id        String         @id @default(cuid())
+  type      EmailTokenType
+  token     String         @unique   // SHA-256 hash of raw token
+  email     String                    // Target email address
+  expiresAt DateTime
+  usedAt    DateTime?                 // null = unused
+  userId    String?                   // null for pre-registration
+  createdAt DateTime       @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([email, type])
+  @@map("email_tokens")
+}
+
+enum EmailTokenType {
+  VERIFICATION
+  PASSWORD_RESET
+}
+
+// ─── Project Invitations ────────────────────────────────────────────────────
+
+model ProjectInvitation {
+  id          String           @id @default(cuid())
+  email       String
+  role        String           @default("member") // member, admin, viewer
+  status      InvitationStatus @default(PENDING)
+  token       String           @unique   // SHA-256 hash
+  invitedById String
+  projectId   String
+  expiresAt   DateTime                    // 7 days from creation
+  acceptedAt  DateTime?
+  createdAt   DateTime         @default(now())
+
+  invitedBy User    @relation("SentInvitations", fields: [invitedById], references: [id])
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, email])
+  @@index([email])
+  @@index([token])
+  @@map("project_invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+// ─── Webhook Endpoints (Outbound) ────────────────────────────────────────────
+
+model WebhookEndpoint {
+  id          String   @id @default(cuid())
+  url         String                    // Target URL (https://...)
+  secret      String                    // Shared secret for HMAC signing
+  events      String[] @default([])     // Event types: ["*"] or ["pr.created", "build.complete"]
+  enabled     Boolean  @default(true)
+  description String   @default("")
+  projectId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([projectId])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  endpointId   String
+  eventType    String                    // e.g. "pr.created"
+  payload      String   @db.Text         // JSON stringified event payload
+  statusCode   Int?                      // HTTP response status (null = pending)
+  responseBody String?  @db.Text         // First 1KB of response
+  duration     Int?                      // ms
+  success      Boolean  @default(false)
+  attempt      Int      @default(1)
+  error        String?                   // Error message if failed
+  deliveredAt  DateTime @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId])
+  @@index([deliveredAt])
+  @@map("webhook_deliveries")
+}
+
+// ─── API Keys ──────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  keyHash    String    @unique   // SHA-256 hash of raw key
+  keyPrefix  String              // "ats_sk_..." (first 12 chars for display)
+  scopes     String[]  @default(["read"])
+  userId     String
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash])
+  @@index([userId])
+  @@map("api_keys")
+}
+
+// ─── Organizations ──────────────────────────────────────────────────────────
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  avatarColor String   @default("#3b82f6")
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner    User          @relation("OrgOwner", fields: [ownerId], references: [id])
+  members  OrgMember[]
+  projects Project[]
+
+  @@map("organizations")
+}
+
+model OrgMember {
+  id       String   @id @default(cuid())
+  orgId    String
+  userId   String
+  role     OrgRole  @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@map("org_members")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// ─── Admin Settings (Key-Value) ─────────────────────────────────────────────
+
+model AdminSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String   @default("")
+
+  @@map("admin_settings")
 }

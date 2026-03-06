@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth-guard';
+import { encrypt, decrypt, isEncrypted } from '@/lib/ai/encryption';
+import type { Session } from 'next-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,21 +10,22 @@ export const dynamic = 'force-dynamic';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Mask API key to show only last 4 characters. */
+/** Mask API key to show only last 4 characters. Decrypts first if encrypted. */
 function maskApiKey(key: string | null): string | null {
   if (!key) return null;
-  if (key.length <= 4) return '****';
-  return '****' + key.slice(-4);
+  try {
+    const raw = isEncrypted(key) ? decrypt(key) : key;
+    if (raw.length <= 4) return '****';
+    return '****' + raw.slice(-4);
+  } catch {
+    // Decryption failed — key may be corrupted or key rotated
+    return '****';
+  }
 }
 
-/** Resolve the current user ID from the session, falling back to demo. */
-async function resolveUserId(): Promise<string> {
-  try {
-    const session = await auth();
-    return (session?.user as any)?.id ?? 'demo-user-id';
-  } catch {
-    return 'demo-user-id';
-  }
+/** Resolve the current user ID from the session. */
+function resolveUserId(session: Session): string {
+  return (session.user as any)?.id ?? 'demo-user-id';
 }
 
 // ---------------------------------------------------------------------------
@@ -39,6 +42,8 @@ export async function GET(
 ) {
   try {
     const { id: projectId } = await params;
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     // Verify project exists
     const project = await prisma.project.findUnique({
@@ -103,6 +108,8 @@ export async function POST(
 ) {
   try {
     const { id: projectId } = await params;
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const body = await request.json();
 
     // Verify project exists
@@ -158,14 +165,13 @@ export async function POST(
     }
 
     const scope = agentShortName ? 'AGENT' : 'PROJECT';
-    const userId = await resolveUserId();
+    const userId = resolveUserId(session);
 
     const config = await prisma.lLMProviderConfig.create({
       data: {
         provider: body.provider,
         displayName: body.displayName?.trim() || `${body.provider} (${scope === 'AGENT' ? agentShortName : 'Project'})`,
-        // Store API key as-is for now; encryption will be added in Phase 7
-        apiKeyEncrypted: body.apiKey ?? null,
+        apiKeyEncrypted: body.apiKey ? encrypt(body.apiKey) : null,
         baseUrl: body.baseUrl?.trim() || null,
         organizationId: body.organizationId?.trim() || null,
         defaultModel: body.defaultModel.trim(),
@@ -216,6 +222,8 @@ export async function DELETE(
 ) {
   try {
     const { id: projectId } = await params;
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const { searchParams } = new URL(request.url);
     const configId = searchParams.get('id');
 

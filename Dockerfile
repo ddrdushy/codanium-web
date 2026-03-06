@@ -1,5 +1,5 @@
 # ─── AI Team Studio — Multi-stage Dockerfile ───
-# Optimized for Next.js 16 + Prisma 7.x + PostgreSQL
+# Optimized for Next.js 16 + Prisma 7.x + PostgreSQL + BullMQ Worker
 
 # ── Stage 1: Dependencies ──────────────────────────────────────────────────────
 FROM node:22-alpine AS deps
@@ -34,6 +34,28 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
 
+# Bundle standalone worker entrypoint with esbuild (ESM for import.meta support)
+RUN npx esbuild src/lib/queue/worker-entrypoint.ts \
+  --bundle \
+  --format=esm \
+  --platform=node \
+  --target=node22 \
+  --outfile=worker.mjs \
+  --alias:@=./src \
+  --external:@prisma/client \
+  --external:@prisma/adapter-pg \
+  --external:pg \
+  --external:ioredis \
+  --external:bullmq \
+  --external:@langchain/core \
+  --external:@langchain/langgraph \
+  --external:bcryptjs \
+  --external:next-auth \
+  --external:@sendgrid/mail \
+  --external:@react-email/components \
+  --external:octokit \
+  --external:stripe
+
 # ── Stage 4: Production Runner ─────────────────────────────────────────────────
 FROM node:22-alpine AS runner
 RUN apk add --no-cache libc6-compat openssl
@@ -56,6 +78,14 @@ COPY --from=prisma /app/src/generated ./src/generated
 # Copy Prisma schema + config for migrations
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# Copy bundled worker script (ESM)
+COPY --from=builder --chown=nextjs:nodejs /app/worker.mjs ./worker.mjs
+
+# Copy full node_modules from deps stage — the standalone output traces only
+# what Next.js needs; the worker's externalized packages (ioredis, bullmq,
+# @prisma/adapter-pg, pg, etc.) also need to be available at runtime.
+COPY --from=deps /app/node_modules ./node_modules
 
 # Copy entrypoint
 COPY docker-entrypoint.sh ./

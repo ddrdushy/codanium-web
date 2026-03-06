@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth-guard';
 import type { CardState, CardType, Priority } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,8 @@ interface RouteContext {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id: projectId } = await context.params;
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const { searchParams } = new URL(request.url);
 
     // Verify project exists
@@ -95,7 +96,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { id: projectId } = await context.params;
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const body = await request.json();
 
     // Verify project exists

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth-guard';
 import { NotificationType } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
@@ -12,11 +12,12 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const { searchParams } = new URL(request.url);
 
-    // Use session user ID if available, otherwise fall back to query param
-    const userId = (session?.user as any)?.id ?? searchParams.get('userId');
+    // Use session user ID
+    const userId = (session.user as any)?.id ?? searchParams.get('userId');
 
     if (!userId) {
       return NextResponse.json(
@@ -70,7 +71,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const body = await request.json();
 
     const { type, title, description, actionLabel, actionHref, userId, projectId } = body;
@@ -139,13 +141,14 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const body = await request.json();
 
     const { ids, markAllRead, userId: bodyUserId } = body;
 
     if (markAllRead === true) {
-      const userId = (session?.user as any)?.id ?? bodyUserId;
+      const userId = (session.user as any)?.id ?? bodyUserId;
 
       if (!userId) {
         return NextResponse.json(

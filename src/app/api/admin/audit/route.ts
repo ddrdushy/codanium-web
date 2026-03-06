@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
+    const { session, error } = await requireAdmin();
+    if (error) return error;
     const { searchParams } = new URL(request.url);
 
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));

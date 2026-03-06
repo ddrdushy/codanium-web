@@ -36,7 +36,12 @@ export type AgentAction =
   | { type: 'update_agent_status'; agentId: string; status: string; task?: string }
   | { type: 'create_document'; data: { title: string; type: string; content: string; owner?: string } }
   | { type: 'advance_sdlc'; stageName: string }
-  | { type: 'delegate'; targetAgent: string; context: string };
+  | { type: 'delegate'; targetAgent: string; context: string }
+  | { type: 'create_branch'; data: { name: string; baseBranch?: string } }
+  | { type: 'create_pr'; data: { title: string; branch: string; description?: string } }
+  | { type: 'create_release'; data: { version: string; features?: string[] } }
+  | { type: 'trigger_deploy'; data: { pipelineName?: string; environment?: string; branch?: string } }
+  | { type: 'create_pipeline'; data: { name: string; environment: string; trigger: string; config?: string } };
 
 export interface AgentExecutionResult {
   message: string;

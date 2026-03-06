@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   Hammer,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -136,7 +137,7 @@ function NotificationItem({
   notification: Notification;
   onRead: (id: string) => void;
 }) {
-  const config = typeConfig[notification.type];
+  const config = typeConfig[notification.type] ?? typeConfig.agent;
   const Icon = config.icon;
 
   return (
@@ -180,6 +181,11 @@ function NotificationItem({
           <span className="text-[10px] text-muted-foreground/60">
             {formatRelative(notification.timestamp)}
           </span>
+          {notification.projectName && (
+            <span className="text-[10px] text-muted-foreground/40">
+              · {notification.projectName}
+            </span>
+          )}
           {notification.actionLabel && (
             <span className="text-[10px] font-medium text-amber-400 hover:text-amber-300 transition-colors">
               {notification.actionLabel}
@@ -191,9 +197,23 @@ function NotificationItem({
   );
 }
 
+// ── Loading skeleton ──────────────────────────────────────────────────
+function NotificationSkeleton() {
+  return (
+    <div className="px-4 py-3 flex items-start gap-3 animate-pulse">
+      <div className="w-8 h-8 rounded-lg bg-foreground/[0.06]" />
+      <div className="flex-1 space-y-2">
+        <div className="h-3.5 w-3/4 rounded bg-foreground/[0.06]" />
+        <div className="h-3 w-full rounded bg-foreground/[0.04]" />
+        <div className="h-2.5 w-1/4 rounded bg-foreground/[0.04]" />
+      </div>
+    </div>
+  );
+}
+
 // ── Main panel ────────────────────────────────────────────────────────
 export function NotificationPanel() {
-  const { isOpen, close, notifications, markAsRead, markAllRead } =
+  const { isOpen, close, notifications, markAsRead, markAllRead, loading } =
     useNotificationStore();
   const unreadCount = useNotificationStore(selectUnreadCount);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -279,7 +299,13 @@ export function NotificationPanel() {
 
             {/* ── Notification list ──────────────────────────────── */}
             <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
-              {groups.length === 0 ? (
+              {loading ? (
+                <div className="space-y-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <NotificationSkeleton key={i} />
+                  ))}
+                </div>
+              ) : groups.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-6">
                   <Bell className="w-8 h-8 text-muted-foreground/30 mb-3" />
                   <p className="text-sm text-muted-foreground">

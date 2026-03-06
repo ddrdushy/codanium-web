@@ -48,7 +48,7 @@ const filterTabs = [
 // ─── Action type configuration ───
 function getActionConfig(action: string): { color: string; icon: React.ReactNode } {
   if (action.startsWith('user.')) {
-    return { color: '#3b82f6', icon: <User className="w-4 h-4" /> };
+    return { color: '#0d9488', icon: <User className="w-4 h-4" /> };
   }
   if (action.startsWith('project.')) {
     return { color: '#10b981', icon: <FolderOpen className="w-4 h-4" /> };
@@ -57,15 +57,15 @@ function getActionConfig(action: string): { color: string; icon: React.ReactNode
     return { color: '#f59e0b', icon: <CreditCard className="w-4 h-4" /> };
   }
   if (action.startsWith('settings.')) {
-    return { color: '#8b5cf6', icon: <Settings className="w-4 h-4" /> };
+    return { color: '#0d9488', icon: <Settings className="w-4 h-4" /> };
   }
   if (action.startsWith('agent.')) {
-    return { color: '#06b6d4', icon: <Bot className="w-4 h-4" /> };
+    return { color: '#14b8a6', icon: <Bot className="w-4 h-4" /> };
   }
   if (action.startsWith('api_key.')) {
     return { color: '#ef4444', icon: <Key className="w-4 h-4" /> };
   }
-  return { color: '#64748b', icon: <Shield className="w-4 h-4" /> };
+  return { color: '#0d9488', icon: <Shield className="w-4 h-4" /> };
 }
 
 // ─── Format action label ───

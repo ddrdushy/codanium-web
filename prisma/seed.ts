@@ -26,6 +26,10 @@ async function main() {
 
   console.log('Clearing existing data...');
   await prisma.$transaction([
+    prisma.adminSetting.deleteMany(),
+    prisma.userPresence.deleteMany(),
+    prisma.deploymentRun.deleteMany(),
+    prisma.deploymentPipeline.deleteMany(),
     prisma.orchestrationRun.deleteMany(),
     prisma.artifact.deleteMany(),
     prisma.event.deleteMany(),
@@ -373,7 +377,7 @@ async function main() {
       currentStage: 'Monitoring',
       completion: 100,
       color: '#ef4444',
-      ownerId: 'usr-002', // Admin User
+      ownerId: 'usr_006', // Tom Wilson
       createdAt: new Date('2024-09-05T10:00:00Z'),
     },
   ];
@@ -388,9 +392,8 @@ async function main() {
   console.log('Seeding project members...');
 
   const projectMembers = [
-    // AI Team Studio: Demo User is owner, Admin User is member
+    // AI Team Studio: Demo User is owner
     { projectId: 'prj-001', userId: 'usr-001', role: 'owner' },
-    { projectId: 'prj-001', userId: 'usr-002', role: 'admin' },
     // FinTrack Pro: Marcus is owner, Elena is member
     { projectId: 'prj-002', userId: 'usr_002', role: 'owner' },
     { projectId: 'prj-002', userId: 'usr_003', role: 'member' },
@@ -401,8 +404,9 @@ async function main() {
     // ShopWave: David is owner, Tom is member
     { projectId: 'prj-004', userId: 'usr_004', role: 'owner' },
     { projectId: 'prj-004', userId: 'usr_006', role: 'member' },
-    // DevOps Dashboard: Admin User is owner
-    { projectId: 'prj-005', userId: 'usr-002', role: 'owner' },
+    // DevOps Dashboard: Tom is owner, Demo User is member
+    { projectId: 'prj-005', userId: 'usr_006', role: 'owner' },
+    { projectId: 'prj-005', userId: 'usr-001', role: 'member' },
   ];
 
   for (const member of projectMembers) {
@@ -1117,6 +1121,217 @@ async function main() {
   await prisma.orchestrationRun.createMany({ data: orchestrationRuns });
   console.log(`  Created ${orchestrationRuns.length} orchestration runs`);
 
+  // ── 20. Seed Deployment Pipelines & Runs ────────────────────────────────
+
+  console.log('Seeding deployment pipelines...');
+
+  const deploymentPipelines = [
+    {
+      id: 'pipe-001',
+      name: 'staging-deploy',
+      environment: 'STAGING' as const,
+      trigger: 'MANUAL' as const,
+      config: JSON.stringify({ buildCmd: 'npm run build', testCmd: 'npm test', deployCmd: 'docker compose up -d' }),
+      projectId: 'prj-001',
+      createdAt: daysAgo(14),
+    },
+    {
+      id: 'pipe-002',
+      name: 'production-deploy',
+      environment: 'PRODUCTION' as const,
+      trigger: 'MANUAL' as const,
+      config: JSON.stringify({ buildCmd: 'npm run build', testCmd: 'npm test && npm run e2e', deployCmd: 'kubectl apply -f k8s/' }),
+      projectId: 'prj-001',
+      createdAt: daysAgo(10),
+    },
+    {
+      id: 'pipe-003',
+      name: 'staging-deploy',
+      environment: 'STAGING' as const,
+      trigger: 'AUTO_ON_MERGE' as const,
+      config: JSON.stringify({ buildCmd: 'npm run build', testCmd: 'npm test', deployCmd: 'fly deploy' }),
+      projectId: 'prj-002',
+      createdAt: daysAgo(7),
+    },
+    {
+      id: 'pipe-004',
+      name: 'dev-deploy',
+      environment: 'DEVELOPMENT' as const,
+      trigger: 'AGENT' as const,
+      config: JSON.stringify({ buildCmd: 'npm run build', deployCmd: 'vercel --prod' }),
+      projectId: 'prj-003',
+      createdAt: daysAgo(5),
+    },
+  ];
+
+  for (const pipe of deploymentPipelines) {
+    await prisma.deploymentPipeline.create({ data: pipe });
+  }
+  console.log(`  Created ${deploymentPipelines.length} deployment pipelines`);
+
+  console.log('Seeding deployment runs...');
+
+  const deploymentRuns = [
+    // prj-001 staging: one success, one running
+    {
+      id: 'drun-001',
+      pipelineId: 'pipe-001',
+      status: 'SUCCESS' as const,
+      currentStage: 'COMPLETE' as const,
+      triggeredBy: 'user',
+      commitHash: 'a3f7c21',
+      branch: 'main',
+      buildLogs: '[12:00:01] Installing dependencies...\n[12:00:15] Dependencies installed.\n[12:00:16] Building application...\n[12:01:02] Build completed successfully.',
+      testLogs: '[12:01:03] Running test suite...\n[12:01:45] 142 tests passed, 0 failed.\n[12:01:45] All tests passed.',
+      deployLogs: '[12:01:46] Deploying to staging...\n[12:02:10] Container built and pushed.\n[12:02:30] Service restarted. Deployment complete.',
+      durationMs: 149000,
+      projectId: 'prj-001',
+      createdAt: daysAgo(2),
+      startedAt: daysAgo(2),
+      completedAt: new Date(daysAgo(2).getTime() + 149000),
+    },
+    {
+      id: 'drun-002',
+      pipelineId: 'pipe-001',
+      status: 'RUNNING' as const,
+      currentStage: 'TEST' as const,
+      triggeredBy: 'DO',
+      commitHash: 'b8e4f19',
+      branch: 'feature/auth-v2',
+      buildLogs: '[14:00:01] Installing dependencies...\n[14:00:18] Dependencies installed.\n[14:00:19] Building application...\n[14:01:05] Build completed successfully.',
+      testLogs: '[14:01:06] Running test suite...\n[14:01:30] 98 of 142 tests completed...',
+      deployLogs: '',
+      durationMs: 0,
+      projectId: 'prj-001',
+      createdAt: hoursAgo(1),
+      startedAt: hoursAgo(1),
+    },
+    // prj-001 production: one failed
+    {
+      id: 'drun-003',
+      pipelineId: 'pipe-002',
+      status: 'FAILED' as const,
+      currentStage: 'DEPLOY' as const,
+      triggeredBy: 'user',
+      commitHash: '9c2d4e7',
+      branch: 'main',
+      buildLogs: '[10:00:01] Installing dependencies...\n[10:00:14] Dependencies installed.\n[10:00:15] Building application...\n[10:00:58] Build completed successfully.',
+      testLogs: '[10:00:59] Running test suite...\n[10:01:40] 142 tests passed, 0 failed.\n[10:01:40] All tests passed.',
+      deployLogs: '[10:01:41] Deploying to production...\n[10:02:05] Error: kubectl connection refused. Cluster unreachable.',
+      errorMessage: 'Deployment failed: kubectl connection refused. Cluster unreachable.',
+      durationMs: 124000,
+      projectId: 'prj-001',
+      createdAt: daysAgo(5),
+      startedAt: daysAgo(5),
+      completedAt: new Date(daysAgo(5).getTime() + 124000),
+    },
+    // prj-002 staging: one success
+    {
+      id: 'drun-004',
+      pipelineId: 'pipe-003',
+      status: 'SUCCESS' as const,
+      currentStage: 'COMPLETE' as const,
+      triggeredBy: 'auto',
+      commitHash: 'f1a2b3c',
+      branch: 'main',
+      buildLogs: '[08:00:01] Installing dependencies...\n[08:00:12] Building application...\n[08:00:48] Build completed successfully.',
+      testLogs: '[08:00:49] Running test suite...\n[08:01:22] 87 tests passed, 0 failed.',
+      deployLogs: '[08:01:23] Deploying to staging via Fly.io...\n[08:01:55] Deployment complete.',
+      durationMs: 114000,
+      projectId: 'prj-002',
+      createdAt: daysAgo(1),
+      startedAt: daysAgo(1),
+      completedAt: new Date(daysAgo(1).getTime() + 114000),
+    },
+    // prj-003 dev: one pending
+    {
+      id: 'drun-005',
+      pipelineId: 'pipe-004',
+      status: 'PENDING' as const,
+      currentStage: 'BUILD' as const,
+      triggeredBy: 'DO',
+      commitHash: 'e5d6c7b',
+      branch: 'develop',
+      buildLogs: '',
+      testLogs: '',
+      deployLogs: '',
+      durationMs: 0,
+      projectId: 'prj-003',
+      createdAt: hoursAgo(0.5),
+    },
+  ];
+
+  for (const run of deploymentRuns) {
+    await prisma.deploymentRun.create({ data: run });
+  }
+  console.log(`  Created ${deploymentRuns.length} deployment runs`);
+
+  // ── 21. Seed Admin Settings ────────────────────────────────────────────
+
+  console.log('Seeding admin settings...');
+
+  const adminSettings = [
+    { key: 'llm.defaultProvider', value: JSON.stringify('anthropic'), updatedBy: 'usr-002' },
+    { key: 'llm.maxTokens', value: JSON.stringify(4096), updatedBy: 'usr-002' },
+    { key: 'llm.temperature', value: JSON.stringify(0.7), updatedBy: 'usr-002' },
+    { key: 'featureFlags', value: JSON.stringify({ autoScaling: true, multiProject: true, realTimeCollab: true, advancedAnalytics: false, customTraining: false, apiAccess: true }), updatedBy: 'usr-002' },
+    { key: 'security.twoFactorAuth', value: JSON.stringify(true), updatedBy: 'usr-002' },
+    { key: 'security.ipAllowlist', value: JSON.stringify(false), updatedBy: 'usr-002' },
+    {
+      key: 'guardrails.config',
+      value: JSON.stringify({
+        input: {
+          enabled: true,
+          maxLength: 50000,
+          injectionDetection: true,
+          piiDetection: true,
+          rateLimiting: true,
+        },
+        output: {
+          enabled: true,
+          maxLength: 100000,
+          unsafeCodeDetection: true,
+          actionValidation: true,
+          blockOnCritical: false,
+        },
+        rateLimit: {
+          maxRequests: 20,
+          windowSeconds: 60,
+        },
+        injectionPatterns: [
+          { label: 'Ignore Previous Instructions', pattern: 'ignore\\s+(all\\s+)?previous\\s+(instructions|prompts|rules)', enabled: true },
+          { label: 'Role Override Attempt', pattern: 'you\\s+are\\s+now\\s+(a|an|the)\\s+', enabled: true },
+          { label: 'Jailbreak Keyword', pattern: '\\bjailbreak\\b', enabled: true },
+          { label: 'DAN Mode Attempt', pattern: '\\bDAN\\b.*\\bmode\\b|\\bmode\\b.*\\bDAN\\b', enabled: true },
+          { label: 'System Tag Injection', pattern: '<\\s*system\\s*>', enabled: true },
+          { label: 'Memory Wipe Attempt', pattern: 'forget\\s+(everything|all|your)\\s+(you|instructions|rules|training)', enabled: true },
+          { label: 'Identity Override', pattern: 'pretend\\s+(you\\s+)?(are|to\\s+be)\\s+(a|an|the)\\s+', enabled: true },
+          { label: 'Safety Bypass Attempt', pattern: 'bypass\\s+(your\\s+)?(safety|content|ethical|guardrail|filter|restriction)', enabled: true },
+          { label: 'Restriction Removal', pattern: '\\bact\\s+as\\s+(if|though)\\s+(you\\s+)?(have\\s+)?no\\s+(restrictions|limits|rules)', enabled: true },
+        ],
+        piiPatterns: [
+          { label: 'US Social Security Number', pattern: '\\b\\d{3}[-\\s]?\\d{2}[-\\s]?\\d{4}\\b', replacement: '[REDACTED-SSN]', enabled: true },
+          { label: 'Credit Card Number', pattern: '\\b(?:\\d{4}[-\\s]?){3,4}\\d{1,4}\\b', replacement: '[REDACTED-CC]', enabled: true },
+          { label: 'US Passport Number', pattern: '\\b[A-Z]?\\d{8,9}\\b', replacement: '[REDACTED-PASSPORT]', enabled: true },
+        ],
+        unsafeCodePatterns: [
+          { label: 'Destructive rm -rf', pattern: 'rm\\s+-rf\\s+\\/', enabled: true },
+          { label: 'SQL DROP Statement', pattern: 'DROP\\s+(TABLE|DATABASE|SCHEMA)\\s+', enabled: true },
+          { label: 'eval() Usage', pattern: '\\beval\\s*\\(', enabled: true },
+          { label: 'exec() Usage', pattern: '\\bexec\\s*\\(', enabled: true },
+          { label: 'Environment Variable Mutation', pattern: 'process\\.env\\.\\w+\\s*=\\s*', enabled: true },
+          { label: 'Shell Execution', pattern: 'child_process|spawn\\s*\\(|execSync\\s*\\(', enabled: true },
+        ],
+      }),
+      updatedBy: 'usr-002',
+    },
+  ];
+
+  for (const setting of adminSettings) {
+    await prisma.adminSetting.create({ data: setting });
+  }
+  console.log(`  Created ${adminSettings.length} admin settings`);
+
   // ── Summary ──────────────────────────────────────────────────────────────
 
   console.log('\n========================================');
@@ -1145,6 +1360,9 @@ async function main() {
     prisma.event.count(),
     prisma.artifact.count(),
     prisma.orchestrationRun.count(),
+    prisma.deploymentPipeline.count(),
+    prisma.deploymentRun.count(),
+    prisma.adminSetting.count(),
   ]);
 
   const labels = [
@@ -1169,6 +1387,9 @@ async function main() {
     'Orchestration Events',
     'Artifacts',
     'Orchestration Runs',
+    'Deployment Pipelines',
+    'Deployment Runs',
+    'Admin Settings',
   ];
 
   labels.forEach((label, i) => {

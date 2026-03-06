@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,8 @@ interface RouteContext {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const { id: projectId, cardId } = await context.params;
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
     const body = await request.json();
 
     // Verify card exists and belongs to project
@@ -95,7 +96,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id: projectId, cardId } = await context.params;
-    const session = await auth();
+    const { session, error } = await requireAuth();
+    if (error) return error;
 
     // Verify card exists and belongs to project
     const existing = await prisma.card.findFirst({

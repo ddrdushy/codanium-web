@@ -96,7 +96,7 @@ export function LoginForm() {
             <Input
               id="email"
               type="email"
-              placeholder="user@demo.com"
+              placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="pl-10 h-11 bg-foreground/[0.03] border-border focus:border-amber/30"
@@ -140,13 +140,6 @@ export function LoginForm() {
           )}
         </Button>
       </form>
-
-      {/* Demo credentials hint */}
-      <div className="mt-4 px-3 py-2.5 rounded-lg bg-amber/5 border border-amber/10">
-        <p className="text-[11px] text-amber/70 text-center">
-          <span className="font-semibold">Demo:</span> user@demo.com / password123 · admin@demo.com / admin123
-        </p>
-      </div>
 
       {/* Sign up link */}
       <p className="mt-6 text-center text-sm text-muted-foreground">

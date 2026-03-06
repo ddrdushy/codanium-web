@@ -10,10 +10,11 @@ import { useProjectStore } from '@/lib/project-store';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Search, Bell, Zap, Sun, Moon, Shield, LogOut, ChevronDown, User } from 'lucide-react';
+import { Search, Bell, Zap, Sun, Moon, Shield, LogOut, ChevronDown, User, FolderOpen, CreditCard, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCommandPaletteStore } from '@/lib/command-palette-store';
 import { useNotificationStore, selectUnreadCount } from '@/lib/notification-store';
+import { PresenceBar } from '@/components/collaboration/presence-bar';
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();
@@ -100,6 +101,13 @@ export function Topbar() {
           </Tooltip>
         ))}
         <span className="ml-2 text-xs text-muted-foreground font-medium">{stageLabel}</span>
+
+        {/* Presence Bar — shows when on a project page */}
+        {currentProjectId && (
+          <div className="ml-4 hidden lg:block">
+            <PresenceBar projectId={currentProjectId} />
+          </div>
+        )}
       </div>
 
       {/* Right side controls */}
@@ -223,14 +231,41 @@ export function Topbar() {
                 {/* Menu Items */}
                 <div className="py-1">
                   <Link
-                    href="/projects"
+                    href="/profile"
                     onClick={() => setUserMenuOpen(false)}
                     className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
                   >
                     <User className="w-3.5 h-3.5" />
+                    Profile
+                  </Link>
+                  <Link
+                    href="/projects"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
                     My Projects
                   </Link>
+                </div>
 
+                {/* Account */}
+                <div className="py-1 border-t border-border">
+                  <Link
+                    href="/billing"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Billing
+                  </Link>
+                  <Link
+                    href="/account/api-keys"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    API Keys
+                  </Link>
                   {isAdmin && (
                     <Link
                       href="/admin"
