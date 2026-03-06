@@ -35,6 +35,16 @@ export type { GitSyncJobData } from './git-sync-queue';
 export { createGitSyncWorker } from './git-sync-worker';
 
 export {
+  getGitPushQueue,
+  addGitPushJob,
+  GIT_PUSH_QUEUE_NAME,
+} from './git-push-queue';
+
+export type { GitPushJobData } from './git-push-queue';
+
+export { createGitPushWorker } from './git-push-worker';
+
+export {
   getWebhookQueue,
   addWebhookDeliveryJob,
   WEBHOOK_QUEUE_NAME,

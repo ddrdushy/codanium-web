@@ -1179,6 +1179,28 @@ export async function persistArtifact(
   const category = inferArtifactCategory(artifact.type, artifact.name, agentShortName);
 
   try {
+    // Find active card for this agent (branch context)
+    let cardId: string | null = null;
+    let branchId: string | null = null;
+    try {
+      const activeCard = await prisma.card.findFirst({
+        where: {
+          projectId,
+          ownerAgent: { shortName: agentShortName },
+          state: 'IN_PROGRESS',
+          gitBranchId: { not: null },
+        },
+        select: { id: true, gitBranchId: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (activeCard) {
+        cardId = activeCard.id;
+        branchId = activeCard.gitBranchId;
+      }
+    } catch {
+      // Non-fatal: artifact created without card link if lookup fails
+    }
+
     if (category === 'DOCUMENT') {
       const docType = inferDocumentType(artifact.type);
       const wordCount = artifact.content.split(/\s+/).filter(Boolean).length;
@@ -1202,8 +1224,24 @@ export async function persistArtifact(
           ownerAgent: agentShortName,
           projectId,
           messageId: messageId ?? null,
+          cardId,
         },
       });
+
+      // Record commit on the card's branch
+      if (branchId) {
+        try {
+          const { recordCommit } = await import('@/lib/git/repo-manager');
+          await recordCommit(
+            branchId,
+            projectId,
+            `Add ${artifact.name} (${category.toLowerCase()})`,
+            agentShortName,
+          );
+        } catch {
+          // Non-fatal: commit recording failure doesn't block artifact persistence
+        }
+      }
     }
   } catch (err) {
     console.error(

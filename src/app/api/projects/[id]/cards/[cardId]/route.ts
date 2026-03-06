@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-guard';
+import { createCardBranch, mergeBranch } from '@/lib/git/repo-manager';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,6 +79,26 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         },
       },
     });
+
+    // ── Git Branch Lifecycle ──────────────────────────────────────────────
+    // When card → IN_PROGRESS: create a feature branch
+    // When card → DONE: merge the branch into main
+    if (body.state) {
+      try {
+        if (body.state === 'IN_PROGRESS' && !existing.gitBranchId) {
+          const { branchId } = await createCardBranch(projectId, cardId, existing.title);
+          await prisma.card.update({
+            where: { id: cardId },
+            data: { gitBranchId: branchId },
+          });
+        } else if (body.state === 'DONE' && existing.gitBranchId) {
+          await mergeBranch(existing.gitBranchId, projectId);
+        }
+      } catch (gitErr) {
+        console.error(`[Card PATCH] Git branch operation failed for card ${cardId}:`, gitErr);
+        // Non-fatal: card state change succeeds even if git fails
+      }
+    }
 
     return NextResponse.json(card);
   } catch (error) {

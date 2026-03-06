@@ -163,6 +163,7 @@ model Project {
   notifications Notification[]
   chatMessages      ChatMessage[]
   gitBranches       GitBranch[]
+  gitCommits        GitCommit[]
   gitPullRequests   GitPullRequest[]
   gitReleases       GitRelease[]
   wireframes        Wireframe[]
@@ -212,15 +213,18 @@ model Card {
   ownerAgentId    String?
   parentId        String?
   linkedDecisionId String?
+  gitBranchId     String?      // Feature branch for this card's work
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   // Relations
-  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee   User?     @relation("CardAssignee", fields: [assigneeId], references: [id])
-  ownerAgent Agent?    @relation(fields: [ownerAgentId], references: [id])
-  parent     Card?     @relation("CardHierarchy", fields: [parentId], references: [id])
-  children   Card[]    @relation("CardHierarchy")
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee   User?      @relation("CardAssignee", fields: [assigneeId], references: [id])
+  ownerAgent Agent?     @relation(fields: [ownerAgentId], references: [id])
+  parent     Card?      @relation("CardHierarchy", fields: [parentId], references: [id])
+  children   Card[]     @relation("CardHierarchy")
+  gitBranch  GitBranch? @relation(fields: [gitBranchId], references: [id])
+  artifacts  Artifact[]
 
   @@index([projectId])
   @@index([state])
@@ -558,11 +562,30 @@ model GitBranch {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cards   Card[]
+  commits GitCommit[]
 
   @@unique([projectId, name])
   @@index([projectId])
   @@map("git_branches")
+}
+
+model GitCommit {
+  id        String   @id @default(cuid())
+  message   String
+  author    String              // Agent shortName or user email
+  sha       String              // 7-char generated hash
+  branchId  String
+  projectId String
+  createdAt DateTime @default(now())
+
+  branch  GitBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+  @@index([projectId])
+  @@map("git_commits")
 }
 
 model GitPullRequest {
@@ -726,14 +749,17 @@ model Artifact {
   ownerAgent String       // Agent shortName that produced it
   version    Int          @default(1)
   messageId  String?      // ChatMessage that generated this artifact
+  cardId     String?      // Card this artifact belongs to (branch context)
   projectId  String
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  card    Card?   @relation(fields: [cardId], references: [id])
 
   @@index([projectId])
   @@index([projectId, ownerAgent])
+  @@index([cardId])
   @@map("artifacts")
 }
 

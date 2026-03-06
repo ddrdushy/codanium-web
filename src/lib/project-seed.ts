@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getAllAgentDefinitions } from '@/lib/ai/agents/registry';
 import { taskQueue } from '@/lib/ai/orchestration/task-queue';
+import { initializeRepo } from '@/lib/git/repo-manager';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,13 @@ export async function seedProject(projectId: string): Promise<SeedProjectResult>
     prisma.agent.createMany({ data: agentData, skipDuplicates: true }),
     prisma.sDLCStage.createMany({ data: stageData, skipDuplicates: true }),
   ]);
+
+  // Initialize the project's "main" branch (DB-backed Git)
+  try {
+    await initializeRepo(projectId);
+  } catch (err) {
+    console.error(`[seedProject] Failed to initialize repo for ${projectId}:`, err);
+  }
 
   return {
     agentCount: agentResult.count,

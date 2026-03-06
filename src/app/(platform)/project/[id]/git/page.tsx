@@ -10,8 +10,9 @@ import {
   GitBranch, GitPullRequest, GitCommit, GitMerge,
   CheckCircle2, Clock, XCircle, AlertTriangle,
   Tag, ArrowRight, ExternalLink, Eye,
-  ChevronRight, Activity, Rocket
+  ChevronRight, Activity, Rocket, Upload
 } from 'lucide-react';
+import { PushToGitHubModal } from '@/components/modals/push-to-github-modal';
 
 interface Branch {
   name: string;
@@ -112,6 +113,14 @@ export default function GitPage() {
   const [branches, setBranches] = useState<Branch[]>(mockBranches);
   const [pullRequests, setPullRequests] = useState<PullRequest[]>(mockPRs);
   const [releases, setReleases] = useState<Release[]>(mockReleases);
+  const [pushModalOpen, setPushModalOpen] = useState(false);
+  const [gitConfig, setGitConfig] = useState<{
+    hasToken: boolean;
+    repoOwner?: string;
+    repoName?: string;
+    defaultBranch?: string;
+  }>({ hasToken: false });
+  const [artifactCount, setArtifactCount] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -146,6 +155,28 @@ export default function GitPage() {
         }
       })
       .catch(() => {});
+
+    // Fetch git config and artifact count for push modal
+    fetch(`/api/projects/${projectId}/git/config`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && !data.error) {
+          setGitConfig({
+            hasToken: data.hasToken ?? false,
+            repoOwner: data.repoOwner,
+            repoName: data.repoName,
+            defaultBranch: data.defaultBranch,
+          });
+        }
+      })
+      .catch(() => {});
+
+    fetch(`/api/projects/${projectId}/artifacts`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setArtifactCount(data.length);
+      })
+      .catch(() => {});
   }, [projectId]);
 
   const openPRs = pullRequests.filter(pr => pr.status === 'open').length;
@@ -171,6 +202,14 @@ export default function GitPage() {
               {openPRs} open PRs
             </Badge>
           )}
+          <Button
+            size="sm"
+            onClick={() => setPushModalOpen(true)}
+            className="bg-amber hover:bg-amber/90 text-black text-xs"
+          >
+            <Upload className="w-3.5 h-3.5 mr-1.5" />
+            Push to GitHub
+          </Button>
         </div>
       </motion.div>
 
@@ -439,6 +478,17 @@ export default function GitPage() {
           ))}
         </motion.div>
       )}
+      {/* Push to GitHub Modal */}
+      <PushToGitHubModal
+        open={pushModalOpen}
+        onOpenChange={setPushModalOpen}
+        projectId={projectId}
+        artifactCount={artifactCount}
+        repoOwner={gitConfig.repoOwner}
+        repoName={gitConfig.repoName}
+        defaultBranch={gitConfig.defaultBranch}
+        hasGitConfig={gitConfig.hasToken}
+      />
     </div>
   );
 }

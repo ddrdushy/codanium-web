@@ -10,7 +10,7 @@ import { Octokit } from 'octokit';
 import { decrypt } from '@/lib/ai/encryption';
 
 // ---------------------------------------------------------------------------
-// Types
+// Types — Read Operations
 // ---------------------------------------------------------------------------
 
 export interface GitHubBranch {
@@ -167,4 +167,152 @@ export async function fetchReleases(
       features,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Types — Push Operations
+// ---------------------------------------------------------------------------
+
+export interface GitTreeEntry {
+  path: string;
+  mode: '100644';     // regular file
+  type: 'blob';
+  content: string;    // file content (GitHub creates blob automatically)
+}
+
+export interface GitPushResult {
+  commitSha: string;
+  commitUrl: string;
+}
+
+export interface GitPullRequestResult {
+  number: number;
+  title: string;
+  url: string;
+  htmlUrl: string;
+}
+
+// ---------------------------------------------------------------------------
+// Git Data API — Push Operations
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the SHA of a branch ref (e.g., "heads/main").
+ */
+export async function getRef(
+  client: Octokit,
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<string> {
+  const { data } = await client.rest.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${branch}`,
+  });
+  return data.object.sha;
+}
+
+/**
+ * Get the tree SHA from a commit SHA.
+ */
+export async function getCommitTreeSha(
+  client: Octokit,
+  owner: string,
+  repo: string,
+  commitSha: string,
+): Promise<string> {
+  const { data } = await client.rest.git.getCommit({
+    owner,
+    repo,
+    commit_sha: commitSha,
+  });
+  return data.tree.sha;
+}
+
+/**
+ * Create a new Git tree containing all files.
+ * Uses base_tree so existing repo files are preserved.
+ */
+export async function createTree(
+  client: Octokit,
+  owner: string,
+  repo: string,
+  baseTreeSha: string,
+  entries: GitTreeEntry[],
+): Promise<string> {
+  const { data } = await client.rest.git.createTree({
+    owner,
+    repo,
+    base_tree: baseTreeSha,
+    tree: entries,
+  });
+  return data.sha;
+}
+
+/**
+ * Create a new commit pointing to a tree.
+ */
+export async function createCommit(
+  client: Octokit,
+  owner: string,
+  repo: string,
+  message: string,
+  treeSha: string,
+  parentCommitSha: string,
+): Promise<GitPushResult> {
+  const { data } = await client.rest.git.createCommit({
+    owner,
+    repo,
+    message,
+    tree: treeSha,
+    parents: [parentCommitSha],
+  });
+  return { commitSha: data.sha, commitUrl: data.html_url };
+}
+
+/**
+ * Create a new branch ref pointing at a commit SHA.
+ */
+export async function createBranchRef(
+  client: Octokit,
+  owner: string,
+  repo: string,
+  branchName: string,
+  commitSha: string,
+): Promise<void> {
+  await client.rest.git.createRef({
+    owner,
+    repo,
+    ref: `refs/heads/${branchName}`,
+    sha: commitSha,
+  });
+}
+
+/**
+ * Create a pull request.
+ */
+export async function createPullRequest(
+  client: Octokit,
+  owner: string,
+  repo: string,
+  title: string,
+  body: string,
+  head: string,
+  base: string,
+): Promise<GitPullRequestResult> {
+  const { data } = await client.rest.pulls.create({
+    owner,
+    repo,
+    title,
+    body,
+    head,
+    base,
+  });
+  return {
+    number: data.number,
+    title: data.title,
+    url: data.url,
+    htmlUrl: data.html_url,
+  };
 }

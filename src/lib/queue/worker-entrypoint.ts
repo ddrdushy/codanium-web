@@ -19,6 +19,7 @@ import { eventBus } from '@/lib/ai/orchestration/event-bus';
 import { createOrchestrationWorker } from './orchestration-worker';
 import { createEmailWorker } from './email-worker';
 import { createGitSyncWorker } from './git-sync-worker';
+import { createGitPushWorker } from './git-push-worker';
 import { createWebhookWorker } from './webhook-worker';
 
 async function main() {
@@ -31,11 +32,13 @@ async function main() {
   const orchWorker = createOrchestrationWorker();
   const emailWorker = createEmailWorker();
   const gitSyncWorker = createGitSyncWorker();
+  const gitPushWorker = createGitPushWorker();
   const webhookWorker = createWebhookWorker();
 
   console.log('[Worker] Orchestration worker started');
   console.log('[Worker] Email worker started');
   console.log('[Worker] Git Sync worker started');
+  console.log('[Worker] Git Push worker started');
   console.log('[Worker] Webhook Delivery worker started');
 
   // ── Graceful Shutdown ───────────────────────────────────────────────────
@@ -46,6 +49,7 @@ async function main() {
       orchWorker.close(),
       emailWorker.close(),
       gitSyncWorker.close(),
+      gitPushWorker.close(),
       webhookWorker.close(),
     ]);
     console.log('[Worker] All workers closed. Exiting.');

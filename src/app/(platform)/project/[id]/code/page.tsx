@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Code2, FileText, Settings, TestTube, Copy, Download,
-  Search, ChevronRight, ChevronDown, Check, File,
+  Search, ChevronRight, ChevronDown, Check, File, Upload,
 } from 'lucide-react';
+import { PushToGitHubModal } from '@/components/modals/push-to-github-modal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -300,6 +301,15 @@ export default function CodePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<ArtifactType>>(new Set());
 
+  // Push modal state
+  const [pushModalOpen, setPushModalOpen] = useState(false);
+  const [gitConfig, setGitConfig] = useState<{
+    hasToken: boolean;
+    repoOwner?: string;
+    repoName?: string;
+    defaultBranch?: string;
+  }>({ hasToken: false });
+
   // Fetch artifacts list
   useEffect(() => {
     if (!projectId) return;
@@ -319,6 +329,21 @@ export default function CodePage() {
         }
       })
       .catch(() => {/* keep mock data */});
+
+    // Fetch git config for push modal
+    fetch(`/api/projects/${projectId}/git/config`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && !data.error) {
+          setGitConfig({
+            hasToken: data.hasToken ?? false,
+            repoOwner: data.repoOwner,
+            repoName: data.repoName,
+            defaultBranch: data.defaultBranch,
+          });
+        }
+      })
+      .catch(() => {});
   }, [projectId]);
 
   // Fetch individual artifact content on selection
@@ -614,6 +639,13 @@ export default function CodePage() {
                   >
                     <Download className="w-3 h-3 mr-1" /> Download
                   </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setPushModalOpen(true)}
+                    className="h-7 text-[11px] bg-amber hover:bg-amber/90 text-black"
+                  >
+                    <Upload className="w-3 h-3 mr-1" /> Push to GitHub
+                  </Button>
                 </div>
               </div>
 
@@ -677,6 +709,17 @@ export default function CodePage() {
           )}
         </AnimatePresence>
       </div>
+      {/* Push to GitHub Modal */}
+      <PushToGitHubModal
+        open={pushModalOpen}
+        onOpenChange={setPushModalOpen}
+        projectId={projectId}
+        artifactCount={artifacts.length}
+        repoOwner={gitConfig.repoOwner}
+        repoName={gitConfig.repoName}
+        defaultBranch={gitConfig.defaultBranch}
+        hasGitConfig={gitConfig.hasToken}
+      />
     </div>
   );
 }
