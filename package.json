@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
+    "@codesandbox/sandpack-react": "^2.20.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -22,6 +23,9 @@
     "@prisma/client": "^7.4.2",
     "@react-email/components": "^1.0.8",
     "@sendgrid/mail": "^8.1.6",
+    "@types/archiver": "^7.0.0",
+    "@webcontainer/api": "^1.6.1",
+    "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.70.4",
     "class-variance-authority": "^0.7.1",

@@ -131,6 +131,9 @@ model Project {
   completion   Int           @default(0) // 0-100
   color        String        @default("#f59e0b")
 
+  // Preview tier
+  previewTier  String        @default("sandpack") // sandpack, webcontainer, cloud
+
   // Git integration
   gitProvider       String?   // "github" (future: "gitlab", "bitbucket")
   gitRepoOwner      String?   // e.g. "acme-corp"

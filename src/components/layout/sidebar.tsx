@@ -9,7 +9,7 @@ import {
   Users, FileText, PenTool, BarChart3, Settings,
   ChevronLeft, ChevronRight, Workflow, Scale,
   ChevronDown, ChevronUp, Zap, Bot, FolderOpen,
-  Check, Plus, Code2
+  Check, Plus, Code2, Play
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -18,6 +18,7 @@ import { useProjectStore } from '@/lib/project-store';
 import { mockProjects } from '@/lib/mock-data';
 import { ProjectSelectorSkeleton } from '@/components/ui/skeleton';
 import { CreateProjectModal } from '@/components/modals/create-project-modal';
+import { usePreviewStore } from '@/hooks/use-preview';
 
 const getNavItems = (projectId: string) => [
   { label: 'Chat', icon: MessageSquare, href: `/project/${projectId}/chat`, section: 'main' },
@@ -25,6 +26,7 @@ const getNavItems = (projectId: string) => [
   { label: 'Work Board', icon: Kanban, href: `/project/${projectId}/board`, section: 'main' },
   { label: 'My Decisions', icon: Scale, href: `/project/${projectId}/decisions`, section: 'main' },
   { label: 'AI Team', icon: Bot, href: `/project/${projectId}/agents`, section: 'main' },
+  { label: 'Live Preview', icon: Play, href: `__preview__`, section: 'deliverables' },
   { label: 'Generated Code', icon: Code2, href: `/project/${projectId}/code`, section: 'deliverables' },
   { label: 'Documents', icon: FileText, href: `/project/${projectId}/docs`, section: 'deliverables' },
   { label: 'Designs', icon: PenTool, href: `/project/${projectId}/wireframes`, section: 'deliverables' },
@@ -50,6 +52,8 @@ export function Sidebar() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { projects: storeProjects, loading, fetchProjects } = useProjectStore();
+  const previewOpen = usePreviewStore((s) => s.isOpen);
+  const togglePreview = usePreviewStore((s) => s.toggle);
 
   // Fetch real projects on mount
   useEffect(() => {
@@ -248,13 +252,47 @@ export function Sidebar() {
               )}
               {section.label && collapsed && <div className="my-2 mx-2 border-t border-border" />}
               {items.map((item) => {
+                const isPreview = item.href === '__preview__';
                 const basePath = `/project/${currentProjectId}`;
-                const isActive = pathname === item.href || (item.href !== basePath && pathname?.startsWith(item.href));
+                const isActive = isPreview
+                  ? previewOpen
+                  : pathname === item.href || (item.href !== basePath && pathname?.startsWith(item.href));
                 const Icon = item.icon;
 
-                const linkContent = (
+                const itemElement = isPreview ? (
+                  <button
+                    onClick={() => togglePreview()}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150 group relative',
+                      isActive
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-[var(--sidebar-accent)]'
+                    )}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="sidebar-preview-active"
+                        className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-400"
+                        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                      />
+                    )}
+                    <Icon className={cn('w-4 h-4 shrink-0', isActive && 'drop-shadow-[0_0_6px_rgba(16,185,129,0.5)]')} />
+                    <AnimatePresence>
+                      {!collapsed && (
+                        <motion.span
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.1 }}
+                          className="truncate flex-1"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </button>
+                ) : (
                   <Link
-                    key={item.href}
                     href={item.href}
                     className={cn(
                       'flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150 group relative',
@@ -290,14 +328,14 @@ export function Sidebar() {
                 if (collapsed) {
                   return (
                     <Tooltip key={item.href}>
-                      <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                      <TooltipTrigger asChild>{itemElement}</TooltipTrigger>
                       <TooltipContent side="right" className="font-medium">
                         {item.label}
                       </TooltipContent>
                     </Tooltip>
                   );
                 }
-                return <div key={item.href}>{linkContent}</div>;
+                return <div key={item.href}>{itemElement}</div>;
               })}
             </div>
           );
