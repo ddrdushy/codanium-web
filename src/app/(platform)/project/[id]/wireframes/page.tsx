@@ -6,11 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { WireframeModal, DeleteWireframeDialog } from '@/components/modals/wireframe-modal';
 import {
   PenTool, Plus, Grid3X3, Layers, Eye, Edit3,
   Smartphone, Monitor, Tablet, ChevronRight,
   Square, Type, Image, MousePointer, Layout,
-  ArrowRight, CheckCircle2, Clock, Bot, Maximize2
+  ArrowRight, CheckCircle2, Clock, Bot, Maximize2,
+  Trash2, Send,
 } from 'lucide-react';
 
 interface Wireframe {
@@ -201,6 +203,21 @@ function formatRelative(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function mapApiWireframe(w: any): Wireframe {
+  return {
+    id: w.id,
+    title: w.title,
+    screen: w.screen ?? '',
+    status: dbWfStatus[w.status] ?? 'draft',
+    device: dbDevice[w.device] ?? 'desktop',
+    owner: w.owner ?? 'Unknown',
+    ownerAvatar: w.ownerAvatar ?? '🎨',
+    lastUpdated: w.updatedAt ? formatRelative(w.updatedAt) : 'just now',
+    components: w.components ?? 0,
+    version: w.version ?? 1,
+  };
+}
+
 export default function WireframesPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -209,29 +226,61 @@ export default function WireframesPage() {
   const [selectedWireframe, setSelectedWireframe] = useState<Wireframe | null>(mockWireframes[0]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
+  // Modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
   useEffect(() => {
     fetch(`/api/projects/${projectId}/wireframes`)
       .then(r => r.json())
       .then((data: any[]) => {
         if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map((w: any) => ({
-            id: w.id,
-            title: w.title,
-            screen: w.screen ?? '',
-            status: dbWfStatus[w.status] ?? 'draft',
-            device: dbDevice[w.device] ?? 'desktop',
-            owner: w.owner ?? 'Unknown',
-            ownerAvatar: w.ownerAvatar ?? '🎨',
-            lastUpdated: formatRelative(w.updatedAt),
-            components: w.components ?? 0,
-            version: w.version ?? 1,
-          }));
+          const mapped = data.map(mapApiWireframe);
           setWireframes(mapped);
           setSelectedWireframe(mapped[0]);
         }
       })
       .catch(() => {});
   }, [projectId]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────
+
+  const handleCreateSuccess = (apiWf: any) => {
+    const wf = mapApiWireframe(apiWf);
+    setWireframes((prev) => [wf, ...prev]);
+    setSelectedWireframe(wf);
+  };
+
+  const handleEditSuccess = (apiWf: any) => {
+    const wf = mapApiWireframe(apiWf);
+    setWireframes((prev) => prev.map((w) => (w.id === wf.id ? wf : w)));
+    setSelectedWireframe(wf);
+  };
+
+  const handleDeleteSuccess = () => {
+    const remaining = wireframes.filter((w) => w.id !== selectedWireframe?.id);
+    setWireframes(remaining);
+    setSelectedWireframe(remaining[0] ?? null);
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!selectedWireframe) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/wireframes`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wireframeId: selectedWireframe.id, status: newStatus }),
+      });
+      if (!res.ok) return;
+      const updated = await res.json();
+      const wf = mapApiWireframe(updated);
+      setWireframes((prev) => prev.map((w) => (w.id === wf.id ? wf : w)));
+      setSelectedWireframe(wf);
+    } catch {
+      // silent
+    }
+  };
 
   return (
     <div className="flex h-full">
@@ -244,7 +293,11 @@ export default function WireframesPage() {
               <PenTool className="w-5 h-5 text-amber" />
               Designs
             </h1>
-            <Button size="sm" className="h-7 text-[11px] bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20">
+            <Button
+              size="sm"
+              className="h-7 text-[11px] bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20"
+              onClick={() => setShowCreateModal(true)}
+            >
               <Plus className="w-3 h-3 mr-1" /> New
             </Button>
           </div>
@@ -365,6 +418,38 @@ export default function WireframesPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Status workflow buttons */}
+                  {selectedWireframe.status === 'draft' && (
+                    <Button
+                      size="sm"
+                      className="h-7 text-[11px] bg-amber/20 text-amber hover:bg-amber/30 border border-amber/20"
+                      onClick={() => handleStatusChange('REVIEW')}
+                    >
+                      <Send className="w-3 h-3 mr-1" />
+                      Submit for Review
+                    </Button>
+                  )}
+                  {selectedWireframe.status === 'review' && (
+                    <Button
+                      size="sm"
+                      className="h-7 text-[11px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/20"
+                      onClick={() => handleStatusChange('APPROVED')}
+                    >
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      Approve
+                    </Button>
+                  )}
+                  {selectedWireframe.status === 'approved' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={() => handleStatusChange('DRAFT')}
+                    >
+                      Revert to Draft
+                    </Button>
+                  )}
+
                   {/* Device toggles */}
                   <div className="flex gap-0.5 bg-[var(--sidebar-accent)] rounded-md p-0.5">
                     {(['desktop', 'tablet', 'mobile'] as const).map(dev => {
@@ -382,11 +467,21 @@ export default function WireframesPage() {
                       );
                     })}
                   </div>
-                  <Button size="sm" variant="outline" className="h-7 text-[11px]">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    onClick={() => setShowEditModal(true)}
+                  >
                     <Edit3 className="w-3 h-3 mr-1" /> Edit
                   </Button>
-                  <Button size="sm" variant="outline" className="h-7 text-[11px]">
-                    <Maximize2 className="w-3 h-3 mr-1" /> Fullscreen
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px] text-red-400 hover:text-red-300 hover:border-red-500/30"
+                    onClick={() => setShowDeleteDialog(true)}
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" /> Delete
                   </Button>
                 </div>
               </div>
@@ -426,6 +521,31 @@ export default function WireframesPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Modals */}
+      <WireframeModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        projectId={projectId}
+        mode="create"
+        onSuccess={handleCreateSuccess}
+      />
+      <WireframeModal
+        open={showEditModal}
+        onOpenChange={setShowEditModal}
+        projectId={projectId}
+        mode="edit"
+        wireframe={selectedWireframe}
+        onSuccess={handleEditSuccess}
+      />
+      <DeleteWireframeDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        projectId={projectId}
+        wireframeId={selectedWireframe?.id}
+        wireframeTitle={selectedWireframe?.title}
+        onDeleted={handleDeleteSuccess}
+      />
     </div>
   );
 }

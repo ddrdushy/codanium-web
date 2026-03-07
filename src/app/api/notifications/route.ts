@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-guard';
+import { validateBody } from '@/lib/validations/validate';
+import { createNotificationSchema } from '@/lib/validations/schemas';
 import { NotificationType } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
@@ -75,46 +77,18 @@ export async function POST(request: NextRequest) {
     if (error) return error;
     const body = await request.json();
 
-    const { type, title, description, actionLabel, actionHref, userId, projectId } = body;
-
-    if (!type || typeof type !== 'string') {
-      return NextResponse.json(
-        { error: 'Notification type is required' },
-        { status: 400 }
-      );
-    }
-
-    if (!title || typeof title !== 'string') {
-      return NextResponse.json(
-        { error: 'Notification title is required' },
-        { status: 400 }
-      );
-    }
-
-    if (!userId || typeof userId !== 'string') {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      );
-    }
-
-    const validTypes = Object.values(NotificationType);
-    if (!validTypes.includes(type as NotificationType)) {
-      return NextResponse.json(
-        { error: `Invalid notification type. Must be one of: ${validTypes.join(', ')}` },
-        { status: 400 }
-      );
-    }
+    const { data, error: validationError } = validateBody(createNotificationSchema, body);
+    if (validationError) return validationError;
 
     const notification = await prisma.notification.create({
       data: {
-        type: type as NotificationType,
-        title: title.trim(),
-        description: description?.trim() ?? '',
-        actionLabel: actionLabel ?? null,
-        actionHref: actionHref ?? null,
-        userId,
-        projectId: projectId ?? null,
+        type: data.type as NotificationType,
+        title: data.title,
+        description: data.description?.trim() ?? '',
+        actionLabel: data.actionLabel ?? null,
+        actionHref: data.actionHref ?? null,
+        userId: data.userId,
+        projectId: data.projectId ?? null,
       },
       include: {
         project: {

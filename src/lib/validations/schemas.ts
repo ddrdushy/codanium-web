@@ -231,3 +231,63 @@ export const previewTierSchema = z.object({
 });
 
 export type PreviewTierInput = z.infer<typeof previewTierSchema>;
+
+// ---------------------------------------------------------------------------
+// Notification
+// ---------------------------------------------------------------------------
+
+export const NotificationTypeEnum = z.enum([
+  'DECISION',
+  'COMPLETION',
+  'PR',
+  'FAILURE',
+  'AGENT',
+  'DEPLOY',
+  'SECURITY',
+  'BUILD',
+]);
+
+export const createNotificationSchema = z.object({
+  type: NotificationTypeEnum,
+  title: z
+    .string({ error: 'Notification title is required' })
+    .trim()
+    .min(1, 'Title is required')
+    .max(200, 'Title must be 200 characters or less'),
+  description: z.string().max(2000).optional(),
+  actionLabel: z.string().max(100).optional(),
+  actionHref: z.string().max(500).optional(),
+  userId: z.string({ error: 'User ID is required' }),
+  projectId: z.string().optional(),
+});
+
+export type CreateNotificationInput = z.infer<typeof createNotificationSchema>;
+
+// ---------------------------------------------------------------------------
+// Wireframe
+// ---------------------------------------------------------------------------
+
+export const WireframeStatusEnum = z.enum(['DRAFT', 'REVIEW', 'APPROVED']);
+export const DeviceTypeEnum = z.enum(['DESKTOP', 'MOBILE', 'TABLET']);
+
+export const createWireframeSchema = z.object({
+  title: z
+    .string({ error: 'Wireframe title is required' })
+    .trim()
+    .min(1, 'Title is required')
+    .max(200, 'Title must be 200 characters or less'),
+  screen: z.string().max(100).optional().default(''),
+  device: DeviceTypeEnum.optional().default('DESKTOP'),
+  status: WireframeStatusEnum.optional().default('DRAFT'),
+});
+
+export type CreateWireframeInput = z.infer<typeof createWireframeSchema>;
+
+export const updateWireframeSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  screen: z.string().max(100).optional(),
+  device: DeviceTypeEnum.optional(),
+  status: WireframeStatusEnum.optional(),
+});
+
+export type UpdateWireframeInput = z.infer<typeof updateWireframeSchema>;

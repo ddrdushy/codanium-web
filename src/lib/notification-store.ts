@@ -28,12 +28,14 @@ interface NotificationState {
   notifications: Notification[];
   initialized: boolean;
   loading: boolean;
+  unreadCount: number;
   open: () => void;
   close: () => void;
   toggle: () => void;
   markAsRead: (id: string) => void;
   markAllRead: () => void;
   fetchNotifications: () => Promise<void>;
+  fetchUnreadCount: () => Promise<void>;
   addNotification: (notification: Notification) => void;
 }
 
@@ -60,6 +62,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   initialized: false,
   loading: false,
+  unreadCount: 0,
 
   open: () => {
     set({ isOpen: true });
@@ -80,11 +83,18 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   markAsRead: (id: string) => {
     // Optimistic update
-    set((state) => ({
-      notifications: state.notifications.map((n) =>
-        n.id === id ? { ...n, read: true } : n
-      ),
-    }));
+    set((state) => {
+      const notification = state.notifications.find((n) => n.id === id);
+      const wasUnread = notification && !notification.read;
+      return {
+        notifications: state.notifications.map((n) =>
+          n.id === id ? { ...n, read: true } : n
+        ),
+        unreadCount: wasUnread
+          ? Math.max(0, state.unreadCount - 1)
+          : state.unreadCount,
+      };
+    });
     // Persist to API
     fetch('/api/notifications', {
       method: 'PATCH',
@@ -97,6 +107,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     // Optimistic update
     set((state) => ({
       notifications: state.notifications.map((n) => ({ ...n, read: true })),
+      unreadCount: 0,
     }));
     // Persist to API
     fetch('/api/notifications', {
@@ -113,23 +124,40 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const notifications = (data.notifications ?? []).map(mapDbNotification);
-      set({ notifications, initialized: true, loading: false });
+      const unreadCount = data.unreadCount ?? notifications.filter((n: Notification) => !n.read).length;
+      set({ notifications, unreadCount, initialized: true, loading: false });
     } catch (err) {
       console.error('[NotificationStore] fetchNotifications error:', err);
       set({ loading: false, initialized: true });
     }
   },
 
+  fetchUnreadCount: async () => {
+    try {
+      const res = await fetch('/api/notifications?unread=true&limit=1');
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ unreadCount: data.unreadCount ?? 0 });
+    } catch {
+      // Silent — badge will show 0 until panel is opened
+    }
+  },
+
   addNotification: (notification: Notification) => {
     set((state) => ({
       notifications: [notification, ...state.notifications],
+      unreadCount: notification.read
+        ? state.unreadCount
+        : state.unreadCount + 1,
     }));
   },
 }));
 
-// Selector for unread count (derived)
+// Selector for unread count (derived from store or pre-fetched count)
 export const selectUnreadCount = (state: NotificationState) =>
-  state.notifications.filter((n) => !n.read).length;
+  state.initialized
+    ? state.notifications.filter((n) => !n.read).length
+    : state.unreadCount;
 
 // Export mapper for use in SSE hook
 export { mapDbNotification };

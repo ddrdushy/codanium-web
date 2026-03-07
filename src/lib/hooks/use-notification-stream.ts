@@ -87,6 +87,8 @@ export function useNotificationStream() {
   }, [status, addNotification, addToast]);
 
   useEffect(() => {
+    // Fetch badge count immediately on mount (before SSE connects)
+    useNotificationStore.getState().fetchUnreadCount();
     connect();
 
     return () => {

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -133,16 +135,23 @@ function groupByDay(notifications: Notification[]) {
 function NotificationItem({
   notification,
   onRead,
+  onNavigate,
 }: {
   notification: Notification;
   onRead: (id: string) => void;
+  onNavigate?: (href: string) => void;
 }) {
   const config = typeConfig[notification.type] ?? typeConfig.agent;
   const Icon = config.icon;
 
   return (
     <button
-      onClick={() => onRead(notification.id)}
+      onClick={() => {
+        onRead(notification.id);
+        if (notification.actionHref && onNavigate) {
+          onNavigate(notification.actionHref);
+        }
+      }}
       className={cn(
         'w-full text-left flex items-start gap-3 px-4 py-3 rounded-lg transition-all',
         'hover:bg-foreground/[0.04] group',
@@ -217,6 +226,12 @@ export function NotificationPanel() {
     useNotificationStore();
   const unreadCount = useNotificationStore(selectUnreadCount);
   const panelRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  const handleNavigate = (href: string) => {
+    close();
+    router.push(href);
+  };
 
   // Close on Escape
   useEffect(() => {
@@ -331,6 +346,7 @@ export function NotificationPanel() {
                           key={n.id}
                           notification={n}
                           onRead={markAsRead}
+                          onNavigate={handleNavigate}
                         />
                       ))}
                     </div>
@@ -341,10 +357,14 @@ export function NotificationPanel() {
 
             {/* ── Footer ─────────────────────────────────────────── */}
             <div className="px-5 py-3 border-t border-border shrink-0">
-              <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group/link">
+              <Link
+                href="/notifications"
+                onClick={close}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group/link"
+              >
                 <span>View all notifications</span>
                 <ChevronRight className="w-3 h-3 transition-transform group-hover/link:translate-x-0.5" />
-              </button>
+              </Link>
             </div>
           </motion.div>
         </>
