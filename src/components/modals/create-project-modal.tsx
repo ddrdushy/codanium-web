@@ -194,7 +194,7 @@ export function CreateProjectModal({ open, onOpenChange }: CreateProjectModalPro
 
       reset();
       onOpenChange(false);
-      router.push(`/project/${project.id}`);
+      router.push(`/project/${project.id}/chat`);
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {
