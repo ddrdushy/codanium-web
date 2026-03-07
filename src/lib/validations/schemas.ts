@@ -87,6 +87,7 @@ export const createCardSchema = z.object({
   assigneeId: z.string().optional(),
   ownerAgentId: z.string().optional(),
   parentId: z.string().optional(),
+  module: z.string().trim().max(100).optional(),
 });
 
 export type CreateCardInput = z.infer<typeof createCardSchema>;

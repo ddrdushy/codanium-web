@@ -214,6 +214,7 @@ model Card {
   parentId        String?
   linkedDecisionId String?
   gitBranchId     String?      // Feature branch for this card's work
+  module          String?      // Codebase module scope, e.g. "auth", "payments", "dashboard"
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -225,9 +226,11 @@ model Card {
   children   Card[]     @relation("CardHierarchy")
   gitBranch  GitBranch? @relation(fields: [gitBranchId], references: [id])
   artifacts  Artifact[]
+  chatMessages ChatMessage[]
 
   @@index([projectId])
   @@index([state])
+  @@index([projectId, module])
   @@map("cards")
 }
 
@@ -532,13 +535,16 @@ model ChatMessage {
   projectId           String
   orchestrationRunId  String?     // Links to the OrchestrationRun that produced this message
   artifacts           String?     // JSON array of {name, type}
+  cardId              String?     // Scoped to a specific card/module for context filtering
   createdAt           DateTime    @default(now())
 
   agent   Agent?  @relation(fields: [agentId], references: [id])
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  card    Card?   @relation(fields: [cardId], references: [id])
 
   @@index([projectId])
   @@index([createdAt])
+  @@index([projectId, cardId])
   @@map("chat_messages")
 }
 
@@ -750,6 +756,7 @@ model Artifact {
   version    Int          @default(1)
   messageId  String?      // ChatMessage that generated this artifact
   cardId     String?      // Card this artifact belongs to (branch context)
+  module     String?      // Codebase module scope, inherited from card
   projectId  String
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
@@ -760,6 +767,7 @@ model Artifact {
   @@index([projectId])
   @@index([projectId, ownerAgent])
   @@index([cardId])
+  @@index([projectId, module])
   @@map("artifacts")
 }
 
@@ -797,6 +805,7 @@ model OrchestrationRun {
   startedAt    DateTime?                   // When processing began
   isBackground Boolean   @default(false)   // false = SSE interactive, true = background
   parentRunId  String?                     // For sub-tasks from delegation
+  cardId       String?                     // Scoped to a specific card/module
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 

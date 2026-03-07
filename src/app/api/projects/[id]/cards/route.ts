@@ -58,6 +58,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
       where.assigneeId = assigneeId;
     }
 
+    const module = searchParams.get('module');
+    if (module) {
+      where.module = module;
+    }
+
     const cards = await prisma.card.findMany({
       where,
       include: {
@@ -132,6 +137,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         ownerAgentId: data.ownerAgentId ?? null,
         parentId: data.parentId ?? null,
         linkedDecisionId: linkedDecisionId ?? null,
+        module: data.module ?? null,
       },
       include: {
         assignee: {

@@ -6,7 +6,7 @@ export const juniorDev: AgentDefinition = {
   group: 'ENGINEERING',
   temperature: 0.7,
   capabilities: ['implement_code'],
-  contextSources: ['project_info', 'documents', 'cards', 'chat_history'],
+  contextSources: ['project_info', 'documents', 'cards', 'chat_history', 'artifacts'],
   outputTypes: ['message', 'code_artifact', 'card'],
   authority: {
     canWrite: ['code_artifacts', 'cards'],
@@ -80,7 +80,7 @@ export const seniorDev: AgentDefinition = {
   group: 'ENGINEERING',
   temperature: 0.4,
   capabilities: ['implement_code', 'review_code'],
-  contextSources: ['project_info', 'documents', 'cards', 'chat_history', 'agents_status'],
+  contextSources: ['project_info', 'documents', 'cards', 'chat_history', 'agents_status', 'artifacts'],
   outputTypes: ['message', 'code_artifact', 'card'],
   authority: {
     canWrite: ['code_artifacts', 'cards'],
@@ -154,7 +154,7 @@ export const qaEngineer: AgentDefinition = {
   group: 'ENGINEERING',
   temperature: 0.3,
   capabilities: ['test_functionality'],
-  contextSources: ['cards', 'documents', 'project_info'],
+  contextSources: ['cards', 'documents', 'project_info', 'artifacts'],
   outputTypes: ['message', 'document', 'card'],
   authority: {
     canWrite: ['documents', 'cards'],
@@ -242,7 +242,7 @@ export const automationTest: AgentDefinition = {
   group: 'ENGINEERING',
   temperature: 0.4,
   capabilities: ['automate_tests'],
-  contextSources: ['project_info', 'documents', 'cards'],
+  contextSources: ['project_info', 'documents', 'cards', 'artifacts'],
   outputTypes: ['message', 'code_artifact', 'document'],
   authority: {
     canWrite: ['code_artifacts', 'documents'],
@@ -343,7 +343,7 @@ export const performanceEngineer: AgentDefinition = {
   group: 'ENGINEERING',
   temperature: 0.3,
   capabilities: ['perf_test'],
-  contextSources: ['project_info', 'documents', 'cards'],
+  contextSources: ['project_info', 'documents', 'cards', 'artifacts'],
   outputTypes: ['message', 'document', 'card', 'code_artifact'],
   authority: {
     canWrite: ['documents', 'cards', 'code_artifacts'],

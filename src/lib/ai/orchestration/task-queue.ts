@@ -13,6 +13,7 @@ export class TaskQueue {
     isBackground: boolean;
     priority?: number;
     parentRunId?: string;
+    cardId?: string;
   }): Promise<string> {
     // 1. Always create the Postgres record first (source of truth)
     const run = await prisma.orchestrationRun.create({
@@ -26,6 +27,7 @@ export class TaskQueue {
         isBackground: params.isBackground,
         priority: params.priority ?? 0,
         parentRunId: params.parentRunId ?? null,
+        cardId: params.cardId ?? null,
       },
     });
 

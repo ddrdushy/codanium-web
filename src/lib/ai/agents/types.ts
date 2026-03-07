@@ -23,14 +23,15 @@ export type AgentCapability =
 
 export type ContextSource =
   | 'project_info' | 'sdlc_stages' | 'cards' | 'decisions' | 'documents'
-  | 'chat_history' | 'agents_status' | 'llm_usage' | 'wireframes';
+  | 'chat_history' | 'agents_status' | 'llm_usage' | 'wireframes'
+  | 'artifacts';
 
 export type OutputType =
   | 'message' | 'document' | 'card' | 'decision' | 'state_change'
   | 'agent_assignment' | 'code_artifact' | 'wireframe';
 
 export type AgentAction =
-  | { type: 'create_card'; data: { title: string; description?: string; type?: string; priority?: string; parentId?: string } }
+  | { type: 'create_card'; data: { title: string; description?: string; type?: string; priority?: string; parentId?: string; module?: string } }
   | { type: 'update_card'; cardId: string; data: { state?: string; title?: string; priority?: string } }
   | { type: 'create_decision'; data: { trigger: string; context?: string; riskRating?: string; recommendation?: string; options?: Array<{ name: string; description?: string; pros?: string[]; cons?: string[]; risk?: string; effort?: string }> } }
   | { type: 'update_agent_status'; agentId: string; status: string; task?: string }

@@ -170,11 +170,11 @@ export class OrchestrationEngine {
   async *processStream(
     request: OrchestrationRequest,
   ): AsyncGenerator<SSEEvent, void, undefined> {
-    const { projectId, userMessage, userId } = request;
+    const { projectId, userMessage, userId, cardId } = request;
 
     try {
       // ── Step 1: Persist user message ──────────────────────────────────
-      await this.saveUserMessage(projectId, userMessage);
+      await this.saveUserMessage(projectId, userMessage, cardId);
 
       // ── Step 2: Determine target agent ────────────────────────────────
       const targetShortName = request.targetAgentShortName
@@ -194,8 +194,16 @@ export class OrchestrationEngine {
         `Processing: ${userMessage.slice(0, 80)}`,
       );
 
-      // ── Step 4: Build context ─────────────────────────────────────────
-      const context = await contextBuilder.build(agentDef, projectId);
+      // ── Step 4: Build context (with optional module scope) ────────────
+      let scope: { cardId?: string; module?: string } | undefined;
+      if (cardId) {
+        const card = await prisma.card.findUnique({
+          where: { id: cardId },
+          select: { module: true },
+        });
+        scope = { cardId, module: card?.module ?? undefined };
+      }
+      const context = await contextBuilder.build(agentDef, projectId, { scope });
 
       const messages: LLMMessage[] = [
         { role: 'system', content: context.systemMessage },
@@ -492,6 +500,7 @@ export class OrchestrationEngine {
                 projectId,
                 ownerAgentId: agentDbId ?? undefined,
                 parentId: action.data.parentId ?? undefined,
+                module: action.data.module ?? null,
               },
             });
 
@@ -799,12 +808,14 @@ export class OrchestrationEngine {
   private async saveUserMessage(
     projectId: string,
     content: string,
+    cardId?: string,
   ): Promise<{ id: string }> {
     return prisma.chatMessage.create({
       data: {
         role: 'USER',
         content,
         projectId,
+        cardId: cardId ?? null,
       },
       select: { id: true },
     });
@@ -1120,12 +1131,14 @@ import './event-handlers';
 export async function saveUserMessage(
   projectId: string,
   content: string,
+  cardId?: string,
 ): Promise<{ id: string }> {
   return prisma.chatMessage.create({
     data: {
       role: 'USER',
       content,
       projectId,
+      cardId: cardId ?? null,
     },
     select: { id: true },
   });

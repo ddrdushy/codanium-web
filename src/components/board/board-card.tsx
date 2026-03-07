@@ -1,14 +1,14 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useParams, useRouter } from 'next/navigation';
 import { Card } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { mockAgents } from '@/lib/mock-data';
-import { useDraggable } from '@dnd-kit/core';
 import {
   Layers, Box, Wrench, FlaskConical, AlertOctagon,
-  Clock, AlertTriangle, Flame, ChevronRight, GripVertical
+  Clock, AlertTriangle, Flame, ChevronRight, MessageSquare
 } from 'lucide-react';
 
 const typeConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
@@ -26,37 +26,31 @@ const priorityConfig: Record<string, { icon: React.ElementType; color: string; l
   critical: { icon: Flame, color: 'text-red-400', label: 'Crit' },
 };
 
-export function BoardCard({ card, index, isDragOverlay }: { card: Card; index: number; isDragOverlay?: boolean }) {
+export function BoardCard({ card, index }: { card: Card; index: number }) {
   const typeInfo = typeConfig[card.type] || typeConfig.Task;
   const priorityInfo = priorityConfig[card.priority] || priorityConfig.medium;
   const TypeIcon = typeInfo.icon;
   const PriorityIcon = priorityInfo.icon;
   const agent = mockAgents.find(a => a.id === card.owner_agent);
-
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: card.card_id,
-  });
+  const router = useRouter();
+  const params = useParams();
+  const projectId = params.id as string;
 
   return (
     <motion.div
-      ref={setNodeRef}
       initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
-      transition={{ delay: isDragOverlay ? 0 : index * 0.03, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      className={cn('card-lift', isDragging && 'opacity-40')}
-      {...attributes}
-      {...listeners}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.03, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
       <div
         className={cn(
-          'group rounded-lg border border-border bg-[var(--surface-raised)] p-3 cursor-grab active:cursor-grabbing',
+          'group rounded-lg border border-border bg-[var(--surface-raised)] p-3',
           'hover:border-white/10 transition-all duration-200',
           card.type === 'DecisionBlocker' && 'border-amber/20 bg-amber/[0.03]',
           card.type === 'Epic' && 'border-violet-500/15',
-          isDragOverlay && 'shadow-xl shadow-black/30 border-amber/30',
         )}
       >
-        {/* Top: Type badge + Priority + Drag handle */}
+        {/* Top: Type badge + Priority */}
         <div className="flex items-center justify-between mb-2">
           <Badge variant="outline" className={cn('text-[10px] font-semibold px-1.5 py-0 h-5 gap-1 border', typeInfo.bg, typeInfo.color)}>
             <TypeIcon className="w-2.5 h-2.5" />
@@ -82,24 +76,45 @@ export function BoardCard({ card, index, isDragOverlay }: { card: Card; index: n
           </p>
         )}
 
-        {/* Bottom: Agent + Children count */}
-        <div className="flex items-center justify-between">
-          {agent && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs">{agent.avatar}</span>
-              <span className="text-[10px] text-muted-foreground font-medium">{agent.shortName}</span>
-            </div>
-          )}
-          {card.children.length > 0 && (
-            <span className="text-[10px] text-muted-foreground/50 font-mono">
-              {card.children.length} sub
-            </span>
-          )}
-          {card.linked_decision_id && (
-            <Badge variant="outline" className="text-[10px] h-4 px-1 bg-amber/10 text-amber border-amber/20">
-              {card.linked_decision_id}
+        {/* Module badge */}
+        {card.module && (
+          <div className="mb-2">
+            <Badge variant="outline" className="text-[10px] text-amber border-amber/30 bg-amber/[0.06] px-1.5 py-0 h-4">
+              {card.module}
             </Badge>
-          )}
+          </div>
+        )}
+
+        {/* Bottom: Agent + Children count + Chat button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {agent && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs">{agent.avatar}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{agent.shortName}</span>
+              </div>
+            )}
+            {card.children.length > 0 && (
+              <span className="text-[10px] text-muted-foreground/50 font-mono">
+                {card.children.length} sub
+              </span>
+            )}
+            {card.linked_decision_id && (
+              <Badge variant="outline" className="text-[10px] h-4 px-1 bg-amber/10 text-amber border-amber/20">
+                {card.linked_decision_id}
+              </Badge>
+            )}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/project/${projectId}/chat?cardId=${card.card_id}`);
+            }}
+            className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-amber/10 text-muted-foreground hover:text-amber transition-all"
+            title="Chat about this card"
+          >
+            <MessageSquare className="w-3 h-3" />
+          </button>
         </div>
       </div>
     </motion.div>

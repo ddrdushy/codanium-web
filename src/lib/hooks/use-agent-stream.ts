@@ -186,6 +186,7 @@ export async function streamChat(
   agentShortName?: string,
   callbacks?: StreamCallbacks,
   signal?: AbortSignal,
+  cardId?: string,
 ): Promise<void> {
   const cbs = callbacks ?? {};
 
@@ -194,7 +195,7 @@ export async function streamChat(
     response = await fetch(`/api/projects/${projectId}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, agentShortName }),
+      body: JSON.stringify({ content, agentShortName, cardId }),
       signal,
     });
   } catch (err: unknown) {
@@ -285,7 +286,7 @@ export async function streamChat(
 
 export interface AgentStreamState {
   /** Send a message and start streaming the response */
-  send: (projectId: string, content: string, agentShortName?: string) => Promise<void>;
+  send: (projectId: string, content: string, agentShortName?: string, cardId?: string) => Promise<void>;
   /** Abort the current stream */
   stop: () => void;
   /** Whether a stream is currently in progress */
@@ -341,7 +342,7 @@ export function useAgentStream(): AgentStreamState {
   }, []);
 
   const send = useCallback(
-    async (projectId: string, content: string, agentShortName?: string) => {
+    async (projectId: string, content: string, agentShortName?: string, cardId?: string) => {
       // Abort any in-flight stream before starting a new one
       if (abortRef.current) {
         abortRef.current.abort();
@@ -400,6 +401,7 @@ export function useAgentStream(): AgentStreamState {
             },
           },
           controller.signal,
+          cardId,
         );
       } catch (err: unknown) {
         // Only set error if it's not an abort

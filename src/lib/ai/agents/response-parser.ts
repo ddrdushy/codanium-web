@@ -104,6 +104,7 @@ function parseAction(actionType: string, rawJson: string): AgentAction | null {
           type: parsed.type != null ? String(parsed.type) : undefined,
           priority: parsed.priority != null ? String(parsed.priority) : undefined,
           parentId: parsed.parentId != null ? String(parsed.parentId) : undefined,
+          module: parsed.module != null ? String(parsed.module) : undefined,
         },
       };
 

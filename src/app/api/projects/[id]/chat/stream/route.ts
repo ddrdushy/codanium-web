@@ -37,6 +37,8 @@ export async function POST(
   const isBackground = body.background === true;
   const targetAgent = body.agentShortName ?? 'BA'; // Default to BA
 
+  const cardId = body.cardId ?? undefined;
+
   // Create tracking record
   const runId = await taskQueue.enqueue({
     projectId,
@@ -45,6 +47,7 @@ export async function POST(
     targetAgent,
     autoRouted: !body.agentShortName,
     isBackground,
+    cardId,
   });
 
   if (isBackground) {
@@ -82,7 +85,7 @@ export async function POST(
         if (USE_LANGGRAPH) {
           // ── LangGraph Path ─────────────────────────────────────────────
           // Save user message first (graph nodes don't handle this)
-          await saveUserMessage(projectId, body.content.trim());
+          await saveUserMessage(projectId, body.content.trim(), cardId);
 
           const graph = buildOrchestrationGraph();
 
@@ -125,6 +128,7 @@ export async function POST(
             userMessage: body.content.trim(),
             targetAgentShortName: body.agentShortName ?? undefined,
             userId,
+            cardId,
           });
 
           for await (const event of generator) {

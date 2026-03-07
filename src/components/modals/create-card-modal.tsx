@@ -50,6 +50,7 @@ export function CreateCardModal({ open, onOpenChange, projectId, defaultState = 
   const [description, setDescription] = useState('');
   const [type, setType] = useState<string>('Task');
   const [priority, setPriority] = useState<string>('medium');
+  const [module, setModule] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -58,6 +59,7 @@ export function CreateCardModal({ open, onOpenChange, projectId, defaultState = 
     setDescription('');
     setType('Task');
     setPriority('medium');
+    setModule('');
     setError('');
   };
 
@@ -78,6 +80,7 @@ export function CreateCardModal({ open, onOpenChange, projectId, defaultState = 
           type: typeToDb[type] || 'TASK',
           state: stateToDb[defaultState] || 'PLANNED',
           priority: priorityToDb[priority] || 'MEDIUM',
+          module: module.trim() || undefined,
         }),
       });
 
@@ -101,6 +104,7 @@ export function CreateCardModal({ open, onOpenChange, projectId, defaultState = 
         priority: (dbToPriority[raw.priority] || 'medium') as Card['priority'],
         created_at: raw.createdAt,
         updated_at: raw.updatedAt ?? raw.createdAt,
+        module: raw.module ?? undefined,
       };
 
       onCardCreated?.(newCard);
@@ -146,6 +150,18 @@ export function CreateCardModal({ open, onOpenChange, projectId, defaultState = 
               rows={2}
               className="bg-[var(--surface-raised)] border-border resize-none"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="card-module" className="text-xs text-muted-foreground">Module</Label>
+            <Input
+              id="card-module"
+              placeholder="e.g. auth, payments, dashboard"
+              value={module}
+              onChange={(e) => setModule(e.target.value)}
+              className="bg-[var(--surface-raised)] border-border"
+            />
+            <p className="text-[10px] text-muted-foreground/50">Scope this card to a module for focused AI context</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

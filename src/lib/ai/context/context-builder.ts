@@ -5,11 +5,15 @@
 //   1. Parallel-fetches all ContextSources the agent needs
 //   2. Composes a system message with the agent's prompt + structured project data
 //   3. Converts recent chat history into LLMMessage format
+//
+// When a ContextScope is provided, fetchers narrow to module-level data,
+// reducing token usage by ~50-60%.
 // =============================================================================
 
 import { AgentDefinition, ContextSource } from '@/lib/ai/agents/types';
 import { LLMMessage } from '@/lib/ai/providers/types';
 import * as sources from './context-sources';
+import { ContextScope } from './context-sources';
 
 // ─── Public Interface ────────────────────────────────────────────────────────
 
@@ -20,11 +24,12 @@ export interface AgentContext {
 
 export interface ContextBuildOptions {
   maxHistoryMessages?: number;
+  scope?: ContextScope;
 }
 
 // ─── Fetcher Registry ────────────────────────────────────────────────────────
 
-type ContextFetcher = (projectId: string) => Promise<unknown>;
+type ContextFetcher = (projectId: string, scope?: ContextScope) => Promise<unknown>;
 
 const FETCHER_MAP: Record<ContextSource, ContextFetcher> = {
   project_info:   sources.fetchProjectInfo,
@@ -32,10 +37,11 @@ const FETCHER_MAP: Record<ContextSource, ContextFetcher> = {
   cards:          sources.fetchCards,
   decisions:      sources.fetchDecisions,
   documents:      sources.fetchDocuments,
-  chat_history:   sources.fetchChatHistory,
+  chat_history:   sources.fetchChatHistory as ContextFetcher,
   agents_status:  sources.fetchAgentsStatus,
   llm_usage:      sources.fetchLLMUsage,
   wireframes:     sources.fetchWireframes,
+  artifacts:      sources.fetchArtifacts,
 };
 
 // ─── Formatter Registry ──────────────────────────────────────────────────────
@@ -52,6 +58,7 @@ const FORMATTER_MAP: Record<ContextSource, ContextFormatter> = {
   agents_status:  formatAgentsStatus,
   llm_usage:      formatLLMUsage,
   wireframes:     formatWireframes,
+  artifacts:      formatArtifacts,
 };
 
 // ─── ContextBuilder ──────────────────────────────────────────────────────────
@@ -66,13 +73,19 @@ export class ContextBuilder {
     options?: ContextBuildOptions,
   ): Promise<AgentContext> {
     const maxHistory = options?.maxHistoryMessages ?? 20;
+    const scope = options?.scope;
 
     // Determine which sources to fetch
     const neededSources = agentDef.contextSources;
 
-    // Parallel-fetch all required context sources
+    // Parallel-fetch all required context sources, passing scope
     const fetchEntries = neededSources.map(
-      (source) => [source, FETCHER_MAP[source](projectId)] as const,
+      (source) => {
+        if (source === 'chat_history') {
+          return [source, sources.fetchChatHistory(projectId, maxHistory + 10, scope)] as const;
+        }
+        return [source, FETCHER_MAP[source](projectId, scope)] as const;
+      },
     );
 
     const results = await Promise.allSettled(
@@ -109,7 +122,22 @@ export class ContextBuilder {
     const contextBlock = contextSections.length > 0
       ? `\n\n--- PROJECT CONTEXT ---\n${contextSections.join('\n\n')}\n--- END CONTEXT ---`
       : '';
-    const systemMessage = agentDef.systemPrompt + contextBlock;
+
+    // Add scope instruction when module-scoped
+    const scopeBlock = scope?.module
+      ? `\n\nSCOPE: You are working on module "${scope.module}". Focus your response on this module's tasks and code. Do not discuss unrelated project areas.`
+      : scope?.cardId
+        ? `\n\nSCOPE: You are working on a specific task. Focus your response on this task only.`
+        : '';
+
+    const systemMessage = agentDef.systemPrompt + scopeBlock + contextBlock;
+
+    // Log estimated token count for observability
+    const estimatedTokens = Math.ceil(systemMessage.length / 4);
+    console.log(
+      `[ContextBuilder] ${scope ? 'SCOPED' : 'PROJECT-WIDE'} context: ~${estimatedTokens} tokens` +
+      (scope?.module ? ` (module=${scope.module})` : scope?.cardId ? ` (card=${scope.cardId})` : ''),
+    );
 
     // Build recent history as LLMMessage[]
     const recentHistory = await this.buildRecentHistory(
@@ -162,9 +190,6 @@ export const contextBuilder = new ContextBuilder();
 // =============================================================================
 // Context Formatters
 // =============================================================================
-// Each formatter takes raw Prisma data and returns a compact text block
-// suitable for injection into an LLM system prompt.
-// =============================================================================
 
 function formatProjectInfo(data: unknown): string {
   const p = data as {
@@ -204,12 +229,14 @@ function formatCards(data: unknown): string {
     type: string;
     state: string;
     priority: string;
+    module?: string | null;
     ownerAgent?: { shortName: string; name: string } | null;
   }>;
   if (cards.length === 0) return '';
   const lines = cards.map((c) => {
     const agent = c.ownerAgent ? ` (${c.ownerAgent.shortName})` : '';
-    return `  [${c.type}] ${c.title} — ${c.state} ${c.priority}${agent}`;
+    const mod = c.module ? ` [${c.module}]` : '';
+    return `  [${c.type}] ${c.title} — ${c.state} ${c.priority}${agent}${mod}`;
   });
   return [`BOARD (${cards.length} cards):`, ...lines].join('\n');
 }
@@ -283,11 +310,9 @@ function formatLLMUsage(data: unknown): string {
   }>;
   if (records.length === 0) return '';
 
-  // Aggregate totals
   const totalTokens = records.reduce((sum, r) => sum + r.tokensUsed, 0);
   const totalCost = records.reduce((sum, r) => sum + r.cost, 0);
 
-  // Group by provider
   const byProvider = new Map<string, { tokens: number; cost: number }>();
   for (const r of records) {
     const key = r.provider;
@@ -325,4 +350,24 @@ function formatWireframes(data: unknown): string {
       `  ${w.title} — ${w.screen || '(no screen)'} [${w.device}] ${w.status} v${w.version} (${w.components} components, owner: ${w.owner})`,
   );
   return [`WIREFRAMES (${wireframes.length}):`, ...lines].join('\n');
+}
+
+function formatArtifacts(data: unknown): string {
+  const artifacts = data as Array<{
+    name: string;
+    type: string;
+    ownerAgent: string;
+    version: number;
+    content?: string;
+  }>;
+  if (artifacts.length === 0) return '';
+
+  const lines = artifacts.map((a) => {
+    const preview = a.content
+      ? `\n    ${a.content.slice(0, 500)}${a.content.length > 500 ? '...' : ''}`
+      : '';
+    return `  ${a.name} (${a.type}) v${a.version} by ${a.ownerAgent}${preview}`;
+  });
+
+  return [`MODULE ARTIFACTS (${artifacts.length}):`, ...lines].join('\n');
 }

@@ -21,6 +21,8 @@ export interface OrchestrationRequest {
   targetAgentShortName?: string;
   /** Authenticated user ID (owner of the message). */
   userId: string;
+  /** Optional card ID to scope context to a specific card/module. */
+  cardId?: string;
 }
 
 /**

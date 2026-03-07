@@ -15,6 +15,7 @@ export interface Card {
   created_at: string;
   updated_at: string;
   linked_decision_id?: string;
+  module?: string;
 }
 
 // ─── Decision Types ───

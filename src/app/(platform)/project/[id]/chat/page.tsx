@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAgents } from '@/lib/api';
 import { mockAgents } from '@/lib/mock-data';
@@ -14,7 +14,7 @@ import {
   Send, Bot, User, Sparkles, ChevronDown, Paperclip,
   Code2, FileText, CheckCircle2, AlertTriangle, Clock,
   MessageSquare, Zap, Eye, Terminal, Copy, ThumbsUp,
-  RotateCcw, ArrowRight, Loader2, Square, Settings, TestTube
+  RotateCcw, ArrowRight, Loader2, Square, Settings, TestTube, X
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -57,6 +57,9 @@ function formatTime(iso: string): string {
 export default function ChatPage() {
   const params = useParams();
   const projectId = params.id as string;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const cardId = searchParams.get('cardId') ?? undefined;
 
   const [agents, setAgents] = useState<Agent[]>(mockAgents);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -179,8 +182,8 @@ export default function ChatPage() {
     }
 
     // Start AI streaming via the orchestration engine
-    streamSend(projectId, text, selectedAgent?.shortName);
-  }, [inputValue, isStreaming, projectId, selectedAgent, streamSend]);
+    streamSend(projectId, text, selectedAgent?.shortName, cardId);
+  }, [inputValue, isStreaming, projectId, selectedAgent, streamSend, cardId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -206,6 +209,22 @@ export default function ChatPage() {
             </Button>
           </div>
         </div>
+
+        {cardId && (
+          <div className="px-6 py-2 bg-amber/[0.06] border-b border-amber/20 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5 text-amber" />
+              <span className="text-[11px] text-amber font-medium">Scoped to card</span>
+              <span className="text-[10px] text-muted-foreground/60">AI context focused on this task&apos;s module</span>
+            </div>
+            <button
+              onClick={() => router.push(`/project/${projectId}/chat`)}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-foreground transition-colors"
+            >
+              <X className="w-3 h-3" /> Clear scope
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto space-y-4">

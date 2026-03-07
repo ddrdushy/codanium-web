@@ -42,6 +42,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       'ownerAgentId',
       'parentId',
       'linkedDecisionId',
+      'module',
     ];
 
     const data: Record<string, unknown> = {};

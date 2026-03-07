@@ -4,8 +4,6 @@ import { CardState, Card } from '@/types';
 import { cn } from '@/lib/utils';
 import { BoardCard } from './board-card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus } from 'lucide-react';
-import { useDroppable } from '@dnd-kit/core';
 
 const stateConfig: Record<CardState, { color: string; dot: string; glow?: string }> = {
   'Planned':      { color: 'text-zinc-400',     dot: 'bg-zinc-500' },
@@ -17,18 +15,14 @@ const stateConfig: Record<CardState, { color: string; dot: string; glow?: string
   'Released':     { color: 'text-amber',        dot: 'bg-amber',        glow: 'shadow-[0_0_8px_rgba(245,158,11,0.3)]' },
 };
 
-export function BoardColumn({ state, cards, onAddCard }: { state: CardState; cards: Card[]; onAddCard?: (state: CardState) => void }) {
+export function BoardColumn({ state, cards }: { state: CardState; cards: Card[] }) {
   const config = stateConfig[state];
-  const { setNodeRef, isOver } = useDroppable({ id: state });
 
   return (
     <div
-      ref={setNodeRef}
       className={cn(
         'kanban-column flex flex-col min-w-[280px] max-w-[320px] w-full rounded-xl border bg-[var(--surface)]/50 transition-all duration-200',
-        isOver
-          ? 'border-amber/40 bg-amber/[0.03] shadow-[0_0_20px_rgba(245,158,11,0.08)]'
-          : 'border-border'
+        'border-border'
       )}
     >
       {/* Column Header */}
@@ -42,25 +36,14 @@ export function BoardColumn({ state, cards, onAddCard }: { state: CardState; car
             {cards.length}
           </span>
         </div>
-        <button
-          onClick={() => onAddCard?.(state)}
-          className="p-1 rounded-md hover:bg-white/[0.06] text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
       </div>
 
       {/* Cards */}
       <ScrollArea className="flex-1 max-h-[calc(100vh-12rem)]">
         <div className="p-2 space-y-2">
           {cards.length === 0 ? (
-            <div className={cn(
-              'flex items-center justify-center py-8 text-xs border border-dashed rounded-lg transition-colors',
-              isOver
-                ? 'text-amber/60 border-amber/30 bg-amber/[0.03]'
-                : 'text-muted-foreground/40 border-border'
-            )}>
-              {isOver ? 'Drop here' : 'No cards'}
+            <div className="flex items-center justify-center py-8 text-xs border border-dashed rounded-lg text-muted-foreground/40 border-border">
+              No cards
             </div>
           ) : (
             cards.map((card, i) => (
