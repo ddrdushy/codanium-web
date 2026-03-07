@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-guard';
 import { randomBytes } from 'crypto';
+import { validateBody } from '@/lib/validations/validate';
+import { createWebhookSchema } from '@/lib/validations/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,31 +94,18 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { url, events, description } = body;
-
-    // Validate URL
-    if (!url || typeof url !== 'string') {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
-    }
-
-    try {
-      const parsed = new URL(url);
-      if (!['https:', 'http:'].includes(parsed.protocol)) {
-        return NextResponse.json({ error: 'URL must use HTTPS or HTTP' }, { status: 400 });
-      }
-    } catch {
-      return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
-    }
+    const { data, error: validationError } = validateBody(createWebhookSchema, body);
+    if (validationError) return validationError;
 
     // Generate shared secret
     const secret = randomBytes(32).toString('hex');
 
     const endpoint = await prisma.webhookEndpoint.create({
       data: {
-        url,
+        url: data.url,
         secret,
-        events: Array.isArray(events) ? events : [],
-        description: typeof description === 'string' ? description : '',
+        events: data.events ?? [],
+        description: data.description ?? '',
         projectId: id,
       },
     });

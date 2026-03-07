@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-guard';
+import { validateBody } from '@/lib/validations/validate';
+import { createCardSchema } from '@/lib/validations/schemas';
 import type { CardState, CardType, Priority } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
@@ -113,26 +115,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const { title, description, type, state, priority, assigneeId, ownerAgentId, parentId, linkedDecisionId } = body;
+    const { data, error: validationError } = validateBody(createCardSchema, body);
+    if (validationError) return validationError;
 
-    if (!title || typeof title !== 'string') {
-      return NextResponse.json(
-        { error: 'Card title is required' },
-        { status: 400 }
-      );
-    }
+    const linkedDecisionId = body.linkedDecisionId;
 
     const card = await prisma.card.create({
       data: {
-        title: title.trim(),
-        description: description?.trim() ?? '',
-        type: type ?? 'TASK',
-        state: state ?? 'PLANNED',
-        priority: priority ?? 'MEDIUM',
+        title: data.title,
+        description: data.description ?? '',
+        type: data.type,
+        state: data.state,
+        priority: data.priority,
         projectId,
-        assigneeId: assigneeId ?? null,
-        ownerAgentId: ownerAgentId ?? null,
-        parentId: parentId ?? null,
+        assigneeId: data.assigneeId ?? null,
+        ownerAgentId: data.ownerAgentId ?? null,
+        parentId: data.parentId ?? null,
         linkedDecisionId: linkedDecisionId ?? null,
       },
       include: {

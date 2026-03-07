@@ -16,6 +16,8 @@ interface PreviewState {
   // Preview tier
   tier: PreviewTier;
   setTier: (tier: PreviewTier) => void;
+  allowedTiers: PreviewTier[];
+  setAllowedTiers: (tiers: PreviewTier[]) => void;
 
   // Status
   status: PreviewStatus;
@@ -60,6 +62,8 @@ export const usePreviewStore = create<PreviewState>((set) => ({
   // Preview tier
   tier: 'sandpack',
   setTier: (tier) => set({ tier }),
+  allowedTiers: ['sandpack'],
+  setAllowedTiers: (allowedTiers) => set({ allowedTiers }),
 
   // Status
   status: 'idle',

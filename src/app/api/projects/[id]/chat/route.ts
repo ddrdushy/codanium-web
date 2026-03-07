@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-guard';
+import { validateBody } from '@/lib/validations/validate';
+import { chatMessageSchema } from '@/lib/validations/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,21 +48,19 @@ export async function POST(
 ) {
   try {
     const { id: projectId } = await params;
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
     const body = await request.json();
-
-    if (!body.content?.trim()) {
-      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
-    }
-
-    const validRoles = ['USER', 'AGENT', 'SYSTEM'];
-    const role = validRoles.includes(body.role) ? body.role : 'USER';
+    const { data, error: validationError } = validateBody(chatMessageSchema, body);
+    if (validationError) return validationError;
 
     const message = await prisma.chatMessage.create({
       data: {
-        role,
-        content: body.content.trim(),
-        thinking: body.thinking?.trim() ?? null,
-        agentId: body.agentId ?? null,
+        role: data.role,
+        content: data.content,
+        thinking: data.thinking ?? null,
+        agentId: data.agentId ?? null,
         projectId,
       },
       include: {

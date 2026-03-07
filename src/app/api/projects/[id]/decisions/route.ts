@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-guard';
+import { validateBody } from '@/lib/validations/validate';
+import { createDecisionSchema } from '@/lib/validations/schemas';
 import type { RiskRating, Effort } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
@@ -87,46 +89,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const { trigger, context: decisionContext, riskRating, recommendation, ownerId, options } = body;
+    const { data, error: validationError } = validateBody(createDecisionSchema, body);
+    if (validationError) return validationError;
 
-    if (!trigger || typeof trigger !== 'string') {
-      return NextResponse.json(
-        { error: 'Decision trigger is required' },
-        { status: 400 }
-      );
-    }
-
-    if (!ownerId || typeof ownerId !== 'string') {
-      return NextResponse.json(
-        { error: 'Owner ID is required' },
-        { status: 400 }
-      );
-    }
+    const recommendation = body.recommendation;
 
     const decision = await prisma.decision.create({
       data: {
-        trigger: trigger.trim(),
-        context: decisionContext?.trim() ?? '',
-        riskRating: riskRating ?? 'MEDIUM',
+        trigger: data.trigger,
+        context: data.context ?? '',
+        riskRating: data.riskRating ?? 'MEDIUM',
         recommendation: recommendation?.trim() ?? '',
-        ownerId,
+        ownerId: data.ownerId,
         projectId,
-        options: options && Array.isArray(options) && options.length > 0
+        options: data.options && data.options.length > 0
           ? {
-              create: options.map((opt: {
-                name: string;
-                description?: string;
-                pros?: string[];
-                cons?: string[];
-                risk?: RiskRating;
-                effort?: Effort;
-              }) => ({
-                name: opt.name.trim(),
+              create: data.options.map((opt) => ({
+                name: opt.title,
                 description: opt.description?.trim() ?? '',
                 pros: opt.pros ?? [],
                 cons: opt.cons ?? [],
-                risk: opt.risk ?? ('MEDIUM' as RiskRating),
-                effort: opt.effort ?? ('MEDIUM' as Effort),
+                risk: 'MEDIUM' as RiskRating,
+                effort: 'MEDIUM' as Effort,
               })),
             }
           : undefined,

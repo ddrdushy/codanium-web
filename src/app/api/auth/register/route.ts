@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { generateToken, hashToken, getAppUrl } from '@/lib/email';
 import { addEmailJob } from '@/lib/queue';
 import { isRedisAvailable } from '@/lib/redis';
+import { validateBody } from '@/lib/validations/validate';
+import { registerSchema } from '@/lib/validations/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,31 +19,11 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, invitationToken } = body;
+    const { data, error: validationError } = validateBody(registerSchema, body);
+    if (validationError) return validationError;
 
-    // ── Validate inputs ──────────────────────────────────────────────────────
-    if (!name || typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 100) {
-      return NextResponse.json(
-        { error: 'Name must be between 2 and 100 characters' },
-        { status: 400 },
-      );
-    }
-
-    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json(
-        { error: 'A valid email address is required' },
-        { status: 400 },
-      );
-    }
-
-    if (!password || typeof password !== 'string' || password.length < 6) {
-      return NextResponse.json(
-        { error: 'Password must be at least 6 characters' },
-        { status: 400 },
-      );
-    }
-
-    const normalizedEmail = email.toLowerCase().trim();
+    const invitationToken = body.invitationToken;
+    const normalizedEmail = data.email.toLowerCase();
 
     // ── Check for existing user ──────────────────────────────────────────────
     const existing = await prisma.user.findUnique({
@@ -56,11 +38,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Create user ──────────────────────────────────────────────────────────
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(data.password, 12);
 
     const user = await prisma.user.create({
       data: {
-        name: name.trim(),
+        name: data.name,
         email: normalizedEmail,
         passwordHash,
         role: 'USER',

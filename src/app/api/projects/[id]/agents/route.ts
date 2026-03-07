@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-guard';
+import { validateBody } from '@/lib/validations/validate';
+import { updateAgentSchema } from '@/lib/validations/schemas';
 import type { AgentGroup } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
@@ -89,18 +91,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (error) return error;
     const body = await request.json();
 
-    const { agentId, status, currentTask } = body;
-
-    if (!agentId || typeof agentId !== 'string') {
-      return NextResponse.json(
-        { error: 'Agent ID is required' },
-        { status: 400 }
-      );
-    }
+    const { data, error: validationError } = validateBody(updateAgentSchema, body);
+    if (validationError) return validationError;
 
     // Verify agent exists and belongs to project
     const existing = await prisma.agent.findFirst({
-      where: { id: agentId, projectId },
+      where: { id: data.agentId, projectId },
     });
 
     if (!existing) {
@@ -110,17 +106,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const data: Record<string, unknown> = {};
+    const updateData: Record<string, unknown> = {};
 
-    if (status !== undefined) {
-      data.status = status;
+    if (data.status !== undefined) {
+      updateData.status = data.status;
     }
 
-    if (currentTask !== undefined) {
-      data.currentTask = currentTask;
+    if (data.currentTask !== undefined) {
+      updateData.currentTask = data.currentTask;
     }
 
-    if (Object.keys(data).length === 0) {
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { error: 'No valid fields to update' },
         { status: 400 }
@@ -128,8 +124,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const agent = await prisma.agent.update({
-      where: { id: agentId },
-      data,
+      where: { id: data.agentId },
+      data: updateData,
       include: {
         _count: {
           select: { cards: true },

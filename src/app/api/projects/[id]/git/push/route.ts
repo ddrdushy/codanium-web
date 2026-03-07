@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-guard';
 import { addGitPushJob } from '@/lib/queue/git-push-queue';
 import { isRedisAvailable } from '@/lib/redis';
+import { validateBody } from '@/lib/validations/validate';
+import { gitPushSchema } from '@/lib/validations/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,23 +77,16 @@ export async function POST(
       );
     }
 
-    // Parse request body
+    // Parse and validate request body
     const body = await request.json().catch(() => ({}));
-    const timestamp = Date.now();
-    const branchName = body.branchName?.trim()
-      || `ai-team-studio/delivery-${timestamp}`;
-    const commitMessage = body.commitMessage?.trim()
-      || 'AI Team Studio: deliver project artifacts';
-    const createPR = body.createPR !== false; // default true
-    const prTitle = body.prTitle?.trim() || undefined;
+    const { data: pushData, error: validationError } = validateBody(gitPushSchema, body);
+    if (validationError) return validationError;
 
-    // Validate branch name
-    if (!/^[a-zA-Z0-9._\-/]+$/.test(branchName)) {
-      return NextResponse.json(
-        { error: 'Invalid branch name. Use only letters, numbers, dots, dashes, underscores, and slashes.' },
-        { status: 400 },
-      );
-    }
+    const timestamp = Date.now();
+    const branchName = pushData.branchName || `ai-team-studio/delivery-${timestamp}`;
+    const commitMessage = pushData.commitMessage || 'AI Team Studio: deliver project artifacts';
+    const createPR = pushData.createPR;
+    const prTitle = body.prTitle?.trim() || undefined;
 
     // Prevent pushing to default branch
     const defaultBranch = project.gitDefaultBranch ?? 'main';

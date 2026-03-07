@@ -31,6 +31,7 @@ import {
   Zap,
   Server,
   Layers,
+  Lock,
 } from 'lucide-react';
 import { SandpackPreviewAdapter } from './sandpack-preview';
 import { WebContainerPreview } from './webcontainer-preview';
@@ -76,6 +77,8 @@ export function PreviewPanel() {
     setOpen,
     tier,
     setTier,
+    allowedTiers,
+    setAllowedTiers,
     status,
     device,
     setDevice,
@@ -92,6 +95,24 @@ export function PreviewPanel() {
   const [fullscreen, setFullscreen] = useState(false);
   const [showTierMenu, setShowTierMenu] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Fetch allowed tiers from API based on user's plan
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/preview`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.allowedTiers) {
+          setAllowedTiers(data.allowedTiers);
+          // If current tier is not allowed, fall back to sandpack
+          if (!data.allowedTiers.includes(tier)) {
+            setTier('sandpack');
+          }
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   // Fetch artifacts for preview
   const [artifacts, setArtifacts] = useState<
@@ -254,48 +275,73 @@ export function PreviewPanel() {
                 className="fixed inset-0 z-40"
                 onClick={() => setShowTierMenu(false)}
               />
-              <div className="absolute right-0 top-8 z-50 w-48 bg-[var(--surface)] border border-border rounded-lg shadow-lg overflow-hidden">
+              <div className="absolute right-0 top-8 z-50 w-52 bg-[var(--surface)] border border-border rounded-lg shadow-lg overflow-hidden">
                 {(Object.entries(TIER_CONFIG) as [PreviewTier, typeof tierConfig][]).map(
-                  ([key, config]) => (
-                    <button
-                      key={key}
-                      onClick={() => {
-                        setTier(key);
-                        setShowTierMenu(false);
-                      }}
-                      className={cn(
-                        'flex items-center gap-2 w-full px-3 py-2 text-left text-xs transition-colors',
-                        tier === key
-                          ? 'bg-[var(--surface-raised)]'
-                          : 'hover:bg-[var(--surface-raised)]',
-                      )}
-                    >
-                      <config.icon
-                        className="w-3.5 h-3.5"
-                        style={{ color: config.color }}
-                      />
-                      <div>
-                        <div className="font-medium text-foreground">
-                          {config.label}
+                  ([key, config]) => {
+                    const isAllowed = allowedTiers.includes(key);
+                    const upgradeLabel = key === 'webcontainer' ? 'Pro' : key === 'cloud' ? 'Enterprise' : null;
+
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          if (!isAllowed) return;
+                          // Persist tier change to server
+                          fetch(`/api/projects/${projectId}/preview`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tier: key }),
+                          }).catch(() => {});
+                          setTier(key);
+                          setShowTierMenu(false);
+                        }}
+                        disabled={!isAllowed}
+                        className={cn(
+                          'flex items-center gap-2 w-full px-3 py-2 text-left text-xs transition-colors',
+                          !isAllowed && 'opacity-50 cursor-not-allowed',
+                          tier === key
+                            ? 'bg-[var(--surface-raised)]'
+                            : isAllowed
+                              ? 'hover:bg-[var(--surface-raised)]'
+                              : '',
+                        )}
+                      >
+                        <config.icon
+                          className="w-3.5 h-3.5"
+                          style={{ color: isAllowed ? config.color : undefined }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className={cn(
+                            'font-medium',
+                            isAllowed ? 'text-foreground' : 'text-muted-foreground',
+                          )}>
+                            {config.label}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {config.description}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {config.description}
-                        </div>
-                      </div>
-                      {tier === key && (
-                        <Badge
-                          variant="outline"
-                          className="ml-auto text-[8px] px-1 py-0"
-                          style={{
-                            color: config.color,
-                            borderColor: config.color + '40',
-                          }}
-                        >
-                          Active
-                        </Badge>
-                      )}
-                    </button>
-                  ),
+                        {tier === key && isAllowed && (
+                          <Badge
+                            variant="outline"
+                            className="ml-auto text-[8px] px-1 py-0 shrink-0"
+                            style={{
+                              color: config.color,
+                              borderColor: config.color + '40',
+                            }}
+                          >
+                            Active
+                          </Badge>
+                        )}
+                        {!isAllowed && upgradeLabel && (
+                          <span className="ml-auto flex items-center gap-1 text-[9px] text-muted-foreground/60 shrink-0">
+                            <Lock className="w-2.5 h-2.5" />
+                            {upgradeLabel}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  },
                 )}
               </div>
             </>

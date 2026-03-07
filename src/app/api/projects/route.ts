@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-guard';
 import { seedProject, autoKickoffBA } from '@/lib/project-seed';
+import { validateBody } from '@/lib/validations/validate';
+import { createProjectSchema } from '@/lib/validations/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,20 +82,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const userId = (session.user as any)?.id;
-    const { name, description, color } = body;
-
-    if (!name || typeof name !== 'string') {
-      return NextResponse.json(
-        { error: 'Project name is required' },
-        { status: 400 }
-      );
-    }
+    const { data, error: validationError } = validateBody(createProjectSchema, body);
+    if (validationError) return validationError;
 
     const project = await prisma.project.create({
       data: {
-        name: name.trim(),
-        description: description?.trim() ?? '',
-        color: color ?? '#f59e0b',
+        name: data.name,
+        description: data.description ?? '',
+        color: data.color ?? '#f59e0b',
         ownerId: userId,
         members: {
           create: {
@@ -121,8 +117,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Auto-kickoff BA agent (async background job)
-    if (description?.trim()) {
-      autoKickoffBA(project.id, description.trim(), userId)
+    if (data.description) {
+      autoKickoffBA(project.id, data.description, userId)
         .then((runId) => console.log(`[Project ${project.id}] BA kickoff queued: ${runId}`))
         .catch((err) => console.error('BA auto-kickoff failed (non-fatal):', err));
     }

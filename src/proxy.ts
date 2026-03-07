@@ -1,10 +1,54 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Check for NextAuth session token cookie
+  // ── API Rate Limiting ──────────────────────────────────────────────────────
+  if (pathname.startsWith('/api/')) {
+    // Skip rate limiting for inbound webhooks (Stripe, GitHub)
+    if (
+      !pathname.startsWith('/api/webhooks/stripe') &&
+      !pathname.startsWith('/api/webhooks/github')
+    ) {
+      const sessionToken =
+        request.cookies.get('authjs.session-token')?.value ||
+        request.cookies.get('__Secure-authjs.session-token')?.value;
+
+      const authHeader = request.headers.get('authorization') ?? '';
+      const apiKey = authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7, 19) // prefix only — don't expose full key
+        : null;
+
+      const ip =
+        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+        request.headers.get('x-real-ip') ??
+        'unknown';
+
+      const identifier = sessionToken?.slice(0, 16) ?? apiKey ?? `ip:${ip}`;
+      const method = request.method;
+      const isAuth = pathname.startsWith('/api/auth/');
+
+      let category: 'read' | 'mutation' | 'auth' = 'read';
+      if (isAuth) {
+        category = 'auth';
+      } else if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        category = 'mutation';
+      }
+
+      try {
+        const blocked = await rateLimit(identifier, category);
+        if (blocked) return blocked;
+      } catch {
+        // If rate-limit check fails (Redis down), allow through
+      }
+    }
+
+    return NextResponse.next();
+  }
+
+  // ── Page Auth ──────────────────────────────────────────────────────────────
   const sessionToken =
     request.cookies.get('authjs.session-token')?.value ||
     request.cookies.get('__Secure-authjs.session-token')?.value;
