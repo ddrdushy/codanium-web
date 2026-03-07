@@ -13,17 +13,17 @@ import type {
 
 // ─── Enum Mappers (DB UPPERCASE → Frontend lowercase/Title Case) ─────────────
 
-const mapProjectStatus = (s: string) =>
+export const mapProjectStatus = (s: string) =>
   s.toLowerCase() as Project['status'];
 
-const mapCardType = (t: string): Card['type'] => {
+export const mapCardType = (t: string): Card['type'] => {
   const map: Record<string, Card['type']> = {
     EPIC: 'Epic', FEATURE: 'Feature', TASK: 'Task', QA: 'QA', DECISION_BLOCKER: 'DecisionBlocker',
   };
   return map[t] ?? 'Task';
 };
 
-const mapCardState = (s: string): Card['state'] => {
+export const mapCardState = (s: string): Card['state'] => {
   const map: Record<string, Card['state']> = {
     PLANNED: 'Planned', IN_PROGRESS: 'In Progress', UNDER_REVIEW: 'Under Review',
     TESTING: 'Testing', BLOCKED: 'Blocked', DONE: 'Done', RELEASED: 'Released',
@@ -31,26 +31,26 @@ const mapCardState = (s: string): Card['state'] => {
   return map[s] ?? 'Planned';
 };
 
-const mapPriority = (p: string): Card['priority'] =>
+export const mapPriority = (p: string): Card['priority'] =>
   p.toLowerCase() as Card['priority'];
 
-const mapAgentGroup = (g: string): Agent['group'] =>
+export const mapAgentGroup = (g: string): Agent['group'] =>
   g.toLowerCase() as Agent['group'];
 
-const mapAgentStatus = (s: string): Agent['status'] =>
+export const mapAgentStatus = (s: string): Agent['status'] =>
   s.toLowerCase() as Agent['status'];
 
-const mapRisk = (r: string) => {
+export const mapRisk = (r: string) => {
   const map: Record<string, string> = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High', CRITICAL: 'Critical' };
   return map[r] ?? 'Medium';
 };
 
-const mapEffort = (e: string) => {
+export const mapEffort = (e: string) => {
   const map: Record<string, string> = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' };
   return map[e] ?? 'Medium';
 };
 
-const mapDecisionStatus = (s: string) => {
+export const mapDecisionStatus = (s: string) => {
   const map: Record<string, string> = {
     DRAFTED: 'Drafted', OPTIONS_COLLECTED: 'Options Collected',
     RECOMMENDED: 'Recommended', AWAITING_APPROVAL: 'Awaiting Approval',
@@ -62,7 +62,7 @@ const mapDecisionStatus = (s: string) => {
 
 // ─── Date Formatter ──────────────────────────────────────────────────────────
 
-function formatRelativeDate(iso: string): string {
+export function formatRelativeDate(iso: string): string {
   const date = new Date(iso);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
