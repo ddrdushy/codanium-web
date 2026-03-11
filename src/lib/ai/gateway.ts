@@ -5,9 +5,12 @@
 // Handles BYOM (Bring Your Own Model) config resolution, provider dispatch,
 // latency measurement, and usage logging.
 //
-// Resolution priority: Agent-level -> Project-level -> User-level -> Mock
-// When real provider configs are added to the DB, the resolve() method will
-// query them. Until then, all traffic routes through the MockProvider.
+// Resolution priority (BYOM — each user brings their own model):
+//   1. Agent-level DB config (per-agent override)
+//   2. Project-level DB config
+//   3. User-level DB config  ← main BYOM path (Platform Settings drawer)
+//   4. Admin settings (DB global default)
+//   5. Mock fallback (demo mode)
 // =============================================================================
 
 import {
@@ -50,82 +53,103 @@ export class LLMGateway {
   /**
    * Resolve which provider + config to use for a given request scope.
    *
-   * Resolution priority:
-   *   1. Agent-level config (if agentId is provided)
-   *   2. Project-level config (if projectId is provided)
-   *   3. User-level / workspace default
-   *   4. Mock fallback (always available)
+   * BYOM resolution (each user configures their own provider):
+   *   1. Agent-level DB config (per-agent override)
+   *   2. Project-level DB config
+   *   3. User-level DB config  ← main BYOM path
+   *   4. Admin settings (DB global default)
+   *   5. Mock fallback (demo mode — no API key needed)
    */
   async resolve(
     projectId?: string,
     agentId?: string,
     userId?: string,
   ): Promise<{ provider: LLMProvider; config: ProviderConfig; isMock: boolean }> {
-    if (projectId) {
-      // Try agent-level config first
-      if (agentId) {
-        try {
-          const agentConfig = await prisma.lLMProviderConfig.findFirst({
-            where: { projectId, agentShortName: agentId, scope: 'AGENT', isActive: true },
-          });
-          if (agentConfig) {
-            return this.resolveConfig(agentConfig);
-          }
-        } catch {
-          // DB query failed — fall through to next level
-        }
-      }
+    console.log(`[LLMGateway] resolve() called — project=${projectId}, agent=${agentId}, userId=${userId}`);
 
-      // Try project-level config
+    // ── 1. Agent-level DB config ──
+    if (projectId && agentId) {
+      try {
+        const agentConfig = await prisma.lLMProviderConfig.findFirst({
+          where: { projectId, agentShortName: agentId, scope: 'AGENT', isActive: true },
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (agentConfig) {
+          console.log(`[LLMGateway] ✓ Resolved via AGENT config: provider=${agentConfig.provider}, agent=${agentId}`);
+          return this.resolveConfig(agentConfig);
+        }
+      } catch (err) {
+        console.warn('[LLMGateway] ✗ Agent-level config query failed:', err);
+      }
+    }
+
+    // ── 2. Project-level DB config ──
+    if (projectId) {
       try {
         const projectConfig = await prisma.lLMProviderConfig.findFirst({
           where: { projectId, scope: 'PROJECT', isActive: true },
+          orderBy: { updatedAt: 'desc' },
         });
         if (projectConfig) {
+          console.log(`[LLMGateway] ✓ Resolved via PROJECT config: provider=${projectConfig.provider}`);
           return this.resolveConfig(projectConfig);
         }
-      } catch {
-        // DB query failed — fall through to user-level
+      } catch (err) {
+        console.warn('[LLMGateway] ✗ Project-level config query failed:', err);
       }
     }
 
-    // Try user-level / workspace default config
+    // ── 3. User-level DB config (main BYOM path) ──
     if (userId) {
       try {
+        // Most recently updated non-mock config wins
         const userConfig = await prisma.lLMProviderConfig.findFirst({
-          where: { userId, scope: 'USER', isActive: true },
+          where: { userId, scope: 'USER', isActive: true, provider: { not: 'mock' } },
+          orderBy: { updatedAt: 'desc' },
         });
         if (userConfig) {
+          console.log(`[LLMGateway] ✓ Resolved via USER config: provider=${userConfig.provider}, model=${userConfig.defaultModel}, baseUrl=${userConfig.baseUrl}, userId=${userId}`);
           return this.resolveConfig(userConfig);
         }
-      } catch {
-        // DB query failed — fall through to mock
+        console.log(`[LLMGateway] — No USER config found for userId=${userId}`);
+      } catch (err) {
+        console.warn('[LLMGateway] ✗ User-level config query failed:', err);
       }
+    } else {
+      console.warn('[LLMGateway] ⚠ userId is empty/undefined — cannot look up user BYOM config');
     }
 
-    // Try admin-level (global) settings as second-to-last fallback
+    // ── 4. Admin settings (DB global default) ──
     try {
       const adminSettings = await prisma.adminSetting.findMany({
-        where: { key: { in: ['llm.defaultProvider', 'llm.defaultModel', 'llm.baseUrl'] } },
+        where: { key: { in: ['llm.defaultProvider', 'llm.defaultModel', 'llm.baseUrl', 'llm.apiKey'] } },
       });
       const adminMap: Record<string, string> = {};
       for (const s of adminSettings) {
-        adminMap[s.key] = String(s.value);
+        // Strip surrounding quotes from JSON-encoded strings
+        let val = String(s.value);
+        if (val.startsWith('"') && val.endsWith('"')) {
+          try { val = JSON.parse(val); } catch { /* keep as-is */ }
+        }
+        adminMap[s.key] = val;
       }
       const adminProvider = adminMap['llm.defaultProvider'];
       if (adminProvider && adminProvider !== 'mock' && this.providers.has(adminProvider)) {
         const config: ProviderConfig = {
           provider: adminProvider,
+          apiKey: adminMap['llm.apiKey'] || undefined,
           baseUrl: adminMap['llm.baseUrl'] || undefined,
           defaultModel: adminMap['llm.defaultModel'] || 'llama3',
         };
+        console.log(`[LLMGateway] ✓ Resolved via ADMIN settings: provider=${adminProvider}, model=${config.defaultModel}, baseUrl=${config.baseUrl || '(default)'}`);
         return { provider: this.providers.get(adminProvider)!, config, isMock: false };
       }
-    } catch {
-      // Admin settings unavailable — fall through to mock
+    } catch (err) {
+      console.warn('[LLMGateway] ✗ Admin settings query failed:', err);
     }
 
-    // Fall back to mock
+    // ── 5. Mock fallback (demo mode) ──
+    console.log(`[LLMGateway] → Falling back to MOCK (demo mode). No BYOM config found for user=${userId}`);
     return { provider: this.mockProvider, config: this.mockConfig, isMock: true };
   }
 
@@ -169,12 +193,6 @@ export class LLMGateway {
   // Non-Streaming Completion
   // -------------------------------------------------------------------------
 
-  /**
-   * Execute a single-shot LLM completion.
-   *
-   * Measures latency, logs usage for real (non-mock) providers, and returns
-   * the full LLMResponse.
-   */
   async complete(options: LLMRequestOptions): Promise<LLMResponse> {
     const userId = options.metadata?.userId;
     const { provider, config, isMock } = await this.resolve(
@@ -199,8 +217,6 @@ export class LLMGateway {
 
     response.latencyMs = Date.now() - startTime;
 
-    // Log usage asynchronously (fire-and-forget) for real providers only.
-    // Mock usage is not logged to keep the DB clean during development.
     if (!isMock) {
       this.logUsage(options, response).catch((logErr) => {
         console.error('[LLMGateway] Failed to log usage:', logErr);
@@ -214,12 +230,6 @@ export class LLMGateway {
   // Streaming Completion
   // -------------------------------------------------------------------------
 
-  /**
-   * Execute a streaming LLM completion.
-   *
-   * Yields LLMStreamChunk objects as they arrive from the provider.
-   * The final chunk (done === true) includes accumulated token counts.
-   */
   async *stream(options: LLMRequestOptions): AsyncIterable<LLMStreamChunk> {
     const userId = options.metadata?.userId;
     const { provider, config, isMock } = await this.resolve(
@@ -237,7 +247,6 @@ export class LLMGateway {
       yield chunk;
     }
 
-    // Log usage for real providers after stream completes (fire-and-forget)
     if (!isMock && lastTokensUsed && options.projectId) {
       this.logUsage(options, {
         content: '',
@@ -256,19 +265,10 @@ export class LLMGateway {
   // Provider Registration
   // -------------------------------------------------------------------------
 
-  /**
-   * Register a new provider adapter at runtime.
-   *
-   * @param name     Provider key (e.g. "openai", "anthropic", "ollama")
-   * @param provider The LLMProvider implementation
-   */
   registerProvider(name: string, provider: LLMProvider): void {
     this.providers.set(name, provider);
   }
 
-  /**
-   * Get a registered provider by name. Returns undefined if not found.
-   */
   getProvider(name: string): LLMProvider | undefined {
     return this.providers.get(name);
   }
@@ -277,10 +277,6 @@ export class LLMGateway {
   // Usage Logging
   // -------------------------------------------------------------------------
 
-  /**
-   * Persist token usage and estimated cost to the LLMUsage table.
-   * Only called for non-mock providers.
-   */
   private async logUsage(
     options: LLMRequestOptions,
     response: LLMResponse,
@@ -299,17 +295,10 @@ export class LLMGateway {
         },
       });
     } catch (err) {
-      // Non-critical — log and continue
       console.error('[LLMGateway] Usage logging failed:', err);
     }
   }
 
-  /**
-   * Rough cost estimation based on provider-specific per-token rates.
-   *
-   * These rates are approximate and will be replaced with real pricing data
-   * from provider APIs or a pricing configuration table.
-   */
   private estimateCost(response: LLMResponse): number {
     const rates: Record<string, { prompt: number; completion: number }> = {
       openai:    { prompt: 0.00003,   completion: 0.00006   },

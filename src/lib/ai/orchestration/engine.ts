@@ -173,8 +173,10 @@ export class OrchestrationEngine {
     const { projectId, userMessage, userId, cardId } = request;
 
     try {
-      // ── Step 1: Persist user message ──────────────────────────────────
-      await this.saveUserMessage(projectId, userMessage, cardId);
+      // ── Step 1: Persist user message (skip if caller already saved it) ─
+      if (!request.skipMessageSave) {
+        await this.saveUserMessage(projectId, userMessage, cardId);
+      }
 
       // ── Step 2: Determine target agent ────────────────────────────────
       const targetShortName = request.targetAgentShortName

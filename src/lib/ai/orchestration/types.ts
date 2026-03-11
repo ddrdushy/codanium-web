@@ -23,6 +23,8 @@ export interface OrchestrationRequest {
   userId: string;
   /** Optional card ID to scope context to a specific card/module. */
   cardId?: string;
+  /** If true, the caller already persisted the user message — skip saving again. */
+  skipMessageSave?: boolean;
 }
 
 /**

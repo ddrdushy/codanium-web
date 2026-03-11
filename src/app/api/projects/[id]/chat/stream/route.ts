@@ -129,6 +129,7 @@ export async function POST(
             targetAgentShortName: body.agentShortName ?? undefined,
             userId,
             cardId,
+            skipMessageSave: true, // Chat page already saved the user message
           });
 
           for await (const event of generator) {

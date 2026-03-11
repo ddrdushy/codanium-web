@@ -8,6 +8,7 @@
 // =============================================================================
 
 import type {
+  LLMMessage,
   LLMProvider,
   LLMRequestOptions,
   LLMResponse,
@@ -115,7 +116,7 @@ const baGenerator: AgentGenerator = (msg) => {
   const wordCount = msg.trim().split(/\s+/).length;
 
   // ── User describes their idea (4+ words) — LISTEN FIRST, then ask about pages/screens ──
-  if (wordCount >= 4 && !hasKeyword(msg, ['yes', 'no', 'approve', 'reject', 'spec', 'brd'])) {
+  if (wordCount >= 4) {
 
     // If they mention specific features/pages, acknowledge and ask what is next
     if (hasKeyword(msg, ['page', 'screen', 'view', 'section', 'tab', 'panel', 'modal', 'form', 'layout'])) {
@@ -333,14 +334,62 @@ const baGenerator: AgentGenerator = (msg) => {
     };
   }
 
+  // ── Short idea name (1-3 words that look like a product/concept name) ──
+  // This catches follow-up messages like "netflix", "uber for dogs", "task manager"
+  // that the enrichUserMessage function transformed into "I want to build something like X"
+  // as well as short raw inputs that are clearly product ideas.
+  if (wordCount >= 1 && wordCount <= 3 && !hasKeyword(msg, ['hello', 'hi', 'hey'])) {
+    const idea = msg.replace(/^i want to build something like\s*/i, '').trim();
+
+    // If it's a simple confirmation/response, ask them to describe their idea
+    if (hasKeyword(msg, ['yes', 'no', 'ok', 'sure', 'thanks', 'yep', 'nope'])) {
+      return {
+        thinking:
+          'User gave a short confirmation or response. I should ask them to describe what they want to build.',
+        response:
+          'Great! Tell me what you want to build — describe your idea and I will start shaping it into a plan.',
+      };
+    }
+
+    return {
+      thinking:
+        `The user wants to build something like "${idea}". I should acknowledge the concept and ask about the first screen they picture — this moves us from vague idea to concrete features.`,
+      response:
+        `Interesting — **${idea}**! I can already see a few directions this could go.\n\n` +
+        'Let us start shaping it. When a user opens your app, **what is the first thing they should see?**\n\n' +
+        '- **A)** A dashboard with key info at a glance\n' +
+        '- **B)** A feed or list of content to browse\n' +
+        '- **C)** A search bar to find something specific\n' +
+        '- **D)** A form or wizard to get started\n' +
+        '- **E)** Something else — describe it',
+    };
+  }
+
   // ── Default: first interaction — welcome and ask about the idea ──
+  // Only shown when the message is empty/whitespace (no actual user input).
+  if (msg.trim().length === 0) {
+    return {
+      thinking:
+        'New conversation. The user has created a project with a name and basic info. I should welcome them and ask them to describe their idea so I can help shape it into buildable features and pages.',
+      response:
+        'Hi! I am your **Business Analyst**. Let us turn your idea into something real.\n\n' +
+        'I can see you have started a new project. **Tell me what you want to build** — describe it however you like, even a rough idea works.\n\n' +
+        'The more you tell me, the faster the team can start building!',
+    };
+  }
+
+  // ── Catch-all: unrecognized input — treat as a new idea description ──
   return {
     thinking:
-      'New conversation. The user has created a project with a name and basic info. I should welcome them and ask them to describe their idea so I can help shape it into buildable features and pages.',
+      'The user provided input that did not match known patterns. I should treat it as a new idea or requirement and ask about the first screen they picture.',
     response:
-      'Hi! I am your **Business Analyst**. Let us turn your idea into something real.\n\n' +
-      'I can see you have started a new project. **Tell me what you want to build** — describe it however you like, even a rough idea works.\n\n' +
-      'The more you tell me, the faster the team can start building!',
+      'Got it! Let me work with that.\n\n' +
+      'When a user opens your app, **what is the first thing they should see?**\n\n' +
+      '- **A)** A dashboard with key info at a glance\n' +
+      '- **B)** A feed or list of content to browse\n' +
+      '- **C)** A search bar to find something specific\n' +
+      '- **D)** A form or wizard to get started\n' +
+      '- **E)** Something else — describe it',
   };
 };
 
@@ -2108,6 +2157,53 @@ const fallbackGenerator: AgentGenerator = (msg) => ({
 // MockProvider Implementation
 // ---------------------------------------------------------------------------
 
+/**
+ * Detect whether the conversation already has prior assistant/agent messages,
+ * indicating this is NOT the first exchange (i.e., the user already received
+ * a greeting). Returns true if there's at least one prior assistant message.
+ */
+function hasConversationHistory(messages: LLMMessage[]): boolean {
+  return messages.some((m) => m.role === 'assistant');
+}
+
+/**
+ * Build an enriched user message for short inputs by prepending conversation
+ * context cues. This helps agent generators classify short follow-up messages
+ * (like "netflix") as idea descriptions rather than unknown inputs.
+ */
+function enrichUserMessage(
+  lastUserMsg: string,
+  messages: LLMMessage[],
+  agentId: string,
+): string {
+  const wordCount = lastUserMsg.trim().split(/\s+/).length;
+
+  // If the message is already long enough, no enrichment needed.
+  if (wordCount >= 4) return lastUserMsg;
+
+  // Only enrich when there's prior conversation (this is a follow-up).
+  if (!hasConversationHistory(messages)) return lastUserMsg;
+
+  // Look at the last assistant message to understand the conversational context.
+  const lastAssistantMsg = [...messages]
+    .reverse()
+    .find((m) => m.role === 'assistant')?.content ?? '';
+
+  // If the BA just asked "Tell me what you want to build", treat short input as an idea.
+  if (
+    agentId === 'BA' &&
+    (lastAssistantMsg.includes('Tell me what you want to build') ||
+     lastAssistantMsg.includes('what you want to build') ||
+     lastAssistantMsg.includes('describe it however you like') ||
+     lastAssistantMsg.includes('what is the first thing') ||
+     lastAssistantMsg.includes('Let us turn your idea'))
+  ) {
+    return `I want to build something like ${lastUserMsg}`;
+  }
+
+  return lastUserMsg;
+}
+
 export class MockProvider implements LLMProvider {
   readonly name = 'Mock';
 
@@ -2132,10 +2228,11 @@ export class MockProvider implements LLMProvider {
     const agentId = (options.agentId ?? '').toUpperCase();
     const generator = agentGenerators[agentId] ?? fallbackGenerator;
 
-    // Extract the last user message.
-    const lastUserMsg =
+    // Extract the last user message, enriched with conversation context.
+    const rawUserMsg =
       [...options.messages].reverse().find((m) => m.role === 'user')?.content ??
       '';
+    const lastUserMsg = enrichUserMessage(rawUserMsg, options.messages, agentId);
 
     // Generate the response.
     const { thinking, response } = generator(lastUserMsg);
@@ -2172,10 +2269,11 @@ export class MockProvider implements LLMProvider {
     const agentId = (options.agentId ?? '').toUpperCase();
     const generator = agentGenerators[agentId] ?? fallbackGenerator;
 
-    // Extract the last user message.
-    const lastUserMsg =
+    // Extract the last user message, enriched with conversation context.
+    const rawUserMsg =
       [...options.messages].reverse().find((m) => m.role === 'user')?.content ??
       '';
+    const lastUserMsg = enrichUserMessage(rawUserMsg, options.messages, agentId);
 
     // Generate the full response up-front, then stream it word by word.
     const { thinking, response } = generator(lastUserMsg);
