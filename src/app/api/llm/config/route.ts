@@ -25,7 +25,9 @@ function maskApiKey(key: string | null): string | null {
 
 /** Resolve the current user ID from the session. */
 function resolveUserId(session: Session): string {
-  return (session.user as any)?.id ?? 'demo-user-id';
+  const id = (session.user as any)?.id;
+  if (!id) throw new Error('User ID not found in session');
+  return id;
 }
 
 // ---------------------------------------------------------------------------

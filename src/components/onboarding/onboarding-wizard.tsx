@@ -311,7 +311,7 @@ export function OnboardingWizard() {
             disabled={saving}
             className="w-full text-sm text-muted-foreground hover:text-amber transition-colors py-2 disabled:opacity-50"
           >
-            {saving ? 'Setting up...' : 'Skip — use demo mode'}
+            {saving ? 'Setting up...' : 'Skip — set up later'}
           </button>
         </div>
       </div>
@@ -433,12 +433,12 @@ export function OnboardingWizard() {
           )}
         </div>
 
-        {/* Demo mode info */}
-        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-          <Info className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+        {/* BYOM setup info */}
+        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+          <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-blue-400">No API key?</span>{' '}
-            No problem — your platform works in demo mode with simulated AI responses. You can add a real provider anytime from Settings.
+            <span className="font-medium text-amber-400">Bring Your Own Model:</span>{' '}
+            Connect your preferred LLM provider (OpenAI, Anthropic, or Ollama) to power your AI team. You can configure this anytime from Platform Settings.
           </p>
         </div>
       </div>

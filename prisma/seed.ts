@@ -1032,24 +1032,6 @@ async function main() {
   console.log('\nSeeding LLM provider configs...');
   const llmProviderConfigs = [
     {
-      id: 'llm-cfg-001',
-      provider: 'mock',
-      displayName: 'Demo Mode (Built-in)',
-      defaultModel: 'mock-standard',
-      isActive: true,
-      scope: 'USER' as const,
-      userId: 'usr-001',
-    },
-    {
-      id: 'llm-cfg-002',
-      provider: 'mock',
-      displayName: 'Demo Mode (Built-in)',
-      defaultModel: 'mock-standard',
-      isActive: true,
-      scope: 'USER' as const,
-      userId: 'usr-002',
-    },
-    {
       id: 'llm-cfg-003',
       provider: 'openai',
       displayName: 'OpenAI — GPT-4o',

@@ -493,11 +493,11 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
                   )}
                 </div>
 
-                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/10">
-                  <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0" />
+                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                  <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    <span className="font-medium text-blue-400">No API key?</span>{' '}
-                    Works in demo mode with simulated AI responses.
+                    <span className="font-medium text-amber-400">BYOM:</span>{' '}
+                    Configure your own LLM provider to power your AI team. Supports OpenAI, Anthropic, and Ollama.
                   </p>
                 </div>
               </section>

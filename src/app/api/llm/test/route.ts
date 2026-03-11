@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     // defaultModel is optional — when omitted, we still validate connection + list models
 
-    const validProviders = ['openai', 'anthropic', 'ollama', 'custom', 'mock'];
+    const validProviders = ['openai', 'anthropic', 'ollama', 'custom'];
     if (!validProviders.includes(body.provider)) {
       return NextResponse.json(
         {

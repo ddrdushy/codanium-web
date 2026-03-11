@@ -10,7 +10,7 @@
 //   2. Project-level DB config
 //   3. User-level DB config  ← main BYOM path (Platform Settings drawer)
 //   4. Admin settings (DB global default)
-//   5. Mock fallback (demo mode)
+//   5. Error (no config found — user must set up BYOM provider)
 // =============================================================================
 
 import {
@@ -20,7 +20,6 @@ import {
   LLMStreamChunk,
   ProviderConfig,
 } from './providers/types';
-import { MockProvider } from './providers/mock-provider';
 import { OpenAIAdapter } from './providers/openai-adapter';
 import { AnthropicAdapter } from './providers/anthropic-adapter';
 import { OllamaAdapter } from './providers/ollama-adapter';
@@ -33,17 +32,12 @@ import { prisma } from '@/lib/prisma';
 
 export class LLMGateway {
   private providers: Map<string, LLMProvider>;
-  private mockProvider: MockProvider;
-  private mockConfig: ProviderConfig;
 
   constructor() {
     this.providers = new Map();
-    this.mockProvider = new MockProvider();
-    this.providers.set('mock', this.mockProvider);
     this.providers.set('openai', new OpenAIAdapter());
     this.providers.set('anthropic', new AnthropicAdapter());
     this.providers.set('ollama', new OllamaAdapter());
-    this.mockConfig = { provider: 'mock', defaultModel: 'mock-v1' };
   }
 
   // -------------------------------------------------------------------------
@@ -58,7 +52,7 @@ export class LLMGateway {
    *   2. Project-level DB config
    *   3. User-level DB config  ← main BYOM path
    *   4. Admin settings (DB global default)
-   *   5. Mock fallback (demo mode — no API key needed)
+   *   5. Error (no config found — user must set up BYOM provider)
    */
   async resolve(
     projectId?: string,
@@ -148,9 +142,10 @@ export class LLMGateway {
       console.warn('[LLMGateway] ✗ Admin settings query failed:', err);
     }
 
-    // ── 5. Mock fallback (demo mode) ──
-    console.log(`[LLMGateway] → Falling back to MOCK (demo mode). No BYOM config found for user=${userId}`);
-    return { provider: this.mockProvider, config: this.mockConfig, isMock: true };
+    // ── 5. No config found — error ──
+    const errMsg = `No LLM provider configured. Please set up your provider in Platform Settings. (userId=${userId})`;
+    console.error(`[LLMGateway] ✗ ${errMsg}`);
+    throw new Error(errMsg);
   }
 
   /**
@@ -164,7 +159,10 @@ export class LLMGateway {
     organizationId: string | null;
     defaultModel: string;
   }): { provider: LLMProvider; config: ProviderConfig; isMock: boolean } {
-    const provider = this.providers.get(dbConfig.provider) ?? this.mockProvider;
+    const provider = this.providers.get(dbConfig.provider);
+    if (!provider) {
+      throw new Error(`Unknown LLM provider "${dbConfig.provider}". Supported: openai, anthropic, ollama`);
+    }
 
     // Decrypt the API key — supports both encrypted and legacy plaintext values
     let apiKey: string | undefined;
@@ -186,7 +184,7 @@ export class LLMGateway {
       organizationId: dbConfig.organizationId ?? undefined,
       defaultModel: dbConfig.defaultModel,
     };
-    return { provider, config, isMock: dbConfig.provider === 'mock' };
+    return { provider, config, isMock: false };
   }
 
   // -------------------------------------------------------------------------
@@ -304,10 +302,9 @@ export class LLMGateway {
       openai:    { prompt: 0.00003,   completion: 0.00006   },
       anthropic: { prompt: 0.000003,  completion: 0.000015  },
       ollama:    { prompt: 0,         completion: 0         },
-      mock:      { prompt: 0,         completion: 0         },
     };
 
-    const rate = rates[response.provider] ?? rates.mock;
+    const rate = rates[response.provider] ?? { prompt: 0, completion: 0 };
     return (
       response.tokensUsed.prompt * rate.prompt +
       response.tokensUsed.completion * rate.completion
