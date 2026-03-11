@@ -6,7 +6,7 @@ export const orchestrator: AgentDefinition = {
   group: 'GOVERNANCE',
   temperature: 0.3,
   capabilities: ['route_tasks', 'validate_state', 'manage_decisions'],
-  contextSources: ['project_info', 'sdlc_stages', 'cards', 'agents_status', 'chat_history'],
+  contextSources: ['project_info', 'project_memory', 'sdlc_stages', 'cards', 'agents_status', 'chat_history'],
   outputTypes: ['message', 'agent_assignment', 'state_change'],
   authority: {
     canWrite: ['agent_assignments', 'workflow_state'],

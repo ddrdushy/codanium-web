@@ -777,6 +777,30 @@ export class OrchestrationEngine {
             break;
           }
 
+          case 'remember': {
+            const memoryData = action.data as { category: string; content: string };
+            await prisma.projectMemory.create({
+              data: {
+                projectId,
+                category: memoryData.category,
+                content: memoryData.content,
+                source: `agent:${agentDbId ? 'unknown' : 'system'}`,
+              },
+            });
+            console.log(`[OrchestrationEngine] Saved memory: [${memoryData.category}] ${memoryData.content.slice(0, 80)}`);
+
+            await eventBus.emit({
+              type: 'action.executed',
+              actor: 'system',
+              projectId,
+              payload: {
+                actionType: 'remember',
+                category: memoryData.category,
+              },
+            });
+            break;
+          }
+
           default: {
             // TypeScript exhaustive check — if we get here, a new action type
             // was added to the union but not handled.
@@ -1552,6 +1576,20 @@ export async function executeSideEffects(
               projectId,
             },
           });
+          break;
+        }
+
+        case 'remember': {
+          const memoryData = action.data as { category: string; content: string };
+          await prisma.projectMemory.create({
+            data: {
+              projectId,
+              category: memoryData.category,
+              content: memoryData.content,
+              source: `agent:${agentDbId ?? 'system'}`,
+            },
+          });
+          console.log(`[executeSideEffects] Saved memory: [${memoryData.category}] ${memoryData.content.slice(0, 80)}`);
           break;
         }
 

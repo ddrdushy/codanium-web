@@ -2,7 +2,7 @@
 // AI Team Studio — Email Worker (BullMQ)
 // =============================================================================
 // Processes email jobs by rendering React Email templates to HTML and sending
-// via the email service (SendGrid or console fallback).
+// via the email service (Mailjet or console fallback).
 //
 // Mirrors orchestration-worker.ts pattern.
 // =============================================================================
@@ -96,8 +96,9 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
       throw new Error(`Unknown email template: ${template}`);
   }
 
-  // Send the email
-  const success = await sendEmail({ to, subject, html });
+  // Send the email with customId for Mailjet event correlation
+  const customId = `job-${job.id}`;
+  const success = await sendEmail({ to, subject, html, customId });
 
   if (!success) {
     throw new Error(`Failed to send email to ${to}`);
@@ -123,7 +124,7 @@ export function createEmailWorker(): Worker<EmailJobData> {
       concurrency: 3, // 3 concurrent email sends
       limiter: {
         max: 5,
-        duration: 1000, // Max 5 emails per second (SendGrid free tier)
+        duration: 1000, // Max 5 emails per second (Mailjet rate limit)
       },
     },
   );

@@ -112,101 +112,235 @@ const orcGenerator: AgentGenerator = (msg) => {
 
 // ---- BA — Business Analyst ----
 const baGenerator: AgentGenerator = (msg) => {
-  if (hasKeyword(msg, ['requirements', 'spec', 'user stories', 'brd'])) {
+  const wordCount = msg.trim().split(/\s+/).length;
+
+  // ── User describes their idea (4+ words) — LISTEN FIRST, then ask about pages/screens ──
+  if (wordCount >= 4 && !hasKeyword(msg, ['yes', 'no', 'approve', 'reject', 'spec', 'brd'])) {
+
+    // If they mention specific features/pages, acknowledge and ask what is next
+    if (hasKeyword(msg, ['page', 'screen', 'view', 'section', 'tab', 'panel', 'modal', 'form', 'layout'])) {
+      return {
+        thinking:
+          'User is describing specific pages or screens. I should acknowledge and ask about what should be on this page — the key elements and actions.',
+        response:
+          'Got it! I am noting that down.\n\n' +
+          'What should the user be able to **do** on this page?\n\n' +
+          '- **A)** View a list of items and click into details\n' +
+          '- **B)** Fill out a form and submit it\n' +
+          '- **C)** See charts, stats, or a dashboard\n' +
+          '- **D)** Browse and filter content\n' +
+          '- **E)** Something else — describe the interactions',
+      };
+    }
+
+    // If user is describing what the product does — ask about the first screen they picture
     return {
       thinking:
-        'Requirements specification request. I will produce a structured business requirements document.',
+        'The user described their idea. I should acknowledge it and immediately move toward building — ask about the first screen or page they picture when opening the app.',
       response:
-        'I have drafted the business requirements document based on our discussions:\n\n' +
+        'Love it — I have a clear picture of what you want to build!\n\n' +
+        'Let us start shaping it. When a user opens your app, **what is the first thing they should see?**\n\n' +
+        '- **A)** A dashboard with key info at a glance\n' +
+        '- **B)** A feed or list of content to browse\n' +
+        '- **C)** A search bar to find something specific\n' +
+        '- **D)** A form or wizard to get started\n' +
+        '- **E)** Something else — describe it',
+    };
+  }
+
+  // ── User picks dashboard ──
+  if (hasKeyword(msg, ['dashboard', 'overview', 'summary', 'stats', 'glance'])) {
+    return {
+      thinking:
+        'User wants a dashboard as the main screen. Ask what key info should be displayed.',
+      response:
+        'A dashboard — great choice for the home screen!\n\n' +
+        'What **key information** should be front and center?\n\n' +
+        '- **A)** Numbers and stats (counts, totals, percentages)\n' +
+        '- **B)** A list of recent activity or updates\n' +
+        '- **C)** Quick action buttons (create, add, start)\n' +
+        '- **D)** Charts and graphs showing trends\n' +
+        '- **E)** A mix — tell me what matters most',
+    };
+  }
+
+  // ── User picks feed / list / browse ──
+  if (hasKeyword(msg, ['feed', 'list', 'browse', 'scroll', 'card', 'grid', 'catalog'])) {
+    return {
+      thinking:
+        'User wants a browsable list or feed. Ask about what each item shows.',
+      response:
+        'A browsable list — got it!\n\n' +
+        'When looking at each item in the list, **what info should be visible?**\n\n' +
+        '- **A)** Title, image, and short description\n' +
+        '- **B)** Title, status, and date\n' +
+        '- **C)** Name, price, and rating\n' +
+        '- **D)** Profile picture, name, and message preview\n' +
+        '- **E)** Custom — describe what each item shows',
+    };
+  }
+
+  // ── User picks search ──
+  if (hasKeyword(msg, ['search', 'find', 'filter', 'lookup', 'query'])) {
+    return {
+      thinking:
+        'User wants search as the primary interaction. Ask what they are searching for.',
+      response:
+        'Search-first experience — smart!\n\n' +
+        'What will users be **searching for**?\n\n' +
+        '- **A)** Products or items to buy\n' +
+        '- **B)** People or profiles\n' +
+        '- **C)** Content (articles, posts, videos)\n' +
+        '- **D)** Locations or businesses\n' +
+        '- **E)** Something else — tell me',
+    };
+  }
+
+  // ── User picks form / wizard ──
+  if (hasKeyword(msg, ['form', 'wizard', 'step', 'input', 'submit', 'create', 'register', 'sign up', 'onboard'])) {
+    return {
+      thinking:
+        'User wants a form or wizard as the entry point. Ask what information is collected.',
+      response:
+        'A guided flow to get started — nice!\n\n' +
+        'What **information** do you need from the user?\n\n' +
+        '- **A)** Basic profile (name, email, password)\n' +
+        '- **B)** Preferences or settings to personalize their experience\n' +
+        '- **C)** A description of what they need (like a brief or request)\n' +
+        '- **D)** Upload files or images\n' +
+        '- **E)** Something else — describe the fields',
+    };
+  }
+
+  // ── User answers about page content / details ──
+  if (hasKeyword(msg, ['number', 'stat', 'count', 'total', 'percentage', 'activity', 'recent', 'quick action', 'button', 'chart', 'graph', 'trend', 'title', 'image', 'description', 'status', 'date', 'price', 'rating', 'profile', 'name', 'message'])) {
+    return {
+      thinking:
+        'User described what should be on the main page. Now ask about the second most important page or feature.',
+      response:
+        'Noted — I am building out the main screen.\n\n' +
+        'What is the **second most important page** the user will need?\n\n' +
+        '- **A)** A detail page (click into an item to see everything about it)\n' +
+        '- **B)** A settings or profile page\n' +
+        '- **C)** A create/add new page\n' +
+        '- **D)** A notifications or inbox page\n' +
+        '- **E)** Something else — what comes next?',
+    };
+  }
+
+  // ── User talks about detail pages, settings, notifications etc ──
+  if (hasKeyword(msg, ['detail', 'settings', 'profile', 'create', 'add new', 'notification', 'inbox', 'edit', 'update', 'delete'])) {
+    return {
+      thinking:
+        'User described another page. Now ask if users need accounts/login or if it is open access.',
+      response:
+        'Great — adding that to the plan.\n\n' +
+        'Do users need to **log in** to use this?\n\n' +
+        '- **A)** Yes — they need accounts (email + password)\n' +
+        '- **B)** Yes — but let them sign in with Google or social accounts\n' +
+        '- **C)** No — it should be open to everyone without login\n' +
+        '- **D)** Both — some features are public, some need login',
+    };
+  }
+
+  // ── Auth / login answers ──
+  if (hasKeyword(msg, ['login', 'log in', 'sign in', 'account', 'google', 'social', 'auth', 'open', 'public', 'password', 'email'])) {
+    return {
+      thinking:
+        'User told me about auth. Now I have enough to propose a feature list and start building.',
+      response:
+        'Perfect! I have a solid picture now. Here is what I am handing off to the team:\n\n' +
+        '**Pages to build:**\n' +
+        '1. Home / main screen\n' +
+        '2. Detail view\n' +
+        '3. Create / add new\n' +
+        '4. User profile & settings\n' +
+        '5. Login / signup\n\n' +
+        'The **Solutions Architect** will design the tech stack and the **UX Designer** will start on wireframes.\n\n' +
+        'Want to **add more pages**, or should the team start building?',
+    };
+  }
+
+  // ── User wants to add more or gives additional features ──
+  if (hasKeyword(msg, ['add', 'also', 'another', 'more', 'plus', 'and', 'include', 'need', 'want'])) {
+    return {
+      thinking:
+        'User wants to add more features. Ask them to describe what else they need.',
+      response:
+        'Sure! Tell me what else you want to include — describe the feature or page and I will add it to the plan.',
+    };
+  }
+
+  // ── User says start building / good to go ──
+  if (hasKeyword(msg, ['start', 'build', 'begin', 'go ahead', 'lets go', "let's go", 'ship', 'do it', 'looks good', 'all good', 'good', 'fine', 'perfect', 'great'])) {
+    return {
+      thinking:
+        'User is ready to start building. Hand off to the team and begin development.',
+      response:
+        'The team is now working on your project!\n\n' +
+        'Here is what is happening:\n' +
+        '- **Solutions Architect** is designing the system\n' +
+        '- **UX Designer** is creating wireframes\n' +
+        '- **Developers** will start coding once the design is ready\n\n' +
+        'Check your **Work Board** for live progress. I will ping you when there are decisions that need your input.\n\n' +
+        'You can come back here anytime to ask questions or request changes!',
+    };
+  }
+
+  // ── Yes / confirmation ──
+  if (hasKeyword(msg, ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'correct', 'right', 'exactly', 'agreed'])) {
+    return {
+      thinking:
+        'User confirmed. Ask them to describe what they want to build.',
+      response:
+        'Great! Tell me what you want to build — describe your idea and I will start shaping it into a plan.',
+    };
+  }
+
+  // ── No / negative ──
+  if (hasKeyword(msg, ['no', 'nope', 'nothing', "that's all", 'that is all', 'done', 'enough'])) {
+    return {
+      thinking:
+        'User is done. Hand off to the team to start building.',
+      response:
+        'The team is picking this up now!\n\n' +
+        'You will see updates on your **Work Board** as pages and features get built. I will come back if we need any decisions from you.',
+    };
+  }
+
+  // ── Requirements / spec request ──
+  if (hasKeyword(msg, ['requirements', 'spec', 'user stories', 'brd', 'document'])) {
+    return {
+      thinking:
+        'User wants formal requirements. Generate a brief based on what we know.',
+      response:
+        'I will compile everything into a structured document and share it with you for review. Give me a moment.\n\n' +
         '[ARTIFACT:requirements.md]' +
-        '# Business Requirements Document\n\n' +
-        '## 1. Project Overview\n' +
-        'This document captures the functional and non-functional requirements gathered from stakeholder discussions.\n\n' +
-        '## 2. Functional Requirements\n\n' +
-        '### FR-1: User Registration\n' +
-        '- Users can create accounts using email and password\n' +
-        '- Email verification required before first login\n' +
-        '- Password must meet complexity requirements (8+ chars, mixed case, number)\n\n' +
-        '### FR-2: User Authentication\n' +
-        '- Login with email and password\n' +
-        '- "Remember me" option extends session to 30 days\n' +
-        '- Forgot password flow with email reset link\n' +
-        '- Account lockout after 5 failed attempts (15-minute cooldown)\n\n' +
-        '### FR-3: Dashboard\n' +
-        '- Overview of all active projects\n' +
-        '- Quick-access recent items\n' +
-        '- Notification center with unread count\n' +
-        '- Real-time status updates for running AI tasks\n\n' +
-        '### FR-4: Project Management\n' +
-        '- Create, edit, and archive projects\n' +
-        '- Invite team members with role-based permissions\n' +
-        '- Project-level settings and preferences\n\n' +
-        '## 3. Non-Functional Requirements\n\n' +
-        '### NFR-1: Performance\n' +
-        '- Page load time under 2 seconds (p95)\n' +
-        '- API response time under 500ms (p95)\n' +
-        '- Support 100 concurrent users\n\n' +
-        '### NFR-2: Security\n' +
-        '- All data encrypted at rest (AES-256)\n' +
-        '- TLS 1.3 for all connections\n' +
-        '- OWASP Top 10 compliance\n\n' +
-        '### NFR-3: Availability\n' +
-        '- 99.9% uptime SLA\n' +
-        '- Automated failover for database\n' +
-        '- Zero-downtime deployments\n\n' +
-        '## 4. Acceptance Criteria\n' +
-        '- All functional requirements pass automated testing\n' +
-        '- Performance benchmarks met under load testing\n' +
-        '- Security audit completed with no critical findings\n' +
+        '# Project Requirements\n\n' +
+        '## Pages\n' +
+        '- Home / Dashboard\n' +
+        '- Detail View\n' +
+        '- Create New\n' +
+        '- Profile & Settings\n' +
+        '- Auth (Login / Signup)\n\n' +
+        '## Core Features\n' +
+        '- User authentication\n' +
+        '- CRUD operations\n' +
+        '- Responsive design\n' +
+        '- Search and filtering\n\n' +
         '[/ARTIFACT]\n\n' +
-        'The document is ready for stakeholder review. Shall I schedule a walkthrough session?',
+        'Want to add or change anything?',
     };
   }
-  if (hasKeyword(msg, ['requirement', 'feature', 'user story', 'scope'])) {
-    return {
-      thinking:
-        'The user is discussing requirements. I need to break this down into structured questions to fill gaps in the specification before we can proceed.',
-      response:
-        'Thank you for the initial description. To build a complete requirements specification, I need to clarify several points:\n\n' +
-        '1. **Target Users** — Who are the primary and secondary user personas?\n' +
-        '2. **Success Criteria** — What measurable outcomes define "done" for this feature?\n' +
-        '3. **Data Dependencies** — Does this feature require data from external systems or APIs?\n' +
-        '4. **Edge Cases** — Are there known constraints (rate limits, concurrent users, offline support)?\n' +
-        '5. **Priority** — Where does this sit relative to the current backlog?\n\n' +
-        'Once I have answers, I will draft a formal requirements document and route it to SA for architecture review.',
-    };
-  }
-  if (hasKeyword(msg, ['stakeholder', 'business', 'value', 'roi'])) {
-    return {
-      thinking:
-        'Business-value question. I should frame this in terms of stakeholder impact and measurable outcomes.',
-      response:
-        'From a business-value perspective, I recommend framing this initiative around three pillars:\n\n' +
-        '- **Revenue Impact**: Estimated increase in conversion based on similar features in the market.\n' +
-        '- **Operational Efficiency**: Reduction in manual steps for the operations team.\n' +
-        '- **User Satisfaction**: Expected improvement in NPS based on user feedback themes.\n\n' +
-        'Shall I draft a one-page business case with these metrics for stakeholder review?',
-    };
-  }
-  if (hasKeyword(msg, ['priority', 'backlog', 'rank'])) {
-    return {
-      thinking:
-        'The user wants help prioritizing. I will apply a weighted scoring model and present recommendations.',
-      response:
-        'I have evaluated the backlog items using a weighted scoring model (Impact x Confidence / Effort):\n\n' +
-        '| # | Item | Score |\n|---|------|-------|\n| 1 | Authentication overhaul | 8.4 |\n| 2 | Dashboard redesign | 7.1 |\n| 3 | Notification system | 6.8 |\n| 4 | Export functionality | 5.2 |\n\n' +
-        'I recommend tackling items 1 and 2 in the next sprint. Would you like me to elaborate on the scoring?',
-    };
-  }
+
+  // ── Default: first interaction — welcome and ask about the idea ──
   return {
     thinking:
-      'General analysis request. I will ask structured clarifying questions to ensure we capture the full picture.',
+      'New conversation. The user has created a project with a name and basic info. I should welcome them and ask them to describe their idea so I can help shape it into buildable features and pages.',
     response:
-      'I want to make sure I fully understand the request before proceeding. A few clarifying questions:\n\n' +
-      '- What problem does this solve for the end user?\n' +
-      '- Are there existing solutions or workarounds in place today?\n' +
-      '- What is the expected timeline for delivery?\n\n' +
-      'I will compile the answers into a structured brief and share it with the team.',
+      'Hi! I am your **Business Analyst**. Let us turn your idea into something real.\n\n' +
+      'I can see you have started a new project. **Tell me what you want to build** — describe it however you like, even a rough idea works.\n\n' +
+      'The more you tell me, the faster the team can start building!',
   };
 };
 
@@ -2054,20 +2188,29 @@ export class MockProvider implements LLMProvider {
     };
 
     // Split response into words, preserving whitespace structure.
-    const words = response.split(/(\s+)/);
+    // Regex captures whitespace as separate tokens: ["Hello", " ", "world", "\n", "!"]
+    const tokens = response.split(/(\s+)/);
     let accumulated = '';
 
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      accumulated += word;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      accumulated += token;
 
-      // Only yield non-whitespace tokens (but include trailing whitespace in content).
-      if (word.trim().length > 0) {
+      // Only yield non-whitespace tokens, but attach trailing whitespace to the word.
+      if (token.trim().length > 0) {
         // Simulate per-word latency (30–80ms).
         await sleep(randInt(30, 80));
 
-        const isLast = i >= words.length - 1 ||
-          words.slice(i + 1).every((w) => w.trim().length === 0);
+        // Grab trailing whitespace (the next token if it's whitespace-only).
+        let chunk = token;
+        if (i + 1 < tokens.length && tokens[i + 1].trim().length === 0) {
+          chunk += tokens[i + 1];
+          accumulated += tokens[i + 1];
+          i++; // skip the whitespace token
+        }
+
+        const isLast = i >= tokens.length - 1 ||
+          tokens.slice(i + 1).every((w) => w.trim().length === 0);
 
         if (isLast) {
           // Final chunk — include token counts.
@@ -2076,7 +2219,7 @@ export class MockProvider implements LLMProvider {
           const completionTokens = estimateTokens(accumulated);
 
           yield {
-            content: word,
+            content: chunk,
             done: true,
             tokensUsed: {
               prompt: promptTokens,
@@ -2086,7 +2229,7 @@ export class MockProvider implements LLMProvider {
           };
         } else {
           yield {
-            content: word,
+            content: chunk,
             done: false,
           };
         }

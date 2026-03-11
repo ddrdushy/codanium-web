@@ -22,12 +22,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!body.defaultModel || typeof body.defaultModel !== 'string') {
-      return NextResponse.json(
-        { success: false, message: 'Default model is required' },
-        { status: 400 }
-      );
-    }
+    // defaultModel is optional — when omitted, we still validate connection + list models
 
     const validProviders = ['openai', 'anthropic', 'ollama', 'custom', 'mock'];
     if (!validProviders.includes(body.provider)) {
@@ -46,7 +41,7 @@ export async function POST(request: NextRequest) {
       apiKey: body.apiKey ?? undefined,
       baseUrl: body.baseUrl?.trim() || undefined,
       organizationId: body.organizationId?.trim() || undefined,
-      defaultModel: body.defaultModel.trim(),
+      defaultModel: body.defaultModel?.trim() || '',
     };
 
     // Get the provider adapter from the gateway

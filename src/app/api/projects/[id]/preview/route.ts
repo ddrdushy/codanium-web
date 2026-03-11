@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { validateBody } from '@/lib/validations/validate';
 import { previewTierSchema } from '@/lib/validations/schemas';
 import { canAccessTier, PREVIEW_TIER_ACCESS, getTierUpgradeRequired } from '@/lib/plan-limits';
@@ -18,7 +18,7 @@ export async function GET(
   { params }: RouteContext,
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id: projectId } = await params;
@@ -67,7 +67,7 @@ export async function PATCH(
   { params }: RouteContext,
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id: projectId } = await params;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { seedProject, autoKickoffBA } from '@/lib/project-seed';
 import { validateBody } from '@/lib/validations/validate';
 import { createProjectSchema } from '@/lib/validations/schemas';
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const userId = (session.user as any)?.id;
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
     const body = await request.json();
 
@@ -114,6 +114,35 @@ export async function POST(request: NextRequest) {
       console.log(`[Project ${project.id}] Seeded ${seed.agentCount} agents, ${seed.stageCount} stages`);
     } catch (seedError) {
       console.error('Project seed failed (non-fatal):', seedError);
+    }
+
+    // Auto-seed project memories from wizard data
+    try {
+      const memories: Array<{ projectId: string; category: string; content: string; source: string }> = [];
+
+      if (data.name) {
+        memories.push({
+          projectId: project.id,
+          category: 'idea',
+          content: `Project name: ${data.name}`,
+          source: 'system',
+        });
+      }
+      if (data.description) {
+        memories.push({
+          projectId: project.id,
+          category: 'idea',
+          content: `Description: ${data.description}`,
+          source: 'system',
+        });
+      }
+
+      if (memories.length > 0) {
+        await prisma.projectMemory.createMany({ data: memories });
+        console.log(`[Project ${project.id}] Seeded ${memories.length} memories`);
+      }
+    } catch (memoryError) {
+      console.error('Memory seed failed (non-fatal):', memoryError);
     }
 
     // Auto-kickoff BA agent (async background job)

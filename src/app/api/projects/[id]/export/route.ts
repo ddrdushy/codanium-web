@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { prisma } from '@/lib/prisma';
 import archiver from 'archiver';
 import { Readable } from 'stream';
@@ -16,7 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
     const { id: projectId } = await params;
 

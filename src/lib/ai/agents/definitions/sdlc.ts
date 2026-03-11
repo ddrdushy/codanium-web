@@ -6,7 +6,7 @@ export const businessAnalyst: AgentDefinition = {
   group: 'SDLC',
   temperature: 0.6,
   capabilities: ['gather_requirements'],
-  contextSources: ['project_info', 'chat_history', 'cards', 'documents', 'decisions'],
+  contextSources: ['project_info', 'project_memory', 'chat_history', 'cards', 'documents', 'decisions'],
   outputTypes: ['message', 'document', 'card', 'decision'],
   authority: {
     canWrite: ['documents', 'cards', 'decisions'],
@@ -81,6 +81,27 @@ CREATING CARDS FROM REQUIREMENTS:
 After the BRD is approved, break requirements into actionable cards. Always include a "module" field to scope the card to a codebase area:
 [ACTION:create_card]{"title":"Epic: User Authentication","description":"As a user, I want to securely log in so that my data is protected.","type":"EPIC","priority":"HIGH","module":"auth"}[/ACTION]
 
+SAVING KEY FACTS (MEMORY):
+When the user shares important details about their project, save them as memories so the whole team remembers across conversations. Use the remember action marker:
+[ACTION:remember]{"category":"feature","content":"User wants Netflix-style recommendation engine"}[/ACTION]
+[ACTION:remember]{"category":"audience","content":"Target users are small business owners aged 30-50"}[/ACTION]
+[ACTION:remember]{"category":"priority","content":"Must-have: user login, dashboard, payment processing"}[/ACTION]
+
+Categories to use:
+- "idea" — core product concept, project vision
+- "audience" — target users, personas, demographics
+- "priority" — must-haves, nice-to-haves, launch requirements
+- "feature" — specific features the user wants
+- "decision" — choices the user has made
+- "preference" — UI preferences, style choices, constraints
+
+Save a memory whenever the user mentions:
+- What the product is or does
+- Who will use it
+- Important features or requirements
+- Constraints, preferences, or decisions
+- Budget or timeline information
+
 COMMUNICATION STYLE:
 - Be warm, friendly, and encouraging. The user is sharing their vision — treat it with respect.
 - Use plain language. Never say "API endpoint" — say "a way for the app to communicate with other services."
@@ -104,7 +125,7 @@ export const solutionArchitect: AgentDefinition = {
   group: 'SDLC',
   temperature: 0.5,
   capabilities: ['design_architecture'],
-  contextSources: ['project_info', 'documents', 'cards', 'decisions'],
+  contextSources: ['project_info', 'project_memory', 'documents', 'cards', 'decisions'],
   outputTypes: ['message', 'document', 'decision'],
   authority: {
     canWrite: ['documents', 'decisions'],
@@ -190,7 +211,7 @@ export const uiUxDesigner: AgentDefinition = {
   group: 'SDLC',
   temperature: 0.7,
   capabilities: ['design_ui'],
-  contextSources: ['project_info', 'documents', 'wireframes', 'chat_history'],
+  contextSources: ['project_info', 'project_memory', 'documents', 'wireframes', 'chat_history'],
   outputTypes: ['message', 'wireframe', 'document'],
   authority: {
     canWrite: ['wireframes', 'documents'],
@@ -276,7 +297,7 @@ export const productManager: AgentDefinition = {
   group: 'SDLC',
   temperature: 0.5,
   capabilities: ['manage_scope'],
-  contextSources: ['project_info', 'cards', 'sdlc_stages', 'decisions', 'chat_history'],
+  contextSources: ['project_info', 'project_memory', 'cards', 'sdlc_stages', 'decisions', 'chat_history'],
   outputTypes: ['message', 'card', 'decision'],
   authority: {
     canWrite: ['cards', 'decisions'],

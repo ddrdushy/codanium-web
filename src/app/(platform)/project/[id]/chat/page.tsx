@@ -16,6 +16,26 @@ import {
   MessageSquare, Zap, Eye, Terminal, Copy, ThumbsUp,
   RotateCcw, ArrowRight, Loader2, Square, Settings, TestTube, X
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+/**
+ * Extract option buttons from agent markdown content.
+ * Matches patterns like "- **A)** Some option text" or "- **B)** Another option"
+ * Returns the content without option lines + the extracted options.
+ */
+function extractOptions(content: string): { cleanContent: string; options: { label: string; text: string }[] } {
+  const optionRegex = /^[-*]\s+\*\*([A-F])\)\*\*\s+(.+)$/gm;
+  const options: { label: string; text: string }[] = [];
+  let match;
+  while ((match = optionRegex.exec(content)) !== null) {
+    options.push({ label: match[1], text: match[2].trim() });
+  }
+  if (options.length === 0) return { cleanContent: content, options: [] };
+  // Remove option lines from content
+  const cleanContent = content.replace(/^[-*]\s+\*\*[A-F]\)\*\*\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  return { cleanContent, options };
+}
 
 interface ChatMessage {
   id: string;
@@ -297,29 +317,41 @@ export default function ChatPage() {
                         )}
                       </AnimatePresence>
 
-                      <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
-                        <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                          {msg.content.split('\n').map((line, j) => {
-                            if (line.startsWith('**') && line.endsWith('**')) {
-                              return <p key={j} className="font-semibold text-foreground mt-2 first:mt-0">{line.replace(/\*\*/g, '')}</p>;
-                            }
-                            if (line.match(/^\d+\.\s\*\*/)) {
-                              const parts = line.match(/^(\d+\.)\s\*\*(.+?)\*\*\s*[—–-]?\s*(.*)/);
-                              if (parts) {
-                                return (
-                                  <p key={j} className="mt-1.5 pl-2">
-                                    <span className="text-amber font-mono text-[11px]">{parts[1]}</span>{' '}
-                                    <span className="font-semibold text-foreground">{parts[2]}</span>
-                                    {parts[3] && <span className="text-muted-foreground"> — {parts[3]}</span>}
-                                  </p>
-                                );
-                              }
-                            }
-                            if (line === '') return <br key={j} />;
-                            return <p key={j} className="mt-1 first:mt-0">{line}</p>;
-                          })}
-                        </div>
-                      </div>
+                      {(() => {
+                        const isLastAgentMsg = i === messages.length - 1 ||
+                          messages.slice(i + 1).every(m => m.role !== 'agent');
+                        const { cleanContent, options } = isLastAgentMsg && !isStreaming
+                          ? extractOptions(msg.content)
+                          : { cleanContent: msg.content, options: [] };
+                        return (
+                          <>
+                            <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
+                              <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanContent}</ReactMarkdown>
+                              </div>
+                            </div>
+                            {options.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {options.map((opt) => (
+                                  <button
+                                    key={opt.label}
+                                    onClick={() => {
+                                      setInputValue(opt.label);
+                                      setTimeout(() => handleSend(), 50);
+                                    }}
+                                    className="group flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-[var(--surface)] hover:border-amber/40 hover:bg-amber/[0.06] transition-all text-left"
+                                  >
+                                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-amber/10 text-amber text-[10px] font-bold shrink-0 group-hover:bg-amber/20">
+                                      {opt.label}
+                                    </span>
+                                    <span className="text-xs text-foreground/80 group-hover:text-foreground">{opt.text}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
 
                       {msg.codeBlock && (
                         <div className="rounded-xl border border-border overflow-hidden">
@@ -415,26 +447,8 @@ export default function ChatPage() {
 
                     {streamContent ? (
                       <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
-                        <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                          {streamContent.split('\n').map((line, j) => {
-                            if (line.startsWith('**') && line.endsWith('**')) {
-                              return <p key={j} className="font-semibold text-foreground mt-2 first:mt-0">{line.replace(/\*\*/g, '')}</p>;
-                            }
-                            if (line.match(/^\d+\.\s\*\*/)) {
-                              const parts = line.match(/^(\d+\.)\s\*\*(.+?)\*\*\s*[—–-]?\s*(.*)/);
-                              if (parts) {
-                                return (
-                                  <p key={j} className="mt-1.5 pl-2">
-                                    <span className="text-amber font-mono text-[11px]">{parts[1]}</span>{' '}
-                                    <span className="font-semibold text-foreground">{parts[2]}</span>
-                                    {parts[3] && <span className="text-muted-foreground"> — {parts[3]}</span>}
-                                  </p>
-                                );
-                              }
-                            }
-                            if (line === '') return <br key={j} />;
-                            return <p key={j} className="mt-1 first:mt-0">{line}</p>;
-                          })}
+                        <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamContent}</ReactMarkdown>
                           <span className="inline-block w-1.5 h-4 bg-amber/60 animate-pulse ml-0.5 -mb-0.5 rounded-sm" />
                         </div>
                       </div>

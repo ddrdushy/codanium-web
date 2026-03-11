@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { encrypt, decrypt, isEncrypted } from '@/lib/ai/encryption';
 import type { Session } from 'next-auth';
 
@@ -42,7 +42,7 @@ export async function GET(
 ) {
   try {
     const { id: projectId } = await params;
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     // Verify project exists
@@ -108,7 +108,7 @@ export async function POST(
 ) {
   try {
     const { id: projectId } = await params;
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
     const body = await request.json();
 
@@ -222,7 +222,7 @@ export async function DELETE(
 ) {
   try {
     const { id: projectId } = await params;
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
     const { searchParams } = new URL(request.url);
     const configId = searchParams.get('id');

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { orchestrationEngine } from '@/lib/ai';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { prisma } from '@/lib/prisma';
 import { taskQueue } from '@/lib/ai/orchestration/task-queue';
 import { saveUserMessage } from '@/lib/ai/orchestration/engine';
@@ -22,7 +22,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-  const { session, error } = await requireAuth();
+  const { session, error } = await requireAuthOrApiKey();
   if (error) return error;
   const body = await request.json();
 

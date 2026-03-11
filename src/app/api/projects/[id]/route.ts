@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +24,7 @@ async function isMember(userId: string, projectId: string): Promise<boolean> {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const userId = (session.user as any)?.id;
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const userId = (session.user as any)?.id;
@@ -212,7 +212,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const userId = (session.user as any)?.id;

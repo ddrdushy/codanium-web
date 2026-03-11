@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-  const { session, error } = await requireAuth();
+  const { session, error } = await requireAuthOrApiKey();
   if (error) return error;
 
   const cutoff = new Date(Date.now() - 60000); // 60s ago
@@ -57,7 +57,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-  const { session, error } = await requireAuth();
+  const { session, error } = await requireAuthOrApiKey();
   if (error) return error;
 
   const userId = (session.user as any).id;
@@ -89,7 +89,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-  const { session, error } = await requireAuth();
+  const { session, error } = await requireAuthOrApiKey();
   if (error) return error;
 
   const userId = (session.user as any).id;

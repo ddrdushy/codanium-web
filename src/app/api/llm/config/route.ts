@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { encrypt, decrypt, isEncrypted } from '@/lib/ai/encryption';
 import type { Session } from 'next-auth';
 
@@ -38,7 +38,7 @@ function resolveUserId(session: Session): string {
  */
 export async function GET(request: NextRequest) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
     const userId = resolveUserId(session);
 
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
     const userId = resolveUserId(session);
     const body = await request.json();
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
     const userId = resolveUserId(session);
     const { searchParams } = new URL(request.url);

@@ -1,0 +1,738 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { StepIndicator } from './step-indicator';
+import {
+  Sparkles, Zap, DollarSign, CheckCircle2, ArrowRight, ArrowLeft,
+  Loader2, Eye, EyeOff, Server, Wrench, AlertTriangle, Info,
+  Settings, Bell, MessageSquare, Shield,
+} from 'lucide-react';
+
+// ─── Constants ─────────────────────────────────────────────────────────────
+
+const TOTAL_STEPS = 4;
+
+const STEP_LABELS = ['Welcome', 'AI Provider', 'Preferences', 'Done'];
+
+const PROVIDER_OPTIONS = [
+  { id: 'openai', label: 'OpenAI', icon: Zap, description: 'GPT-4o, GPT-4, GPT-3.5 Turbo', defaultModel: 'gpt-4o' },
+  { id: 'anthropic', label: 'Anthropic', icon: Sparkles, description: 'Claude Sonnet, Claude Haiku', defaultModel: 'claude-sonnet-4-20250514' },
+  { id: 'ollama', label: 'Ollama', icon: Server, description: 'Run models locally — free', defaultModel: 'llama3' },
+  { id: 'custom', label: 'Custom', icon: Wrench, description: 'Any OpenAI-compatible endpoint', defaultModel: '' },
+] as const;
+
+type ProviderType = typeof PROVIDER_OPTIONS[number]['id'];
+
+const APPROVAL_OPTIONS = [
+  { id: 'everything', label: 'Approve everything', description: 'Your AI team will ask before every major decision', badge: 'Most control' },
+  { id: 'big-stuff', label: 'Just the big stuff', description: 'Only critical decisions need your approval', badge: 'Recommended' },
+  { id: 'autonomous', label: 'Let the team handle it', description: 'Your AI team makes most decisions autonomously', badge: 'Fastest' },
+] as const;
+
+const COMMUNICATION_OPTIONS = [
+  { id: 'simple', label: 'Keep it simple', description: 'Explanations in plain language, no technical jargon' },
+  { id: 'detailed', label: 'Give me the details', description: 'Include technical information when relevant' },
+] as const;
+
+const NOTIFICATION_OPTIONS = [
+  { id: 'approvals', label: 'Decisions that need my approval', defaultOn: true },
+  { id: 'progress', label: 'Major progress updates', defaultOn: true },
+  { id: 'attention', label: 'When something needs attention', defaultOn: true },
+  { id: 'daily-summary', label: 'Daily summary email', defaultOn: false },
+  { id: 'budget-alerts', label: 'Budget alerts', defaultOn: true },
+];
+
+const BUDGET_ALERT_OPTIONS = [50, 75, 90];
+
+// Framer-motion variants for step transitions
+const variants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 80 : -80,
+    opacity: 0,
+  }),
+  center: { x: 0, opacity: 1 },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -80 : 80,
+    opacity: 0,
+  }),
+};
+
+// ─── Component ─────────────────────────────────────────────────────────────
+
+export function OnboardingWizard() {
+  const router = useRouter();
+  const { data: session, update } = useSession();
+  const userName = session?.user?.name?.split(' ')[0] || 'there';
+
+  // Step navigation
+  const [step, setStep] = useState(1);
+  const [direction, setDirection] = useState(1);
+  const [error, setError] = useState('');
+
+  // LLM Provider state (Step 2)
+  const [selectedProvider, setSelectedProvider] = useState<ProviderType>('openai');
+  const [apiKey, setApiKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [defaultModel, setDefaultModel] = useState('gpt-4o');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
+
+  // Budget & Preferences state (Step 3)
+  const [monthlyBudget, setMonthlyBudget] = useState(500);
+  const [alertThreshold, setAlertThreshold] = useState(75);
+  const [approvalLevel, setApprovalLevel] = useState('big-stuff');
+  const [commStyle, setCommStyle] = useState('simple');
+  const [notifications, setNotifications] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(NOTIFICATION_OPTIONS.map(n => [n.id, n.defaultOn]))
+  );
+
+  // Submission state
+  const [saving, setSaving] = useState(false);
+
+  // Resume from last step on mount
+  useEffect(() => {
+    fetch('/api/onboarding/status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.step && data.step > 0 && data.step < 4) {
+          setStep(data.step + 1);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Update default model when provider changes
+  useEffect(() => {
+    const provider = PROVIDER_OPTIONS.find(p => p.id === selectedProvider);
+    if (provider) {
+      setDefaultModel(provider.defaultModel);
+    }
+    setTestStatus('idle');
+    setTestMessage('');
+    setApiKey('');
+    setBaseUrl('');
+  }, [selectedProvider]);
+
+  // ─── Handlers ──────────────────────────────────────────────────────────
+
+  async function testConnection() {
+    setTestStatus('testing');
+    setTestMessage('');
+    try {
+      const res = await fetch('/api/llm/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          apiKey,
+          baseUrl: baseUrl || undefined,
+          model: defaultModel,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestStatus('success');
+        setTestMessage(data.message || 'Connection successful!');
+      } else {
+        setTestStatus('error');
+        setTestMessage(data.error || 'Connection failed');
+      }
+    } catch {
+      setTestStatus('error');
+      setTestMessage('Network error — could not reach test endpoint');
+    }
+  }
+
+  async function saveLLMConfig() {
+    if (!apiKey.trim() && selectedProvider !== 'ollama') return;
+    try {
+      await fetch('/api/llm/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          apiKey: apiKey.trim() || undefined,
+          baseUrl: baseUrl.trim() || undefined,
+          defaultModel: defaultModel.trim(),
+        }),
+      });
+    } catch {
+      // Non-blocking — user can configure later
+    }
+  }
+
+  async function goNext() {
+    setError('');
+    setDirection(1);
+
+    // Save LLM config when leaving step 2
+    if (step === 2) {
+      await saveLLMConfig();
+    }
+
+    // Persist step progress
+    try {
+      await fetch('/api/onboarding/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step }),
+      });
+    } catch {}
+
+    setStep(s => Math.min(s + 1, TOTAL_STEPS));
+  }
+
+  function goBack() {
+    setError('');
+    setDirection(-1);
+    setStep(s => Math.max(s - 1, 1));
+  }
+
+  async function handleComplete() {
+    setSaving(true);
+    setError('');
+    try {
+      // 1. Save user preferences
+      await fetch('/api/user/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          approvalLevel,
+          communicationStyle: commStyle,
+          monthlyBudget,
+          alertThreshold,
+          notifyApprovals: notifications.approvals,
+          notifyProgress: notifications.progress,
+          notifyAttention: notifications.attention,
+          notifyDailySummary: notifications['daily-summary'],
+          notifyBudgetAlerts: notifications['budget-alerts'],
+        }),
+      });
+
+      // 2. Mark onboarding complete
+      await fetch('/api/onboarding/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: true }),
+      });
+
+      // 3. Refresh JWT so session contains updated onboardingCompleted
+      await update();
+
+      // 4. Hard redirect — forces full page load with fresh session cookie
+      window.location.href = '/projects';
+    } catch {
+      setError('Something went wrong. Please try again.');
+      setSaving(false);
+    }
+  }
+
+  async function handleSkip() {
+    setSaving(true);
+    try {
+      await fetch('/api/onboarding/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: true }),
+      });
+      await update();
+      // Hard redirect — forces full page load with fresh session cookie
+      window.location.href = '/projects';
+    } catch {
+      setError('Something went wrong. Please try again.');
+      setSaving(false);
+    }
+  }
+
+  // ─── Step Renderers ────────────────────────────────────────────────────
+
+  function renderStep1() {
+    return (
+      <div className="text-center space-y-8">
+        {/* Sparkle icon */}
+        <motion.div
+          initial={{ scale: 0, rotate: -45 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ delay: 0.1, duration: 0.5, type: 'spring', stiffness: 200 }}
+          className="w-16 h-16 rounded-2xl bg-amber/10 border border-amber/20 flex items-center justify-center mx-auto"
+        >
+          <Sparkles className="w-8 h-8 text-amber" />
+        </motion.div>
+
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-amber via-orange-400 to-amber bg-clip-text text-transparent">
+            Welcome, {userName}!
+          </h1>
+          <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+            Let&apos;s set up your platform so your AI team can start building. This takes about 2 minutes.
+          </p>
+        </div>
+
+        {/* What we'll configure */}
+        <div className="grid gap-3 text-left max-w-md mx-auto">
+          {[
+            { icon: Zap, label: 'AI Provider', desc: 'Connect your preferred LLM (OpenAI, Anthropic, etc.)' },
+            { icon: DollarSign, label: 'Budget & Limits', desc: 'Set monthly spending limits and alerts' },
+            { icon: Settings, label: 'Preferences', desc: 'Communication style, approval workflow, notifications' },
+          ].map(({ icon: Icon, label, desc }) => (
+            <div
+              key={label}
+              className="flex items-start gap-3 p-3.5 rounded-xl bg-surface-raised border border-border"
+            >
+              <div className="w-9 h-9 rounded-lg bg-amber/10 flex items-center justify-center shrink-0 mt-0.5">
+                <Icon className="w-4.5 h-4.5 text-amber" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">{label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-3 max-w-md mx-auto">
+          <Button
+            onClick={goNext}
+            className="w-full h-11 bg-amber text-background hover:bg-amber/90 font-semibold"
+          >
+            Get Started
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+          <button
+            onClick={handleSkip}
+            disabled={saving}
+            className="w-full text-sm text-muted-foreground hover:text-amber transition-colors py-2 disabled:opacity-50"
+          >
+            {saving ? 'Setting up...' : 'Skip — use demo mode'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderStep2() {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h2 className="text-xl font-bold tracking-tight">Connect Your AI Provider</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Choose how your AI team will be powered. You can always change this later in Settings.
+          </p>
+        </div>
+
+        {/* Provider selection grid */}
+        <div className="grid grid-cols-2 gap-3">
+          {PROVIDER_OPTIONS.map(({ id, label, icon: Icon, description }) => (
+            <button
+              key={id}
+              onClick={() => setSelectedProvider(id)}
+              className={cn(
+                'flex flex-col items-start gap-2 p-4 rounded-xl border text-left transition-all duration-200',
+                selectedProvider === id
+                  ? 'border-amber bg-amber/10 shadow-sm shadow-amber/10'
+                  : 'border-border bg-surface-raised hover:border-amber/30',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Icon className={cn('w-4.5 h-4.5', selectedProvider === id ? 'text-amber' : 'text-muted-foreground')} />
+                <span className={cn('text-sm font-semibold', selectedProvider === id ? 'text-amber' : '')}>{label}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">{description}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* API Key input */}
+        {selectedProvider !== 'ollama' && (
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">API Key</label>
+            <div className="relative">
+              <Input
+                type={showApiKey ? 'text' : 'password'}
+                placeholder={
+                  selectedProvider === 'openai' ? 'sk-...' :
+                  selectedProvider === 'anthropic' ? 'sk-ant-...' :
+                  'Enter your API key'
+                }
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="pr-10 h-10 bg-foreground/[0.03] border-border focus:border-amber/30"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+              >
+                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground/50">
+              Your key is encrypted with AES-256-GCM and never stored in plain text.
+            </p>
+          </div>
+        )}
+
+        {/* Base URL (for Ollama / Custom) */}
+        {(selectedProvider === 'ollama' || selectedProvider === 'custom') && (
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              Base URL {selectedProvider === 'ollama' && '(default: http://localhost:11434)'}
+            </label>
+            <Input
+              type="url"
+              placeholder={selectedProvider === 'ollama' ? 'http://localhost:11434' : 'https://your-endpoint.com/v1'}
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              className="h-10 bg-foreground/[0.03] border-border focus:border-amber/30"
+            />
+          </div>
+        )}
+
+        {/* Model selector */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Model</label>
+          <Input
+            placeholder="e.g. gpt-4o"
+            value={defaultModel}
+            onChange={(e) => setDefaultModel(e.target.value)}
+            className="h-10 bg-foreground/[0.03] border-border focus:border-amber/30"
+          />
+        </div>
+
+        {/* Test connection */}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={testConnection}
+            disabled={testStatus === 'testing' || (!apiKey.trim() && selectedProvider !== 'ollama')}
+            variant="outline"
+            className="h-9"
+          >
+            {testStatus === 'testing' ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Testing...</>
+            ) : (
+              'Test Connection'
+            )}
+          </Button>
+          {testStatus === 'success' && (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-500">
+              <CheckCircle2 className="w-3.5 h-3.5" /> {testMessage}
+            </span>
+          )}
+          {testStatus === 'error' && (
+            <span className="flex items-center gap-1.5 text-xs text-red-400">
+              <AlertTriangle className="w-3.5 h-3.5" /> {testMessage}
+            </span>
+          )}
+        </div>
+
+        {/* Demo mode info */}
+        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+          <Info className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-blue-400">No API key?</span>{' '}
+            No problem — your platform works in demo mode with simulated AI responses. You can add a real provider anytime from Settings.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  function renderStep3() {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h2 className="text-xl font-bold tracking-tight">Budget & Preferences</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Set your spending limits and how you&apos;d like your AI team to work.
+          </p>
+        </div>
+
+        {/* Monthly Budget */}
+        <div className="space-y-3 p-4 rounded-xl bg-surface-raised border border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-amber" />
+              <span className="text-sm font-medium">Monthly Budget</span>
+            </div>
+            <span className="text-lg font-bold text-amber">${monthlyBudget}</span>
+          </div>
+          <input
+            type="range"
+            min={100}
+            max={5000}
+            step={50}
+            value={monthlyBudget}
+            onChange={(e) => setMonthlyBudget(Number(e.target.value))}
+            className="w-full h-1.5 bg-border rounded-full appearance-none cursor-pointer accent-amber"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground/50">
+            <span>$100</span>
+            <span>$5,000</span>
+          </div>
+
+          {/* Alert threshold */}
+          <div className="flex items-center justify-between pt-2 border-t border-border">
+            <span className="text-xs text-muted-foreground">Alert me at</span>
+            <div className="flex gap-1.5">
+              {BUDGET_ALERT_OPTIONS.map(pct => (
+                <button
+                  key={pct}
+                  onClick={() => setAlertThreshold(pct)}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+                    alertThreshold === pct
+                      ? 'bg-amber text-background'
+                      : 'bg-foreground/[0.04] text-muted-foreground hover:bg-foreground/[0.08]',
+                  )}
+                >
+                  {pct}%
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Approval Level */}
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-amber" />
+            <span className="text-sm font-medium">Approval Level</span>
+          </div>
+          <div className="space-y-2">
+            {APPROVAL_OPTIONS.map(({ id, label, description, badge }) => (
+              <button
+                key={id}
+                onClick={() => setApprovalLevel(id)}
+                className={cn(
+                  'w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all',
+                  approvalLevel === id
+                    ? 'border-amber bg-amber/10'
+                    : 'border-border bg-surface-raised hover:border-amber/20',
+                )}
+              >
+                <div>
+                  <p className={cn('text-sm font-medium', approvalLevel === id && 'text-amber')}>{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                </div>
+                <span className={cn(
+                  'text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ml-3',
+                  approvalLevel === id ? 'bg-amber/20 text-amber' : 'bg-foreground/[0.04] text-muted-foreground/60',
+                )}>
+                  {badge}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Communication Style */}
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-amber" />
+            <span className="text-sm font-medium">Communication Style</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {COMMUNICATION_OPTIONS.map(({ id, label, description }) => (
+              <button
+                key={id}
+                onClick={() => setCommStyle(id)}
+                className={cn(
+                  'p-3 rounded-lg border text-left transition-all',
+                  commStyle === id
+                    ? 'border-amber bg-amber/10'
+                    : 'border-border bg-surface-raised hover:border-amber/20',
+                )}
+              >
+                <p className={cn('text-sm font-medium', commStyle === id && 'text-amber')}>{label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Notifications */}
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 text-amber" />
+            <span className="text-sm font-medium">Email Notifications</span>
+          </div>
+          <div className="space-y-1">
+            {NOTIFICATION_OPTIONS.map(({ id, label }) => (
+              <div
+                key={id}
+                className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-foreground/[0.02] transition-colors"
+              >
+                <span className="text-sm text-muted-foreground">{label}</span>
+                <Switch
+                  checked={notifications[id] ?? false}
+                  onCheckedChange={(checked) =>
+                    setNotifications(prev => ({ ...prev, [id]: checked }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderStep4() {
+    const providerLabel = PROVIDER_OPTIONS.find(p => p.id === selectedProvider)?.label || selectedProvider;
+    const hasApiKey = apiKey.trim().length > 0 || selectedProvider === 'ollama';
+    const approvalLabel = APPROVAL_OPTIONS.find(a => a.id === approvalLevel)?.label || approvalLevel;
+    const commLabel = COMMUNICATION_OPTIONS.find(c => c.id === commStyle)?.label || commStyle;
+
+    return (
+      <div className="text-center space-y-6">
+        {/* Success icon */}
+        <motion.div
+          initial={{ scale: 0, rotate: -30 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ delay: 0.1, duration: 0.5, type: 'spring', stiffness: 200 }}
+          className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto"
+        >
+          <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+        </motion.div>
+
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">You&apos;re All Set!</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Here&apos;s a summary of your configuration. You can change any of these in Settings later.
+          </p>
+        </div>
+
+        {/* Summary card */}
+        <div className="text-left space-y-3 max-w-md mx-auto">
+          <div className="p-4 rounded-xl bg-surface-raised border border-border space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">AI Provider</span>
+              <span className="text-sm font-medium">
+                {hasApiKey ? providerLabel : (
+                  <span className="text-amber">Demo Mode</span>
+                )}
+              </span>
+            </div>
+            {hasApiKey && (
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Model</span>
+                <span className="text-sm font-medium">{defaultModel}</span>
+              </div>
+            )}
+            <div className="border-t border-border" />
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Monthly Budget</span>
+              <span className="text-sm font-medium">${monthlyBudget}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Alert Threshold</span>
+              <span className="text-sm font-medium">{alertThreshold}%</span>
+            </div>
+            <div className="border-t border-border" />
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Approval Level</span>
+              <span className="text-sm font-medium">{approvalLabel}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Communication</span>
+              <span className="text-sm font-medium">{commLabel}</span>
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="flex items-center justify-center gap-2 text-sm text-red-400">
+            <AlertTriangle className="w-4 h-4" />
+            {error}
+          </div>
+        )}
+
+        <div className="max-w-md mx-auto">
+          <Button
+            onClick={handleComplete}
+            disabled={saving}
+            className="w-full h-11 bg-amber text-background hover:bg-amber/90 font-semibold"
+          >
+            {saving ? (
+              <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Setting up...</>
+            ) : (
+              <>
+                Start Building
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────
+
+  const stepRenderers: Record<number, () => React.ReactNode> = {
+    1: renderStep1,
+    2: renderStep2,
+    3: renderStep3,
+    4: renderStep4,
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Step indicator */}
+      <StepIndicator
+        currentStep={step}
+        totalSteps={TOTAL_STEPS}
+        labels={STEP_LABELS}
+      />
+
+      {/* Step content with transitions */}
+      <div className="min-h-[420px]">
+        <AnimatePresence mode="wait" custom={direction}>
+          <motion.div
+            key={step}
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+          >
+            {stepRenderers[step]?.()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Navigation buttons (steps 2 & 3 only) */}
+      {step > 1 && step < TOTAL_STEPS && (
+        <div className="flex items-center justify-between max-w-md mx-auto">
+          <Button variant="ghost" onClick={goBack} className="gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+          <Button onClick={goNext} className="gap-2 bg-amber text-background hover:bg-amber/90">
+            {step === 3 ? 'Review' : 'Next'}
+            <ArrowRight className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Back button on step 4 */}
+      {step === TOTAL_STEPS && (
+        <div className="flex justify-center">
+          <Button variant="ghost" onClick={goBack} className="gap-2 text-muted-foreground">
+            <ArrowLeft className="w-4 h-4" />
+            Go Back & Edit
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

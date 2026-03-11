@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { taskQueue } from '@/lib/ai/orchestration/task-queue';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ interface RouteContext {
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { id: projectId } = await context.params;
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const [active, recent] = await Promise.all([

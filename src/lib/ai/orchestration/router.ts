@@ -94,7 +94,7 @@ const ROUTING_TABLE: Record<UserIntent, string> = {
   deployment:      'DO',   // DevOps — deployment pipeline
   testing:         'QA',   // QA Engineer — test strategy
   architecture:    'SA',   // Solutions Architect — technical decisions
-  general:         'ORC',  // Orchestrator — catch-all
+  general:         'BA',   // Business Analyst — default conversational agent
 };
 
 // ---------------------------------------------------------------------------

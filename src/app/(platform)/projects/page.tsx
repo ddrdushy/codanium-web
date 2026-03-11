@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { fetchProjects } from '@/lib/api';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { mockProjects } from '@/lib/mock-data';
 import { Project, ProjectStatus } from '@/types';
@@ -14,9 +14,11 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   Plus, Search, Zap, Bot, Kanban, Clock, CheckCircle2,
   Pause, Archive, TrendingUp, ArrowRight, BarChart3,
-  FolderOpen, LayoutGrid, List, Filter
+  FolderOpen, LayoutGrid, List, Filter, Settings,
+  User, CreditCard, Key, Shield, LogOut, ChevronDown
 } from 'lucide-react';
 import { CreateProjectModal } from '@/components/modals/create-project-modal';
+import { PlatformSettingsDrawer } from '@/components/modals/platform-settings-drawer';
 
 const statusConfig: Record<ProjectStatus, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   active: { label: 'Active', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', icon: Zap },
@@ -36,6 +38,9 @@ export default function ProjectsPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchProjects()
@@ -44,8 +49,21 @@ export default function ProjectsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Close user menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const userName = session?.user?.name || 'User';
+  const userEmail = session?.user?.email || '';
   const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const isAdmin = (session?.user as { role?: string })?.role === 'admin';
 
   const filteredProjects = projects.filter(p => {
     if (filterMode !== 'all' && p.status !== filterMode) return false;
@@ -75,8 +93,109 @@ export default function ProjectsPage() {
               <Bot className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-xs font-semibold text-emerald-400">{totalAgents} AI specialists working</span>
             </div>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber/30 to-blue-500/30 border border-foreground/10 flex items-center justify-center text-xs font-bold">
-              {userInitials}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="w-8 h-8 rounded-lg bg-[var(--surface)] border border-border hover:border-amber/30 hover:bg-amber/5 flex items-center justify-center text-muted-foreground hover:text-amber transition-all"
+              title="Platform Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-foreground/[0.04] transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber/30 to-blue-500/30 border border-foreground/10 flex items-center justify-center text-xs font-bold text-foreground/80">
+                  {userInitials}
+                </div>
+                <span className="hidden md:block text-sm font-medium text-foreground max-w-[100px] truncate">
+                  {userName.split(' ')[0]}
+                </span>
+                <ChevronDown className={cn(
+                  'hidden md:block w-3 h-3 text-muted-foreground transition-transform',
+                  userMenuOpen && 'rotate-180'
+                )} />
+              </button>
+
+              {/* User Dropdown Menu */}
+              <AnimatePresence>
+                {userMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-1.5 w-56 z-50 rounded-xl border border-border bg-[var(--surface)] shadow-xl shadow-black/20 overflow-hidden"
+                  >
+                    {/* User Info */}
+                    <div className="px-3 py-3 border-b border-border">
+                      <p className="text-sm font-semibold text-foreground truncate">{userName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
+                      {isAdmin && (
+                        <Badge className="mt-1.5 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)] border-[var(--admin-accent)]/20 text-[10px]">
+                          Admin
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="py-1">
+                      <Link
+                        href="/profile"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
+                      >
+                        <User className="w-3.5 h-3.5" />
+                        Profile
+                      </Link>
+                    </div>
+
+                    {/* Account */}
+                    <div className="py-1 border-t border-border">
+                      <Link
+                        href="/billing"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        Billing
+                      </Link>
+                      <Link
+                        href="/account/api-keys"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        API Keys
+                      </Link>
+                      {isAdmin && (
+                        <Link
+                          href="/admin"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/[0.06] transition-all"
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                          Admin Panel
+                        </Link>
+                      )}
+                    </div>
+
+                    {/* Sign Out */}
+                    <div className="py-1 border-t border-border">
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          signOut({ callbackUrl: '/login' });
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-500/[0.06] transition-all w-full text-left"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -198,6 +317,7 @@ export default function ProjectsPage() {
       </main>
 
       <CreateProjectModal open={showCreateModal} onOpenChange={setShowCreateModal} />
+      <PlatformSettingsDrawer open={showSettings} onOpenChange={setShowSettings} />
     </div>
   );
 }

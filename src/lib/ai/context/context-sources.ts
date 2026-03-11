@@ -251,6 +251,23 @@ export async function fetchWireframes(projectId: string, _scope?: ContextScope) 
 }
 
 /**
+ * Fetch persistent project memories for agent knowledge.
+ * Returns all memories ordered by category then creation time.
+ */
+export async function fetchProjectMemory(projectId: string, _scope?: ContextScope) {
+  return prisma.projectMemory.findMany({
+    where: { projectId },
+    orderBy: [{ category: 'asc' }, { createdAt: 'asc' }],
+    take: 50,
+    select: {
+      category: true,
+      content: true,
+      source: true,
+    },
+  });
+}
+
+/**
  * Fetch code artifacts scoped to a card or module.
  * Includes content (truncated) so agents can see existing code.
  */

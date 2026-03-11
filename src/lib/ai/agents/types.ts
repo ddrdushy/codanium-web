@@ -24,7 +24,7 @@ export type AgentCapability =
 export type ContextSource =
   | 'project_info' | 'sdlc_stages' | 'cards' | 'decisions' | 'documents'
   | 'chat_history' | 'agents_status' | 'llm_usage' | 'wireframes'
-  | 'artifacts';
+  | 'artifacts' | 'project_memory';
 
 export type OutputType =
   | 'message' | 'document' | 'card' | 'decision' | 'state_change'
@@ -42,7 +42,8 @@ export type AgentAction =
   | { type: 'create_pr'; data: { title: string; branch: string; description?: string } }
   | { type: 'create_release'; data: { version: string; features?: string[] } }
   | { type: 'trigger_deploy'; data: { pipelineName?: string; environment?: string; branch?: string } }
-  | { type: 'create_pipeline'; data: { name: string; environment: string; trigger: string; config?: string } };
+  | { type: 'create_pipeline'; data: { name: string; environment: string; trigger: string; config?: string } }
+  | { type: 'remember'; data: { category: string; content: string } };
 
 export interface AgentExecutionResult {
   message: string;

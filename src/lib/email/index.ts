@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Email Service (SendGrid)
+// AI Team Studio — Email Service (Mailjet)
 // =============================================================================
 // Singleton email service that reads config from admin settings (Redis-cached)
 // with env var fallback. If no API key is configured, emails are logged to
@@ -8,7 +8,7 @@
 // Config hierarchy: Admin Settings (DB/Redis) → Environment Variables → Console
 // =============================================================================
 
-import sgMail from '@sendgrid/mail';
+import Mailjet from 'node-mailjet';
 import crypto from 'crypto';
 import { redis, isRedisAvailable } from '@/lib/redis';
 import { prisma } from '@/lib/prisma';
@@ -19,7 +19,8 @@ import { prisma } from '@/lib/prisma';
 
 export interface EmailConfig {
   enabled: boolean;
-  apiKey: string;
+  mailjetApiKey: string;
+  mailjetSecretKey: string;
   fromAddress: string;
   fromName: string;
 }
@@ -28,6 +29,7 @@ export interface SendEmailOptions {
   to: string;
   subject: string;
   html: string;
+  customId?: string; // Echoed back in Mailjet webhook events for correlation
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +72,15 @@ export async function getEmailConfig(): Promise<EmailConfig> {
   try {
     const settings = await prisma.adminSetting.findMany({
       where: {
-        key: { in: ['email.enabled', 'email.apiKey', 'email.fromAddress', 'email.fromName'] },
+        key: {
+          in: [
+            'email.enabled',
+            'email.mailjetApiKey',
+            'email.mailjetSecretKey',
+            'email.fromAddress',
+            'email.fromName',
+          ],
+        },
       },
     });
 
@@ -81,7 +91,8 @@ export async function getEmailConfig(): Promise<EmailConfig> {
 
     const config: EmailConfig = {
       enabled: settingsMap['email.enabled'] ? JSON.parse(settingsMap['email.enabled']) : false,
-      apiKey: settingsMap['email.apiKey'] ?? process.env.SENDGRID_API_KEY ?? '',
+      mailjetApiKey: settingsMap['email.mailjetApiKey'] ?? process.env.MAILJET_API_KEY ?? '',
+      mailjetSecretKey: settingsMap['email.mailjetSecretKey'] ?? process.env.MAILJET_SECRET_KEY ?? '',
       fromAddress: settingsMap['email.fromAddress'] ?? 'noreply@yourdomain.com',
       fromName: settingsMap['email.fromName'] ?? 'AI Team Studio',
     };
@@ -103,8 +114,9 @@ export async function getEmailConfig(): Promise<EmailConfig> {
   } catch {
     // DB unavailable — fall back to env vars
     return {
-      enabled: !!process.env.SENDGRID_API_KEY,
-      apiKey: process.env.SENDGRID_API_KEY ?? '',
+      enabled: !!(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY),
+      mailjetApiKey: process.env.MAILJET_API_KEY ?? '',
+      mailjetSecretKey: process.env.MAILJET_SECRET_KEY ?? '',
       fromAddress: 'noreply@yourdomain.com',
       fromName: 'AI Team Studio',
     };
@@ -131,14 +143,14 @@ export async function invalidateEmailConfigCache(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Send an email via SendGrid (or log to console in dev mode).
+ * Send an email via Mailjet (or log to console in dev mode).
  * Returns true if sent successfully, false otherwise.
  */
 export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   const config = await getEmailConfig();
 
   // Dev mode: log to console if email is not configured
-  if (!config.apiKey || !config.enabled) {
+  if (!config.mailjetApiKey || !config.mailjetSecretKey || !config.enabled) {
     console.log('─────────────────────────────────────────────');
     console.log('[Email] Dev Mode — Email would have been sent:');
     console.log(`  To:      ${options.to}`);
@@ -150,16 +162,27 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   }
 
   try {
-    sgMail.setApiKey(config.apiKey);
+    const mailjet = new Mailjet({
+      apiKey: config.mailjetApiKey,
+      apiSecret: config.mailjetSecretKey,
+    });
 
-    await sgMail.send({
-      to: options.to,
-      from: {
-        email: config.fromAddress,
-        name: config.fromName,
+    const message: Record<string, unknown> = {
+      From: {
+        Email: config.fromAddress,
+        Name: config.fromName,
       },
-      subject: options.subject,
-      html: options.html,
+      To: [{ Email: options.to }],
+      Subject: options.subject,
+      HTMLPart: options.html,
+    };
+
+    if (options.customId) {
+      message.CustomID = options.customId;
+    }
+
+    await mailjet.post('send', { version: 'v3.1' }).request({
+      Messages: [message],
     });
 
     console.log(`[Email] Sent to ${options.to}: ${options.subject}`);

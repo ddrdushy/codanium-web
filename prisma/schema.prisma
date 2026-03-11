@@ -26,6 +26,11 @@ model User {
   updatedAt     DateTime  @updatedAt
   emailVerified DateTime?          // null = not verified, DateTime = when verified
 
+  // Onboarding
+  onboardingCompleted   Boolean   @default(false)
+  onboardingStep        Int       @default(0)       // 0=not started, 4=done
+  onboardingCompletedAt DateTime?
+
   // Stripe billing
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?   @unique
@@ -50,6 +55,7 @@ model User {
   ownedOrgs       Organization[]  @relation("OrgOwner")
   orgMemberships  OrgMember[]
   transactions    Transaction[]
+  preferences     UserPreferences?
 
   @@map("users")
 }
@@ -120,6 +126,28 @@ enum SubscriptionStatus {
   UNPAID
 }
 
+// ─── User Preferences ────────────────────────────────────────────────────────
+
+model UserPreferences {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  approvalLevel       String   @default("big-stuff")    // everything, big-stuff, autonomous
+  communicationStyle  String   @default("simple")       // simple, detailed
+  monthlyBudget       Int      @default(500)             // dollars
+  alertThreshold      Int      @default(75)              // percentage: 50, 75, 90
+  notifyApprovals     Boolean  @default(true)
+  notifyProgress      Boolean  @default(true)
+  notifyAttention     Boolean  @default(true)
+  notifyDailySummary  Boolean  @default(false)
+  notifyBudgetAlerts  Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
 // ─── Projects ───────────────────────────────────────────────────────────────
 
 model Project {
@@ -174,6 +202,7 @@ model Project {
   userPresence         UserPresence[]
   invitations          ProjectInvitation[]
   webhookEndpoints     WebhookEndpoint[]
+  memories             ProjectMemory[]
 
   @@map("projects")
 }
@@ -940,6 +969,47 @@ enum EmailTokenType {
   PASSWORD_RESET
 }
 
+// ─── Email Events (Mailjet Webhook Tracking) ────────────────────────────────
+
+model EmailEvent {
+  id           String         @id @default(cuid())
+  event        EmailEventType
+  messageId    String         // Mailjet MessageID
+  messageGuid  String?        // Mailjet Message_GUID
+  email        String         // Recipient email address
+  customId     String?        // CustomID echoed from send call (for correlation)
+  timestamp    DateTime       // Mailjet event timestamp
+
+  // Full raw Mailjet event payload as JSON
+  payload      String         @default("{}")
+
+  // Denormalized fields for common queries
+  smtpReply    String?        // sent events
+  url          String?        // click events
+  ip           String?        // open/click/unsub events
+  bounceError  String?        // bounce/blocked error details
+  isHardBounce Boolean?       // bounce: hard_bounce flag
+  spamSource   String?        // spam: source
+
+  createdAt    DateTime       @default(now())
+
+  @@index([email])
+  @@index([messageId])
+  @@index([event])
+  @@index([event, timestamp])
+  @@map("email_events")
+}
+
+enum EmailEventType {
+  SENT
+  OPEN
+  CLICK
+  BOUNCE
+  SPAM
+  BLOCKED
+  UNSUB
+}
+
 // ─── Project Invitations ────────────────────────────────────────────────────
 
 model ProjectInvitation {
@@ -1068,6 +1138,24 @@ enum OrgRole {
   ADMIN
   MEMBER
   VIEWER
+}
+
+// ─── Project Memory (Agent Knowledge Store) ─────────────────────────────────
+
+model ProjectMemory {
+  id          String   @id @default(cuid())
+  projectId   String
+  category    String   // "idea", "audience", "priority", "feature", "decision", "preference"
+  content     String   // The actual fact/memory
+  source      String   @default("user") // "user", "agent:BA", "agent:SA", "system"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, category])
+  @@map("project_memories")
 }
 
 // ─── Admin Settings (Key-Value) ─────────────────────────────────────────────

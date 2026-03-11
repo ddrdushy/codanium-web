@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { addGitPushJob } from '@/lib/queue/git-push-queue';
 import { isRedisAvailable } from '@/lib/redis';
 import { validateBody } from '@/lib/validations/validate';
@@ -24,7 +24,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id: projectId } = await params;

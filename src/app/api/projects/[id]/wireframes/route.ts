@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { validateBody } from '@/lib/validations/validate';
 import { createWireframeSchema, updateWireframeSchema } from '@/lib/validations/schemas';
 
@@ -17,7 +17,7 @@ export async function GET(
   { params }: RouteContext,
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id: projectId } = await params;
@@ -43,7 +43,7 @@ export async function POST(
   { params }: RouteContext,
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id: projectId } = await params;
@@ -92,7 +92,7 @@ export async function PATCH(
   { params }: RouteContext,
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id: projectId } = await params;
@@ -145,7 +145,7 @@ export async function DELETE(
   { params }: RouteContext,
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id: projectId } = await params;

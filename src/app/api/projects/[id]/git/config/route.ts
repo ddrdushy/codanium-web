@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { encrypt } from '@/lib/ai/encryption';
 import { randomBytes } from 'crypto';
 import { addRepeatableGitSync, removeRepeatableGitSync } from '@/lib/queue/git-sync-queue';
@@ -17,7 +17,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id } = await context.params;
@@ -76,7 +76,7 @@ export async function PUT(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { session, error } = await requireAuth();
+    const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
     const { id } = await context.params;

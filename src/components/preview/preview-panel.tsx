@@ -32,6 +32,10 @@ import {
   Server,
   Layers,
   Lock,
+  Eye,
+  Code2,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { SandpackPreviewAdapter } from './sandpack-preview';
 import { WebContainerPreview } from './webcontainer-preview';
@@ -216,57 +220,72 @@ export function PreviewPanel() {
       )}
     >
       {/* ── Toolbar ── */}
-      <div className="flex items-center gap-1.5 px-3 h-10 border-b border-border bg-[var(--surface-raised)] shrink-0">
+      <div className="flex items-center gap-1 px-2.5 h-11 border-b border-border bg-[var(--surface-raised)] shrink-0">
+        {/* Title */}
+        <div className="flex items-center gap-1.5 mr-1">
+          <Eye className="w-3.5 h-3.5 text-amber-500/70" />
+          <span className="text-[11px] font-semibold text-foreground/80 tracking-wide uppercase">
+            Preview
+          </span>
+        </div>
+
+        <div className="w-px h-4 bg-border mx-1" />
+
         {/* Reload */}
         <button
           onClick={handleReload}
-          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
-          title="Reload"
+          className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-background/60 transition-all duration-150"
+          title="Reload preview"
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
 
         {/* URL bar */}
-        <div className="flex-1 flex items-center h-6 px-2 rounded bg-background border border-border/50 text-[11px] text-muted-foreground font-mono truncate">
-          <Globe className="w-3 h-3 mr-1.5 shrink-0 text-muted-foreground/50" />
-          {url || 'localhost:3000'}
+        <div className="flex-1 flex items-center h-7 px-2.5 rounded-md bg-background/50 border border-border/40 text-[11px] text-muted-foreground/70 font-mono truncate mx-1 hover:border-border/60 transition-colors">
+          <Globe className="w-3 h-3 mr-1.5 shrink-0 text-muted-foreground/40" />
+          <span className="truncate">{url || 'localhost:3000'}</span>
         </div>
 
         {/* Device toggles */}
-        <div className="flex items-center gap-0.5 border-l border-border pl-1.5 ml-1">
+        <div className="flex items-center gap-0.5 bg-background/30 rounded-md p-0.5 border border-border/30">
           {(
             [
-              { key: 'mobile' as const, icon: Smartphone },
-              { key: 'tablet' as const, icon: Tablet },
-              { key: 'desktop' as const, icon: Monitor },
+              { key: 'mobile' as const, icon: Smartphone, label: 'Mobile' },
+              { key: 'tablet' as const, icon: Tablet, label: 'Tablet' },
+              { key: 'desktop' as const, icon: Monitor, label: 'Desktop' },
             ] as const
-          ).map(({ key, icon: Icon }) => (
+          ).map(({ key, icon: Icon, label }) => (
             <button
               key={key}
               onClick={() => setDevice(key)}
               className={cn(
-                'p-1 rounded transition-colors',
+                'p-1 rounded transition-all duration-150',
                 device === key
-                  ? 'text-foreground bg-background'
-                  : 'text-muted-foreground/50 hover:text-muted-foreground',
+                  ? 'text-amber-500 bg-amber-500/10 shadow-sm'
+                  : 'text-muted-foreground/40 hover:text-muted-foreground/70 hover:bg-background/50',
               )}
-              title={key}
+              title={label}
             >
               <Icon className="w-3.5 h-3.5" />
             </button>
           ))}
         </div>
 
+        <div className="w-px h-4 bg-border mx-0.5" />
+
         {/* Tier selector */}
-        <div className="relative border-l border-border pl-1.5 ml-1">
+        <div className="relative">
           <button
             onClick={() => setShowTierMenu(!showTierMenu)}
-            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:bg-background"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all duration-150 hover:bg-background/50 border border-transparent hover:border-border/30"
             style={{ color: tierConfig.color }}
           >
             <TierIcon className="w-3 h-3" />
             {tierConfig.label}
-            <ChevronDown className="w-2.5 h-2.5" />
+            <ChevronDown className={cn(
+              'w-2.5 h-2.5 transition-transform duration-200',
+              showTierMenu && 'rotate-180',
+            )} />
           </button>
 
           {showTierMenu && (
@@ -275,7 +294,12 @@ export function PreviewPanel() {
                 className="fixed inset-0 z-40"
                 onClick={() => setShowTierMenu(false)}
               />
-              <div className="absolute right-0 top-8 z-50 w-52 bg-[var(--surface)] border border-border rounded-lg shadow-lg overflow-hidden">
+              <div className="absolute right-0 top-9 z-50 w-56 bg-[var(--surface)] border border-border rounded-xl shadow-xl overflow-hidden backdrop-blur-sm">
+                <div className="px-3 py-2 border-b border-border/50">
+                  <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                    Preview Engine
+                  </p>
+                </div>
                 {(Object.entries(TIER_CONFIG) as [PreviewTier, typeof tierConfig][]).map(
                   ([key, config]) => {
                     const isAllowed = allowedTiers.includes(key);
@@ -297,8 +321,8 @@ export function PreviewPanel() {
                         }}
                         disabled={!isAllowed}
                         className={cn(
-                          'flex items-center gap-2 w-full px-3 py-2 text-left text-xs transition-colors',
-                          !isAllowed && 'opacity-50 cursor-not-allowed',
+                          'flex items-center gap-2.5 w-full px-3 py-2.5 text-left text-xs transition-all duration-150',
+                          !isAllowed && 'opacity-40 cursor-not-allowed',
                           tier === key
                             ? 'bg-[var(--surface-raised)]'
                             : isAllowed
@@ -306,10 +330,18 @@ export function PreviewPanel() {
                               : '',
                         )}
                       >
-                        <config.icon
-                          className="w-3.5 h-3.5"
-                          style={{ color: isAllowed ? config.color : undefined }}
-                        />
+                        <div
+                          className={cn(
+                            'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
+                            isAllowed ? 'bg-background/80' : 'bg-background/40',
+                          )}
+                          style={isAllowed ? { borderColor: config.color + '30', borderWidth: 1 } : undefined}
+                        >
+                          <config.icon
+                            className="w-3.5 h-3.5"
+                            style={{ color: isAllowed ? config.color : undefined }}
+                          />
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className={cn(
                             'font-medium',
@@ -317,24 +349,25 @@ export function PreviewPanel() {
                           )}>
                             {config.label}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">
+                          <div className="text-[10px] text-muted-foreground/60 mt-0.5">
                             {config.description}
                           </div>
                         </div>
                         {tier === key && isAllowed && (
                           <Badge
                             variant="outline"
-                            className="ml-auto text-[8px] px-1 py-0 shrink-0"
+                            className="ml-auto text-[8px] px-1.5 py-0 shrink-0"
                             style={{
                               color: config.color,
                               borderColor: config.color + '40',
+                              backgroundColor: config.color + '08',
                             }}
                           >
                             Active
                           </Badge>
                         )}
                         {!isAllowed && upgradeLabel && (
-                          <span className="ml-auto flex items-center gap-1 text-[9px] text-muted-foreground/60 shrink-0">
+                          <span className="ml-auto flex items-center gap-1 text-[9px] text-muted-foreground/50 shrink-0">
                             <Lock className="w-2.5 h-2.5" />
                             {upgradeLabel}
                           </span>
@@ -348,11 +381,13 @@ export function PreviewPanel() {
           )}
         </div>
 
+        <div className="w-px h-4 bg-border mx-0.5" />
+
         {/* Download ZIP */}
         <button
           onClick={handleDownloadZip}
-          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
-          title="Download ZIP"
+          className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-background/60 transition-all duration-150"
+          title="Download project ZIP"
         >
           <Download className="w-3.5 h-3.5" />
         </button>
@@ -360,7 +395,7 @@ export function PreviewPanel() {
         {/* Fullscreen */}
         <button
           onClick={() => setFullscreen(!fullscreen)}
-          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+          className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-background/60 transition-all duration-150"
           title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         >
           {fullscreen ? (
@@ -376,7 +411,7 @@ export function PreviewPanel() {
             setOpen(false);
             setFullscreen(false);
           }}
-          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+          className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-background/60 transition-all duration-150"
           title="Close preview"
         >
           <X className="w-3.5 h-3.5" />
@@ -385,26 +420,47 @@ export function PreviewPanel() {
 
       {/* ── Preview Content ── */}
       <div className="flex-1 relative overflow-hidden bg-background">
-        {/* Status overlay */}
+        {/* Loading overlay */}
         {(status === 'loading' || status === 'installing' || status === 'building') && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground capitalize">{status}...</p>
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
+            <div className="relative mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-amber-500/60" />
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[var(--surface)] border border-border flex items-center justify-center">
+                {status === 'loading' && <RefreshCw className="w-2.5 h-2.5 text-amber-500/70" />}
+                {status === 'installing' && <Download className="w-2.5 h-2.5 text-amber-500/70" />}
+                {status === 'building' && <Code2 className="w-2.5 h-2.5 text-amber-500/70" />}
+              </div>
+            </div>
+            <p className="text-sm font-medium text-foreground/70 mb-1">
+              {status === 'loading' && 'Loading preview...'}
+              {status === 'installing' && 'Installing dependencies...'}
+              {status === 'building' && 'Building project...'}
+            </p>
+            <p className="text-[11px] text-muted-foreground/50">
+              This may take a moment
+            </p>
           </div>
         )}
 
         {/* Error overlay */}
         {status === 'error' && error && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm px-8">
-            <AlertCircle className="w-8 h-8 text-red-400 mb-3" />
-            <p className="text-sm text-red-400 text-center max-w-md">{error}</p>
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm px-8">
+            <div className="w-14 h-14 rounded-2xl bg-red-500/5 border border-red-500/10 flex items-center justify-center mb-4">
+              <AlertCircle className="w-6 h-6 text-red-400/70" />
+            </div>
+            <p className="text-sm font-medium text-foreground/70 mb-1.5">Preview Error</p>
+            <p className="text-xs text-red-400/80 text-center max-w-sm leading-relaxed mb-5 bg-red-500/5 border border-red-500/10 rounded-lg px-4 py-2.5">
+              {error}
+            </p>
             <Button
               variant="outline"
               size="sm"
-              className="mt-4"
+              className="gap-1.5 text-xs border-border/60 hover:border-amber-500/30 hover:bg-amber-500/5 transition-all"
               onClick={handleReload}
             >
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              <RotateCcw className="w-3 h-3" />
               Retry
             </Button>
           </div>
@@ -413,14 +469,31 @@ export function PreviewPanel() {
         {/* Empty state */}
         {artifacts.length === 0 && !loadingArtifacts && status === 'idle' && (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
-            <Play className="w-12 h-12 text-muted-foreground/20 mb-4" />
-            <p className="text-sm text-muted-foreground font-medium mb-1">
+            <div className="relative mb-5">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-center justify-center">
+                <Play className="w-7 h-7 text-amber-500/30" />
+              </div>
+              <div className="absolute -top-1 -right-1">
+                <Sparkles className="w-4 h-4 text-amber-500/20" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-foreground/70 mb-1.5">
               No code artifacts yet
             </p>
-            <p className="text-xs text-muted-foreground/60 max-w-xs">
-              Once your AI team generates code, it will appear here as a live
-              preview.
+            <p className="text-xs text-muted-foreground/50 max-w-[280px] leading-relaxed">
+              Once your AI team generates code, it will appear here as a live preview. Start a conversation in Chat to get building.
             </p>
+            <div className="mt-8 flex items-center gap-3">
+              {Object.entries(TIER_CONFIG).map(([key, config]) => (
+                <div
+                  key={key}
+                  className="flex items-center gap-1.5 text-[10px] text-muted-foreground/30 px-2.5 py-1.5 rounded-md bg-background/30 border border-border/20"
+                >
+                  <config.icon className="w-3 h-3" style={{ color: config.color + '40' }} />
+                  <span>{config.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -454,13 +527,18 @@ export function PreviewPanel() {
               )}
               {tier === 'cloud' && (
                 <div className="flex flex-col items-center justify-center h-full bg-[var(--surface)] p-8">
-                  <Server className="w-10 h-10 text-muted-foreground/20 mb-3" />
-                  <p className="text-sm text-muted-foreground font-medium">
+                  <div className="w-16 h-16 rounded-2xl bg-purple-500/5 border border-purple-500/10 flex items-center justify-center mb-5">
+                    <Server className="w-7 h-7 text-purple-400/30" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground/70 mb-1">
                     Cloud Containers
                   </p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">
-                    Coming soon — Enterprise tier
+                  <p className="text-xs text-muted-foreground/50 max-w-[260px] leading-relaxed">
+                    Run any language in cloud-hosted containers. Available on the Enterprise plan.
                   </p>
+                  <div className="mt-5 px-3 py-1.5 rounded-full bg-purple-500/5 border border-purple-500/10">
+                    <span className="text-[10px] font-medium text-purple-400/60">Coming Soon</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -469,19 +547,25 @@ export function PreviewPanel() {
       </div>
 
       {/* ── Bottom Panel Toggle ── */}
-      <div className="flex items-center h-8 border-t border-border bg-[var(--surface-raised)] px-2 shrink-0">
+      <div className="flex items-center h-9 border-t border-border bg-[var(--surface-raised)] px-2 shrink-0">
         <button
           onClick={() => setShowBottomPanel(!showBottomPanel)}
-          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[10px] text-muted-foreground/60 hover:text-foreground hover:bg-background/50 transition-all duration-150"
+          title={showBottomPanel ? 'Hide panel' : 'Show panel'}
         >
           {showBottomPanel ? (
             <ChevronDown className="w-3 h-3" />
           ) : (
             <ChevronUp className="w-3 h-3" />
           )}
+          <span className="text-[9px] font-medium uppercase tracking-wider">
+            {showBottomPanel ? 'Hide' : 'Show'}
+          </span>
         </button>
 
-        <div className="flex items-center gap-0.5 ml-2">
+        <div className="w-px h-3.5 bg-border mx-1.5" />
+
+        <div className="flex items-center gap-0.5">
           {(
             [
               { key: 'console' as const, icon: MessageSquare, label: 'Console' },
@@ -495,38 +579,43 @@ export function PreviewPanel() {
                 if (!showBottomPanel) setShowBottomPanel(true);
               }}
               className={cn(
-                'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] transition-colors',
+                'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-medium transition-all duration-150',
                 bottomTab === key && showBottomPanel
-                  ? 'text-foreground bg-background'
-                  : 'text-muted-foreground/60 hover:text-muted-foreground',
+                  ? 'text-foreground bg-background/80 shadow-sm border border-border/40'
+                  : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-background/30',
               )}
             >
               <Icon className="w-3 h-3" />
               {label}
               {key === 'console' && consoleOutput.length > 0 && (
-                <span className="ml-1 w-4 h-4 rounded-full bg-amber-500/20 text-amber-500 text-[8px] flex items-center justify-center">
+                <span className="ml-0.5 min-w-[16px] h-4 rounded-full bg-amber-500/15 text-amber-500 text-[8px] font-semibold flex items-center justify-center px-1">
                   {Math.min(consoleOutput.length, 99)}
                 </span>
+              )}
+              {key === 'terminal' && terminalOutput.length > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500/60" />
               )}
             </button>
           ))}
         </div>
 
         {/* Status indicator */}
-        <div className="ml-auto flex items-center gap-1.5">
-          <span
-            className={cn(
-              'w-1.5 h-1.5 rounded-full',
-              status === 'running' && 'bg-green-500',
-              status === 'error' && 'bg-red-400',
-              (status === 'idle' || status === 'loading') && 'bg-muted-foreground/30',
-              (status === 'installing' || status === 'building') &&
-                'bg-amber-500 animate-pulse',
-            )}
-          />
-          <span className="text-[10px] text-muted-foreground capitalize">
-            {status}
-          </span>
+        <div className="ml-auto flex items-center gap-2 pr-1">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-background/30">
+            <span
+              className={cn(
+                'w-1.5 h-1.5 rounded-full transition-colors',
+                status === 'running' && 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.4)]',
+                status === 'error' && 'bg-red-400 shadow-[0_0_4px_rgba(248,113,113,0.4)]',
+                (status === 'idle' || status === 'loading') && 'bg-muted-foreground/30',
+                (status === 'installing' || status === 'building') &&
+                  'bg-amber-500 animate-pulse shadow-[0_0_4px_rgba(245,158,11,0.4)]',
+              )}
+            />
+            <span className="text-[10px] text-muted-foreground/60 font-medium capitalize">
+              {status}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -535,9 +624,9 @@ export function PreviewPanel() {
         {showBottomPanel && (
           <motion.div
             initial={{ height: 0 }}
-            animate={{ height: 160 }}
+            animate={{ height: 180 }}
             exit={{ height: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="border-t border-border overflow-hidden shrink-0"
           >
             {bottomTab === 'network' ? (

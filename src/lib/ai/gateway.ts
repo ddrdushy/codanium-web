@@ -103,6 +103,28 @@ export class LLMGateway {
       }
     }
 
+    // Try admin-level (global) settings as second-to-last fallback
+    try {
+      const adminSettings = await prisma.adminSetting.findMany({
+        where: { key: { in: ['llm.defaultProvider', 'llm.defaultModel', 'llm.baseUrl'] } },
+      });
+      const adminMap: Record<string, string> = {};
+      for (const s of adminSettings) {
+        adminMap[s.key] = String(s.value);
+      }
+      const adminProvider = adminMap['llm.defaultProvider'];
+      if (adminProvider && adminProvider !== 'mock' && this.providers.has(adminProvider)) {
+        const config: ProviderConfig = {
+          provider: adminProvider,
+          baseUrl: adminMap['llm.baseUrl'] || undefined,
+          defaultModel: adminMap['llm.defaultModel'] || 'llama3',
+        };
+        return { provider: this.providers.get(adminProvider)!, config, isMock: false };
+      }
+    } catch {
+      // Admin settings unavailable — fall through to mock
+    }
+
     // Fall back to mock
     return { provider: this.mockProvider, config: this.mockConfig, isMock: true };
   }

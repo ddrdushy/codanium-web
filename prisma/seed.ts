@@ -316,7 +316,7 @@ async function main() {
   const allUsers = [...authUsers, ...adminUsers];
 
   for (const user of allUsers) {
-    await prisma.user.create({ data: user });
+    await prisma.user.create({ data: { ...user, onboardingCompleted: true, onboardingStep: 4 } });
   }
   console.log(`  Created ${allUsers.length} users`);
 

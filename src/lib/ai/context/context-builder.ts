@@ -32,16 +32,17 @@ export interface ContextBuildOptions {
 type ContextFetcher = (projectId: string, scope?: ContextScope) => Promise<unknown>;
 
 const FETCHER_MAP: Record<ContextSource, ContextFetcher> = {
-  project_info:   sources.fetchProjectInfo,
-  sdlc_stages:    sources.fetchSDLCStages,
-  cards:          sources.fetchCards,
-  decisions:      sources.fetchDecisions,
-  documents:      sources.fetchDocuments,
-  chat_history:   sources.fetchChatHistory as ContextFetcher,
-  agents_status:  sources.fetchAgentsStatus,
-  llm_usage:      sources.fetchLLMUsage,
-  wireframes:     sources.fetchWireframes,
-  artifacts:      sources.fetchArtifacts,
+  project_info:    sources.fetchProjectInfo,
+  sdlc_stages:     sources.fetchSDLCStages,
+  cards:           sources.fetchCards,
+  decisions:       sources.fetchDecisions,
+  documents:       sources.fetchDocuments,
+  chat_history:    sources.fetchChatHistory as ContextFetcher,
+  agents_status:   sources.fetchAgentsStatus,
+  llm_usage:       sources.fetchLLMUsage,
+  wireframes:      sources.fetchWireframes,
+  artifacts:       sources.fetchArtifacts,
+  project_memory:  sources.fetchProjectMemory,
 };
 
 // ─── Formatter Registry ──────────────────────────────────────────────────────
@@ -49,16 +50,17 @@ const FETCHER_MAP: Record<ContextSource, ContextFetcher> = {
 type ContextFormatter = (data: unknown) => string;
 
 const FORMATTER_MAP: Record<ContextSource, ContextFormatter> = {
-  project_info:   formatProjectInfo,
-  sdlc_stages:    formatSDLCStages,
-  cards:          formatCards,
-  decisions:      formatDecisions,
-  documents:      formatDocuments,
-  chat_history:   () => '', // chat_history is handled separately as recentHistory
-  agents_status:  formatAgentsStatus,
-  llm_usage:      formatLLMUsage,
-  wireframes:     formatWireframes,
-  artifacts:      formatArtifacts,
+  project_info:    formatProjectInfo,
+  sdlc_stages:     formatSDLCStages,
+  cards:           formatCards,
+  decisions:       formatDecisions,
+  documents:       formatDocuments,
+  chat_history:    () => '', // chat_history is handled separately as recentHistory
+  agents_status:   formatAgentsStatus,
+  llm_usage:       formatLLMUsage,
+  wireframes:      formatWireframes,
+  artifacts:       formatArtifacts,
+  project_memory:  formatProjectMemory,
 };
 
 // ─── ContextBuilder ──────────────────────────────────────────────────────────
@@ -370,4 +372,18 @@ function formatArtifacts(data: unknown): string {
   });
 
   return [`MODULE ARTIFACTS (${artifacts.length}):`, ...lines].join('\n');
+}
+
+function formatProjectMemory(data: unknown): string {
+  const memories = data as Array<{
+    category: string;
+    content: string;
+    source: string;
+  }>;
+  if (memories.length === 0) return '';
+
+  const lines = memories.map(
+    (m) => `  [${m.category}] ${m.content}`,
+  );
+  return ['PROJECT MEMORY (key facts about this project):', ...lines].join('\n');
 }

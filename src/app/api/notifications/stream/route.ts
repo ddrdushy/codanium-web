@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireAuthOrApiKey } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
  * Polls DB every 3s for new notifications and pushes them to the client.
  */
 export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
+  const { session, error } = await requireAuthOrApiKey();
+  if (error) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },

@@ -12,6 +12,8 @@ import {
   Send,
   Loader2,
   CreditCard,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -79,8 +81,15 @@ function SettingField({
 export default function SettingsPage() {
   // ─── LLM Configuration state ───
   const [defaultProvider, setDefaultProvider] = useState('anthropic');
+  const [defaultModel, setDefaultModel] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
   const [maxTokens, setMaxTokens] = useState('4096');
   const [temperature, setTemperature] = useState('0.7');
+  const [testingLlm, setTestingLlm] = useState(false);
+  const [testLlmStatus, setTestLlmStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [testLlmMessage, setTestLlmMessage] = useState('');
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
 
   // ─── Feature Flags state ───
   const [featureFlags, setFeatureFlags] = useState({
@@ -94,11 +103,17 @@ export default function SettingsPage() {
 
   // ─── Email Configuration state ───
   const [emailEnabled, setEmailEnabled] = useState(false);
-  const [emailApiKey, setEmailApiKey] = useState('');
+  const [emailMailjetApiKey, setEmailMailjetApiKey] = useState('');
+  const [emailMailjetSecretKey, setEmailMailjetSecretKey] = useState('');
   const [emailFromAddress, setEmailFromAddress] = useState('noreply@yourdomain.com');
   const [emailFromName, setEmailFromName] = useState('AI Team Studio');
+  const [emailWebhookToken, setEmailWebhookToken] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailStatus, setTestEmailStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [registeringWebhooks, setRegisteringWebhooks] = useState(false);
+  const [registerWebhookStatus, setRegisterWebhookStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [registerWebhookMessage, setRegisterWebhookMessage] = useState('');
+  const [emailAnalytics, setEmailAnalytics] = useState<any>(null);
 
   // ─── Stripe Configuration state ───
   const [stripeEnabled, setStripeEnabled] = useState(false);
@@ -126,6 +141,12 @@ export default function SettingsPage() {
         if (settings['llm.temperature'] !== undefined) {
           setTemperature(String(settings['llm.temperature']));
         }
+        if (settings['llm.defaultModel']) {
+          setDefaultModel(settings['llm.defaultModel']);
+        }
+        if (settings['llm.baseUrl']) {
+          setBaseUrl(settings['llm.baseUrl']);
+        }
         if (settings['featureFlags']) {
           const ff = settings['featureFlags'];
           setFeatureFlags((prev) => ({
@@ -141,14 +162,20 @@ export default function SettingsPage() {
         if (settings['email.enabled'] !== undefined) {
           setEmailEnabled(settings['email.enabled']);
         }
-        if (settings['email.apiKey']) {
-          setEmailApiKey(settings['email.apiKey']);
+        if (settings['email.mailjetApiKey']) {
+          setEmailMailjetApiKey(settings['email.mailjetApiKey']);
+        }
+        if (settings['email.mailjetSecretKey']) {
+          setEmailMailjetSecretKey(settings['email.mailjetSecretKey']);
         }
         if (settings['email.fromAddress']) {
           setEmailFromAddress(settings['email.fromAddress']);
         }
         if (settings['email.fromName']) {
           setEmailFromName(settings['email.fromName']);
+        }
+        if (settings['email.mailjetWebhookToken']) {
+          setEmailWebhookToken(settings['email.mailjetWebhookToken']);
         }
         // Stripe settings
         if (settings['stripe.enabled'] !== undefined) {
@@ -170,6 +197,12 @@ export default function SettingsPage() {
       .catch(() => {/* keep defaults */});
   }, []);
 
+  // Reset models when provider changes
+  useEffect(() => {
+    setAvailableModels([]);
+    setDefaultModel('');
+  }, [defaultProvider]);
+
   const toggleFeature = (key: keyof typeof featureFlags) => {
     setFeatureFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -181,11 +214,14 @@ export default function SettingsPage() {
     try {
       await saveAdminSettings({
         'llm.defaultProvider': defaultProvider,
+        'llm.defaultModel': defaultModel,
+        'llm.baseUrl': baseUrl,
         'llm.maxTokens': Number(maxTokens),
         'llm.temperature': Number(temperature),
         featureFlags,
         'email.enabled': emailEnabled,
-        'email.apiKey': emailApiKey,
+        'email.mailjetApiKey': emailMailjetApiKey,
+        'email.mailjetSecretKey': emailMailjetSecretKey,
         'email.fromAddress': emailFromAddress,
         'email.fromName': emailFromName,
         'stripe.enabled': stripeEnabled,
@@ -239,8 +275,83 @@ export default function SettingsPage() {
             >
               <option value="anthropic">Anthropic</option>
               <option value="openai">OpenAI</option>
+              <option value="ollama">Ollama</option>
               <option value="google">Google</option>
+              <option value="custom">Custom</option>
             </select>
+          </SettingField>
+          {(defaultProvider === 'ollama' || defaultProvider === 'custom') && (
+            <SettingField label="Base URL">
+              <input
+                type="text"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder={defaultProvider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com'}
+                className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+              />
+            </SettingField>
+          )}
+          <SettingField label="Default Model">
+            <div className="flex items-center gap-2">
+              {availableModels.length > 0 ? (
+                <select
+                  value={defaultModel}
+                  onChange={(e) => setDefaultModel(e.target.value)}
+                  className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
+                >
+                  <option value="">Select a model...</option>
+                  {availableModels.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-sm text-muted-foreground italic">
+                  {defaultModel || 'No models loaded'}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loadingModels || (!baseUrl.trim() && (defaultProvider === 'ollama' || defaultProvider === 'custom'))}
+                onClick={async () => {
+                  setLoadingModels(true);
+                  setAvailableModels([]);
+                  try {
+                    const res = await fetch('/api/llm/test', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        provider: defaultProvider,
+                        baseUrl: baseUrl || undefined,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success && data.models?.length) {
+                      setAvailableModels(data.models);
+                      if (!defaultModel || !data.models.includes(defaultModel)) {
+                        setDefaultModel(data.models[0]);
+                      }
+                    } else {
+                      setTestLlmStatus('error');
+                      setTestLlmMessage(data.message || 'Could not load models');
+                      setTimeout(() => { setTestLlmStatus('idle'); setTestLlmMessage(''); }, 5000);
+                    }
+                  } catch {
+                    setTestLlmStatus('error');
+                    setTestLlmMessage('Network error loading models');
+                    setTimeout(() => { setTestLlmStatus('idle'); setTestLlmMessage(''); }, 5000);
+                  }
+                  setLoadingModels(false);
+                }}
+                className="gap-1 shrink-0"
+              >
+                {loadingModels ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading...</>
+                ) : (
+                  <><Cpu className="w-3.5 h-3.5" /> Load Models</>
+                )}
+              </Button>
+            </div>
           </SettingField>
           <SettingField label="Max Tokens per Request">
             <input
@@ -261,6 +372,65 @@ export default function SettingsPage() {
               className="w-20 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
             />
           </SettingField>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-muted-foreground">Test Connection</span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={testingLlm || !defaultModel.trim()}
+                onClick={async () => {
+                  setTestingLlm(true);
+                  setTestLlmStatus('idle');
+                  setTestLlmMessage('');
+                  try {
+                    const res = await fetch('/api/llm/test', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        provider: defaultProvider,
+                        baseUrl: baseUrl || undefined,
+                        defaultModel: defaultModel.trim(),
+                      }),
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                      setTestLlmStatus('success');
+                      setTestLlmMessage(data.message || 'Connected!');
+                    } else {
+                      setTestLlmStatus('error');
+                      setTestLlmMessage(data.message || 'Connection failed');
+                    }
+                  } catch {
+                    setTestLlmStatus('error');
+                    setTestLlmMessage('Network error');
+                  }
+                  setTestingLlm(false);
+                  setTimeout(() => { setTestLlmStatus('idle'); setTestLlmMessage(''); }, 8000);
+                }}
+                className="gap-1.5"
+                style={{
+                  borderColor: testLlmStatus === 'success' ? '#10b981' : testLlmStatus === 'error' ? '#ef4444' : undefined,
+                  color: testLlmStatus === 'success' ? '#10b981' : testLlmStatus === 'error' ? '#ef4444' : undefined,
+                }}
+              >
+                {testingLlm ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Testing...</>
+                ) : testLlmStatus === 'success' ? (
+                  <><CheckCircle2 className="w-3.5 h-3.5" /> Connected</>
+                ) : testLlmStatus === 'error' ? (
+                  <><AlertTriangle className="w-3.5 h-3.5" /> Failed</>
+                ) : (
+                  'Test Connection'
+                )}
+              </Button>
+              {testLlmMessage && testLlmStatus !== 'idle' && (
+                <span className={`text-[11px] max-w-[200px] truncate ${testLlmStatus === 'success' ? 'text-emerald-500' : 'text-red-400'}`}>
+                  {testLlmMessage}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </motion.div>
 
@@ -302,7 +472,7 @@ export default function SettingsPage() {
         <SectionHeader
           icon={<Mail className="w-4 h-4" />}
           title="Email Configuration"
-          subtitle="SendGrid transactional email settings"
+          subtitle="Mailjet transactional email & event tracking"
           color="#8b5cf6"
         />
         <div className="space-y-0">
@@ -319,12 +489,21 @@ export default function SettingsPage() {
               onCheckedChange={setEmailEnabled}
             />
           </div>
-          <SettingField label="SendGrid API Key">
+          <SettingField label="Mailjet API Key">
             <input
               type="password"
-              value={emailApiKey}
-              onChange={(e) => setEmailApiKey(e.target.value)}
-              placeholder="SG.xxxxxxxxxxxx"
+              value={emailMailjetApiKey}
+              onChange={(e) => setEmailMailjetApiKey(e.target.value)}
+              placeholder="your-api-key"
+              className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+            />
+          </SettingField>
+          <SettingField label="Mailjet Secret Key">
+            <input
+              type="password"
+              value={emailMailjetSecretKey}
+              onChange={(e) => setEmailMailjetSecretKey(e.target.value)}
+              placeholder="your-secret-key"
               className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
             />
           </SettingField>
@@ -346,8 +525,19 @@ export default function SettingsPage() {
               className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
             />
           </SettingField>
-          <div className="flex items-center justify-between py-3">
-            <span className="text-sm text-muted-foreground">Send Test Email</span>
+
+          {/* Webhook Token */}
+          {emailWebhookToken && (
+            <SettingField label="Webhook Token">
+              <code className="text-xs text-muted-foreground bg-foreground/5 px-2 py-1 rounded font-mono">
+                {emailWebhookToken.substring(0, 16)}...
+              </code>
+            </SettingField>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-3 py-3 border-t border-border/30 mt-1">
+            {/* Send Test Email */}
             <Button
               variant="outline"
               size="sm"
@@ -384,8 +574,190 @@ export default function SettingsPage() {
                 <><Send className="w-3.5 h-3.5" /> Send Test</>
               )}
             </Button>
+
+            {/* Register Webhooks */}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={registeringWebhooks || !emailMailjetApiKey || !emailMailjetSecretKey}
+              onClick={async () => {
+                setRegisteringWebhooks(true);
+                setRegisterWebhookStatus('idle');
+                setRegisterWebhookMessage('');
+                try {
+                  const res = await fetch('/api/admin/email/register-webhooks', { method: 'POST' });
+                  const data = await res.json();
+                  if (res.ok && data.success) {
+                    setRegisterWebhookStatus('success');
+                    setRegisterWebhookMessage(data.message);
+                    // Reload settings to get the new webhook token
+                    fetchAdminSettings().then((settings) => {
+                      if (settings['email.mailjetWebhookToken']) {
+                        setEmailWebhookToken(settings['email.mailjetWebhookToken']);
+                      }
+                    }).catch(() => {});
+                  } else {
+                    setRegisterWebhookStatus('error');
+                    setRegisterWebhookMessage(data.error || 'Failed');
+                  }
+                } catch {
+                  setRegisterWebhookStatus('error');
+                  setRegisterWebhookMessage('Network error');
+                }
+                setRegisteringWebhooks(false);
+                setTimeout(() => { setRegisterWebhookStatus('idle'); setRegisterWebhookMessage(''); }, 5000);
+              }}
+              className="gap-1.5"
+              style={{
+                borderColor: registerWebhookStatus === 'success' ? '#10b981' : registerWebhookStatus === 'error' ? '#ef4444' : undefined,
+                color: registerWebhookStatus === 'success' ? '#10b981' : registerWebhookStatus === 'error' ? '#ef4444' : undefined,
+              }}
+            >
+              {registeringWebhooks ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Registering...</>
+              ) : registerWebhookStatus === 'success' ? (
+                <><Check className="w-3.5 h-3.5" /> {registerWebhookMessage}</>
+              ) : registerWebhookStatus === 'error' ? (
+                registerWebhookMessage || 'Failed'
+              ) : (
+                'Register Webhooks'
+              )}
+            </Button>
           </div>
         </div>
+      </motion.div>
+
+      {/* Email Analytics */}
+      <motion.div
+        variants={itemVariants}
+        className="glass-card rounded-xl border border-border/50 p-6"
+      >
+        <SectionHeader
+          icon={<Mail className="w-4 h-4" />}
+          title="Email Delivery Analytics"
+          subtitle="Real-time event tracking from Mailjet"
+          color="#8b5cf6"
+        />
+        {!emailAnalytics ? (
+          <div className="flex justify-center py-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/admin/email/analytics?days=30');
+                  if (res.ok) {
+                    const data = await res.json();
+                    setEmailAnalytics(data);
+                  }
+                } catch {}
+              }}
+              className="gap-1.5"
+            >
+              Load Analytics
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Summary stats */}
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { label: 'Sent', key: 'SENT', color: '#10b981' },
+                { label: 'Opened', key: 'OPEN', color: '#3b82f6' },
+                { label: 'Clicked', key: 'CLICK', color: '#8b5cf6' },
+                { label: 'Bounced', key: 'BOUNCE', color: '#ef4444' },
+              ].map(({ label, key, color }) => (
+                <div
+                  key={key}
+                  className="p-3 rounded-lg border border-border/30 bg-foreground/[0.02] text-center"
+                >
+                  <div className="text-2xl font-bold" style={{ color }}>
+                    {emailAnalytics.summary[key] ?? 0}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Additional stats row */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Spam', key: 'SPAM', color: '#f59e0b' },
+                { label: 'Blocked', key: 'BLOCKED', color: '#ef4444' },
+                { label: 'Unsub', key: 'UNSUB', color: '#6b7280' },
+              ].map(({ label, key, color }) => (
+                <div
+                  key={key}
+                  className="p-2.5 rounded-lg border border-border/30 bg-foreground/[0.02] text-center"
+                >
+                  <div className="text-lg font-bold" style={{ color }}>
+                    {emailAnalytics.summary[key] ?? 0}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Recent events */}
+            {emailAnalytics.recentEvents?.length > 0 && (
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-medium text-muted-foreground">Recent Events</h4>
+                <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-border/30 p-2">
+                  {emailAnalytics.recentEvents.slice(0, 20).map((evt: any) => (
+                    <div
+                      key={evt.id}
+                      className="flex items-center justify-between text-xs py-1.5 px-2 rounded hover:bg-foreground/[0.02]"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
+                          style={{
+                            backgroundColor:
+                              evt.event === 'SENT' ? '#10b98120' :
+                              evt.event === 'OPEN' ? '#3b82f620' :
+                              evt.event === 'CLICK' ? '#8b5cf620' :
+                              evt.event === 'BOUNCE' ? '#ef444420' :
+                              evt.event === 'SPAM' ? '#f59e0b20' : '#6b728020',
+                            color:
+                              evt.event === 'SENT' ? '#10b981' :
+                              evt.event === 'OPEN' ? '#3b82f6' :
+                              evt.event === 'CLICK' ? '#8b5cf6' :
+                              evt.event === 'BOUNCE' ? '#ef4444' :
+                              evt.event === 'SPAM' ? '#f59e0b' : '#6b7280',
+                          }}
+                        >
+                          {evt.event}
+                        </span>
+                        <span className="truncate text-muted-foreground">{evt.email}</span>
+                        {evt.bounceError && (
+                          <span className="text-red-400 truncate text-[10px]">{evt.bounceError}</span>
+                        )}
+                      </div>
+                      <span className="text-muted-foreground/50 shrink-0 ml-2">
+                        {new Date(evt.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Refresh button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/admin/email/analytics?days=30');
+                  if (res.ok) setEmailAnalytics(await res.json());
+                } catch {}
+              }}
+              className="text-xs text-muted-foreground"
+            >
+              Refresh
+            </Button>
+          </div>
+        )}
       </motion.div>
 
       {/* Stripe Billing */}

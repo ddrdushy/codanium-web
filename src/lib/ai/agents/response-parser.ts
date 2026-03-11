@@ -224,6 +224,16 @@ function parseAction(actionType: string, rawJson: string): AgentAction | null {
         },
       };
 
+    case 'remember':
+      if (!parsed.category || !parsed.content) return null;
+      return {
+        type: 'remember',
+        data: {
+          category: String(parsed.category),
+          content: String(parsed.content),
+        },
+      };
+
     default:
       console.warn(
         `[ResponseParser] Unrecognized action type: "${actionType}", skipping.`,
