@@ -16,9 +16,6 @@ export async function GET(
 ) {
   try {
     const { id: projectId } = await params;
-    const url = new URL(request.url);
-    const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50'), 200);
-
     const messages = await prisma.chatMessage.findMany({
       where: { projectId },
       include: {
@@ -27,7 +24,6 @@ export async function GET(
         },
       },
       orderBy: { createdAt: 'asc' },
-      take: limit,
     });
 
     return NextResponse.json(messages);

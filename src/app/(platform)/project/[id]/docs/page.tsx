@@ -11,6 +11,8 @@ import {
   Edit3, Eye, Download, MoreHorizontal, BookOpen, Code2,
   FileCode2, ScrollText, Layers, Bot, Lock, Users
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Document {
   id: string;
@@ -23,6 +25,7 @@ interface Document {
   wordCount: number;
   sections: number;
   locked: boolean;
+  content: string;
 }
 
 const docTypeConfig: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
@@ -40,77 +43,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
   published: { label: 'Published', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20', icon: CheckCircle2 },
 };
 
-const mockDocuments: Document[] = [
-  {
-    id: 'doc-001', title: 'Business Requirements Document', type: 'brd', status: 'approved',
-    owner: 'Business Analyst', ownerAvatar: '📋', lastUpdated: '2d ago', wordCount: 4200, sections: 12, locked: false,
-  },
-  {
-    id: 'doc-002', title: 'Solution Design Document', type: 'sdd', status: 'review',
-    owner: 'Solution Architect', ownerAvatar: '🏗️', lastUpdated: '4h ago', wordCount: 8900, sections: 24, locked: true,
-  },
-  {
-    id: 'doc-003', title: 'REST API Specification v2', type: 'api-spec', status: 'draft',
-    owner: 'Junior Developer', ownerAvatar: '💻', lastUpdated: '1h ago', wordCount: 3100, sections: 18, locked: false,
-  },
-  {
-    id: 'doc-004', title: 'Deployment Runbook', type: 'runbook', status: 'draft',
-    owner: 'DevOps Engineer', ownerAvatar: '🚀', lastUpdated: '6h ago', wordCount: 1800, sections: 8, locked: false,
-  },
-  {
-    id: 'doc-005', title: 'ADR-001: File-based Persistence', type: 'adr', status: 'published',
-    owner: 'Solution Architect', ownerAvatar: '🏗️', lastUpdated: '5d ago', wordCount: 950, sections: 5, locked: false,
-  },
-  {
-    id: 'doc-006', title: 'ADR-002: Multi-Provider LLM Gateway', type: 'adr', status: 'draft',
-    owner: 'Solution Architect', ownerAvatar: '🏗️', lastUpdated: '30m ago', wordCount: 620, sections: 5, locked: false,
-  },
-];
-
-// Mock BRD content for the editor preview
-const mockBRDContent = {
-  title: 'Business Requirements Document',
-  subtitle: 'AI Team Studio — Product Delivery Operating System',
-  sections: [
-    {
-      heading: '1. Executive Summary',
-      content: 'AI Team Studio is a deterministic, AI-native Product Delivery Operating System that orchestrates 23 specialized AI agents through a structured SDLC pipeline. The system replaces ad-hoc AI tool usage with a governed, auditable, and reproducible delivery framework.',
-    },
-    {
-      heading: '2. Business Objectives',
-      items: [
-        'Reduce software delivery cycle time by 60% through AI agent automation',
-        'Ensure 100% audit compliance through deterministic state tracking',
-        'Enable non-technical stakeholders to approve decisions via natural language',
-        'Achieve zero-drift between requirements and implementation through continuous validation',
-      ],
-    },
-    {
-      heading: '3. Stakeholders',
-      content: 'Primary stakeholders include the Product Owner (approval authority), Engineering Lead (technical oversight), and Project Sponsor (budget authority). All 23 AI agents operate under RACI-based authority contracts.',
-    },
-    {
-      heading: '4. Functional Requirements',
-      items: [
-        'FR-001: System shall maintain a board of cards with 7 defined states (Planned → Released)',
-        'FR-002: All state transitions shall be validated against the transition matrix',
-        'FR-003: Non-trivial changes require a formal decision with options analysis and risk scoring',
-        'FR-004: Each agent shall operate within defined authority boundaries (can_do, must_do, must_never)',
-        'FR-005: System shall support BYOM (Bring Your Own Model) with multi-provider routing',
-        'FR-006: All system state shall be persisted to files (board.json, decisions.jsonl, events.jsonl)',
-      ],
-    },
-    {
-      heading: '5. Acceptance Criteria',
-      items: [
-        'AC-001: A card can be moved from any valid source state to a valid target state',
-        'AC-002: Invalid state transitions are rejected with a descriptive error',
-        'AC-003: Decisions require at least 2 options with pros, cons, and risk ratings',
-        'AC-004: The system can be fully restored from state files after a crash',
-      ],
-    },
-  ],
-};
+// No mock documents — all content comes from the database
 
 const dbTypeMap: Record<string, Document['type']> = {
   BRD: 'brd', SDD: 'sdd', API_SPEC: 'api-spec', RUNBOOK: 'runbook', ADR: 'adr',
@@ -133,8 +66,8 @@ export default function DocsPage() {
   const params = useParams();
   const projectId = params.id as string;
 
-  const [documents, setDocuments] = useState<Document[]>(mockDocuments);
-  const [selectedDoc, setSelectedDoc] = useState<Document | null>(mockDocuments[0]);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -144,7 +77,7 @@ export default function DocsPage() {
     fetch(`/api/projects/${projectId}/documents`)
       .then(r => r.json())
       .then((data: any[]) => {
-        if (data.length > 0) {
+        if (Array.isArray(data) && data.length > 0) {
           const mapped = data.map((d: any) => ({
             id: d.id,
             title: d.title,
@@ -152,16 +85,17 @@ export default function DocsPage() {
             status: dbStatusMap[d.status] ?? 'draft',
             owner: d.owner ?? 'Unknown',
             ownerAvatar: d.ownerAvatar ?? '📋',
-            lastUpdated: formatRelative(d.updatedAt),
+            lastUpdated: formatRelative(d.updatedAt ?? d.createdAt),
             wordCount: d.wordCount ?? 0,
             sections: d.sections ?? 0,
             locked: d.locked ?? false,
+            content: d.content ?? '',
           }));
           setDocuments(mapped);
           setSelectedDoc(mapped[0]);
         }
       })
-      .catch(() => {/* keep mock data */})
+      .catch(() => {/* no data — keep empty */})
       .finally(() => setLoading(false));
   }, [projectId]);
 
@@ -201,6 +135,13 @@ export default function DocsPage() {
 
         {/* Doc List */}
         <div className="flex-1 overflow-y-auto">
+          {!loading && filteredDocs.length === 0 && (
+            <div className="px-4 py-8 text-center text-muted-foreground/40">
+              <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-xs">No documents yet</p>
+              <p className="text-[10px] mt-1">Documents will appear here as your AI team creates them during the project.</p>
+            </div>
+          )}
           {filteredDocs.map((doc, i) => {
             const typeConf = docTypeConfig[doc.type];
             const statConf = statusConfig[doc.status];
@@ -301,95 +242,50 @@ export default function DocsPage() {
               <div className="px-6 py-8 max-w-3xl mx-auto">
                 {/* Title */}
                 <div className="mb-8 pb-6 border-b border-border">
-                  {editMode ? (
-                    <input
-                      defaultValue={mockBRDContent.title}
-                      className="text-3xl font-bold tracking-tight bg-transparent outline-none w-full text-foreground"
-                    />
-                  ) : (
-                    <h1 className="text-3xl font-bold tracking-tight">{mockBRDContent.title}</h1>
-                  )}
-                  <p className="text-sm text-muted-foreground mt-2">{mockBRDContent.subtitle}</p>
+                  <h1 className="text-3xl font-bold tracking-tight">{selectedDoc.title}</h1>
                   <div className="flex items-center gap-3 mt-3 text-[11px] text-muted-foreground/50">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" /> Last updated {selectedDoc.lastUpdated}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" /> 3 contributors
+                      <Users className="w-3 h-3" /> {selectedDoc.owner}
                     </span>
+                    <span>{selectedDoc.wordCount.toLocaleString()} words</span>
                   </div>
                 </div>
 
-                {/* Sections */}
-                <div className="space-y-8">
-                  {mockBRDContent.sections.map((section, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 + i * 0.05 }}
-                    >
-                      {editMode ? (
-                        <input
-                          defaultValue={section.heading}
-                          className="text-lg font-bold tracking-tight bg-transparent outline-none w-full mb-3 text-foreground"
-                        />
-                      ) : (
-                        <h2 className="text-lg font-bold tracking-tight mb-3">{section.heading}</h2>
-                      )}
-
-                      {section.content && (
-                        editMode ? (
-                          <textarea
-                            defaultValue={section.content}
-                            rows={4}
-                            className="w-full text-sm text-muted-foreground leading-relaxed bg-[var(--sidebar-accent)] border border-border rounded-lg px-3 py-2 outline-none focus:border-amber/30 resize-none transition-colors"
-                          />
-                        ) : (
-                          <p className="text-sm text-muted-foreground leading-relaxed">{section.content}</p>
-                        )
-                      )}
-
-                      {section.items && (
-                        <ul className="space-y-2 mt-2">
-                          {section.items.map((item, j) => (
-                            <li key={j} className="flex items-start gap-2">
-                              <span className="text-amber text-sm mt-0.5">•</span>
-                              {editMode ? (
-                                <input
-                                  defaultValue={item}
-                                  className="flex-1 text-sm text-muted-foreground bg-transparent outline-none border-b border-transparent focus:border-amber/20 transition-colors"
-                                />
-                              ) : (
-                                <span className="text-sm text-muted-foreground leading-relaxed">{item}</span>
-                              )}
-                            </li>
-                          ))}
-                          {editMode && (
-                            <li>
-                              <button className="text-[11px] text-amber/60 hover:text-amber flex items-center gap-1 ml-4 transition-colors">
-                                <Plus className="w-3 h-3" /> Add item
-                              </button>
-                            </li>
-                          )}
-                        </ul>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
-
-                {/* Add Section */}
-                {editMode && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="mt-8 pt-6 border-t border-dashed border-border"
-                  >
-                    <button className="flex items-center gap-2 text-sm text-muted-foreground/40 hover:text-amber transition-colors">
-                      <Plus className="w-4 h-4" />
-                      Add new section
-                    </button>
-                  </motion.div>
+                {/* Document body — rendered from real content */}
+                {editMode ? (
+                  <textarea
+                    defaultValue={selectedDoc.content}
+                    rows={30}
+                    className="w-full text-sm text-muted-foreground leading-relaxed bg-[var(--sidebar-accent)] border border-border rounded-lg px-4 py-3 outline-none focus:border-amber/30 resize-y transition-colors font-mono"
+                  />
+                ) : selectedDoc.content ? (
+                  <div className="prose prose-sm prose-invert max-w-none
+                    prose-headings:text-foreground prose-headings:tracking-tight
+                    prose-h1:text-2xl prose-h1:font-bold prose-h1:mb-4
+                    prose-h2:text-lg prose-h2:font-bold prose-h2:mb-3 prose-h2:mt-8
+                    prose-h3:text-base prose-h3:font-semibold prose-h3:mb-2 prose-h3:mt-6
+                    prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:mb-4
+                    prose-li:text-muted-foreground prose-li:leading-relaxed
+                    prose-ul:space-y-1 prose-ol:space-y-1
+                    prose-strong:text-foreground
+                    prose-code:text-amber prose-code:bg-amber/10 prose-code:px-1 prose-code:rounded
+                    prose-table:border prose-table:border-border
+                    prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-1.5 prose-th:bg-[var(--sidebar-accent)]
+                    prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-1.5
+                  ">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {selectedDoc.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground/40">
+                    <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">This document is empty.</p>
+                    <p className="text-xs mt-1">Content will appear here once the AI team generates it.</p>
+                  </div>
                 )}
               </div>
             </motion.div>
