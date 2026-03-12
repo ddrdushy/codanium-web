@@ -36,7 +36,8 @@ const ACTION_REGEX = /\[ACTION:(\w+)\]([\s\S]*?)\[\/ACTION\]/g;
 const ARTIFACT_REGEX = /\[ARTIFACT:([^\]]+)\]([\s\S]*?)\[\/ARTIFACT\]/g;
 
 // [DELEGATE:BA]context for the BA agent[/DELEGATE]
-const DELEGATE_REGEX = /\[DELEGATE:(\w+)\]([\s\S]*?)\[\/DELEGATE\]/g;
+// Also handles [/DELEGATE:AGENT_NAME] closing tag (LLMs sometimes add the name)
+const DELEGATE_REGEX = /\[DELEGATE:(\w+)\]([\s\S]*?)\[\/DELEGATE(?::\w+)?\]/g;
 
 // ─── File Extension to Type Mapping ──────────────────────────────────────────
 

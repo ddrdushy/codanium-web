@@ -29,8 +29,8 @@ function stripAgentMarkers(content: string): string {
   return content
     // Full [ACTION:xxx]...content...[/ACTION] blocks (including multi-line)
     .replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '')
-    // Full [DELEGATE:xxx]...content...[/DELEGATE] blocks
-    .replace(/\[DELEGATE:\w+\][\s\S]*?\[\/DELEGATE\]/g, '')
+    // Full [DELEGATE:xxx]...content...[/DELEGATE] or [/DELEGATE:xxx] blocks
+    .replace(/\[DELEGATE:\w+\][\s\S]*?\[\/DELEGATE(?::\w+)?\]/g, '')
     // Full [ARTIFACT:xxx]...content...[/ARTIFACT] blocks
     .replace(/\[ARTIFACT:[^\]]*\][\s\S]*?\[\/ARTIFACT\]/g, '')
     // Bold-wrapped markers: **[ACTION:remember]**...
@@ -39,7 +39,7 @@ function stripAgentMarkers(content: string): string {
     .replace(/\[ACTION:\w+\][^[\n]*$/gm, '')
     .replace(/^\s*\[\/ACTION\]/gm, '')
     .replace(/\[DELEGATE:\w+\]\s*$/gm, '')
-    .replace(/^\s*\[\/DELEGATE\]/gm, '')
+    .replace(/^\s*\[\/DELEGATE(?::\w+)?\]/gm, '')
     // Clean up whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
