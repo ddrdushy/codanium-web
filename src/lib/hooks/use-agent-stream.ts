@@ -332,6 +332,11 @@ export function useAgentStream(): AgentStreamState {
   const [error, setError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  // Batching refs — accumulate tokens and flush at ~30fps instead of per-token
+  const pendingContentRef = useRef('');
+  const pendingThinkingRef = useRef('');
+  const contentFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const thinkingFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stop = useCallback(() => {
     if (abortRef.current) {
@@ -352,6 +357,12 @@ export function useAgentStream(): AgentStreamState {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // Clear batching state
+      pendingContentRef.current = '';
+      pendingThinkingRef.current = '';
+      if (contentFlushRef.current) { clearTimeout(contentFlushRef.current); contentFlushRef.current = null; }
+      if (thinkingFlushRef.current) { clearTimeout(thinkingFlushRef.current); thinkingFlushRef.current = null; }
+
       setIsStreaming(true);
       setCurrentAgent(null);
       setStreamContent('');
@@ -371,10 +382,27 @@ export function useAgentStream(): AgentStreamState {
               setCurrentAgent({ shortName: data.agentShortName, name: data.agentName });
             },
             onChunk: (data) => {
-              setStreamContent((prev) => prev + data.content);
+              // Batch token updates at ~30fps to prevent per-token re-renders
+              pendingContentRef.current += data.content;
+              if (!contentFlushRef.current) {
+                contentFlushRef.current = setTimeout(() => {
+                  const pending = pendingContentRef.current;
+                  pendingContentRef.current = '';
+                  contentFlushRef.current = null;
+                  if (pending) setStreamContent((prev) => prev + pending);
+                }, 32);
+              }
             },
             onThinking: (data) => {
-              setStreamThinking((prev) => prev + data.content);
+              pendingThinkingRef.current += data.content;
+              if (!thinkingFlushRef.current) {
+                thinkingFlushRef.current = setTimeout(() => {
+                  const pending = pendingThinkingRef.current;
+                  pendingThinkingRef.current = '';
+                  thinkingFlushRef.current = null;
+                  if (pending) setStreamThinking((prev) => prev + pending);
+                }, 32);
+              }
             },
             onArtifact: (data) => {
               setArtifacts((prev) => [...prev, { name: data.name, type: data.type }]);
@@ -409,6 +437,20 @@ export function useAgentStream(): AgentStreamState {
           setError(err instanceof Error ? err.message : 'An unexpected error occurred');
         }
       } finally {
+        // Flush any remaining batched content before marking stream complete
+        if (pendingContentRef.current) {
+          const pending = pendingContentRef.current;
+          pendingContentRef.current = '';
+          setStreamContent((prev) => prev + pending);
+        }
+        if (pendingThinkingRef.current) {
+          const pending = pendingThinkingRef.current;
+          pendingThinkingRef.current = '';
+          setStreamThinking((prev) => prev + pending);
+        }
+        if (contentFlushRef.current) { clearTimeout(contentFlushRef.current); contentFlushRef.current = null; }
+        if (thinkingFlushRef.current) { clearTimeout(thinkingFlushRef.current); thinkingFlushRef.current = null; }
+
         // Only update streaming state if this controller is still current
         // (prevents a race condition when a new send() replaces the old one)
         if (abortRef.current === controller) {

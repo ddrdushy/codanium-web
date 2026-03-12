@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAgents } from '@/lib/api';
@@ -42,6 +42,15 @@ function extractOptions(content: string): {
   const cleanContent = content.replace(/^[-*]\s+\*\*[A-F]\)\*\*\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
   return { cleanContent, options, multiSelect };
 }
+
+/**
+ * Memoized markdown renderer — prevents expensive re-parsing
+ * on parent re-renders when the content hasn't changed.
+ * Critical during streaming where tokens trigger 50+ re-renders/sec.
+ */
+const MemoizedMarkdown = memo(function MemoizedMarkdown({ content }: { content: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>;
+});
 
 interface ChatMessage {
   id: string;
@@ -96,6 +105,8 @@ export default function ChatPage() {
   const [loaded, setLoaded] = useState(false);
   const [showStreamThinking, setShowStreamThinking] = useState(true);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const sendRef = useRef<(text: string) => void>(() => {});
+  const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -156,8 +167,13 @@ export default function ChatPage() {
     }
   }, [agents, messages.length, loaded]);
 
+  // Throttled scroll-to-bottom — prevents layout thrashing during streaming
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollThrottleRef.current) return;
+    scrollThrottleRef.current = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollThrottleRef.current = null;
+    }, 150);
   }, [messages, streamContent, streamThinking]);
 
   // When the stream completes, add the final agent message to the messages array
@@ -183,15 +199,17 @@ export default function ChatPage() {
 
   const activeAgents = agents.filter(a => a.status === 'working' || a.status === 'waiting');
 
-  const handleSend = useCallback(async () => {
-    const text = inputValue.trim();
-    if (!text || isStreaming) return;
+  // Core send function — takes text directly, eliminating stale closure issues
+  const sendMessage = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || isStreaming) return;
 
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const tempId = `temp-${Date.now()}`;
-    const userMsg: ChatMessage = { id: tempId, role: 'user', content: text, timestamp: now };
+    const userMsg: ChatMessage = { id: tempId, role: 'user', content: trimmed, timestamp: now };
     setMessages(prev => [...prev, userMsg]);
     setInputValue('');
+    setSelectedOptions([]);
     setShowStreamThinking(true);
 
     // Save user message to DB
@@ -199,7 +217,7 @@ export default function ChatPage() {
       const res = await fetch(`/api/projects/${projectId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'USER', content: text }),
+        body: JSON.stringify({ role: 'USER', content: trimmed }),
       });
       if (res.ok) {
         const saved = await res.json();
@@ -210,8 +228,15 @@ export default function ChatPage() {
     }
 
     // Start AI streaming via the orchestration engine
-    streamSend(projectId, text, selectedAgent?.shortName, cardId);
-  }, [inputValue, isStreaming, projectId, selectedAgent, streamSend, cardId]);
+    streamSend(projectId, trimmed, selectedAgent?.shortName, cardId);
+  }, [isStreaming, projectId, selectedAgent, streamSend, cardId]);
+
+  // Keep ref updated so memoized callbacks always call the latest version
+  sendRef.current = sendMessage;
+
+  const handleSend = useCallback(() => {
+    sendMessage(inputValue);
+  }, [sendMessage, inputValue]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -335,7 +360,7 @@ export default function ChatPage() {
                           <>
                             <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
                               <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanContent}</ReactMarkdown>
+                                <MemoizedMarkdown content={cleanContent} />
                               </div>
                             </div>
                             {options.length > 0 && (
@@ -354,8 +379,8 @@ export default function ChatPage() {
                                                 : [...prev, opt.text]
                                             );
                                           } else {
-                                            setInputValue(opt.text);
-                                            setTimeout(() => handleSend(), 50);
+                                            // Send full option text directly — no stale closure
+                                            sendRef.current(opt.text);
                                           }
                                         }}
                                         className={cn(
@@ -381,9 +406,9 @@ export default function ChatPage() {
                                 {multiSelect && selectedOptions.length > 0 && (
                                   <button
                                     onClick={() => {
-                                      setInputValue(selectedOptions.join(', '));
+                                      const text = selectedOptions.join(', ');
                                       setSelectedOptions([]);
-                                      setTimeout(() => handleSend(), 50);
+                                      sendRef.current(text);
                                     }}
                                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber text-black text-xs font-medium hover:bg-amber/90 transition-colors"
                                   >
