@@ -15,6 +15,7 @@
 import { RunnableConfig } from '@langchain/core/runnables';
 import type { GraphStateType } from '../state';
 import { parseAgentResponse } from '@/lib/ai/agents/response-parser';
+import { resolveAgentShortName } from '@/lib/ai/agents/registry';
 import { runOutputGuardrails } from '../guardrails';
 import {
   executeSideEffects,
@@ -23,6 +24,9 @@ import {
 } from '../../engine';
 import { agentStateManager } from '../../state-manager';
 import { eventBus } from '../../event-bus';
+
+/** Maximum delegation depth — must match build-graph.ts conditional edge. */
+const MAX_DELEGATION_DEPTH = 5;
 
 /**
  * Parse and execute node.
@@ -98,16 +102,33 @@ export async function parseAndExecuteNode(
   await agentStateManager.setIdle(state.projectId, state.routedAgent);
 
   // ── 7. Check for delegation ───────────────────────────────────────────
-  const shouldDelegate = !!parsed.delegateTo && (state.delegationDepth ?? 0) < 3;
+  const currentDepth = state.delegationDepth ?? 0;
+  const shouldDelegate = !!parsed.delegateTo && currentDepth < MAX_DELEGATION_DEPTH;
+
+  // Resolve the delegation target to a known short name (e.g. "SOLUTION_ARCHITECT" → "SA")
+  const resolvedDelegateTo = parsed.delegateTo
+    ? resolveAgentShortName(parsed.delegateTo)
+    : undefined;
+
+  console.log(
+    `[ParseAndExecute] Delegation check — delegateTo: ${parsed.delegateTo ?? 'none'}` +
+    ` → resolved: ${resolvedDelegateTo ?? 'none'}` +
+    ` | depth: ${currentDepth}/${MAX_DELEGATION_DEPTH}` +
+    ` | shouldDelegate: ${shouldDelegate}` +
+    ` | delegateContext: ${parsed.delegateContext?.substring(0, 80) ?? 'none'}`,
+  );
 
   // If delegating, emit delegation event and update routedAgent for next iteration
-  if (shouldDelegate && parsed.delegateTo) {
+  if (shouldDelegate && resolvedDelegateTo) {
+    console.log(
+      `[ParseAndExecute] ✅ Delegating: ${state.routedAgent} → ${resolvedDelegateTo} (depth ${currentDepth + 1})`,
+    );
     if (writer) {
       writer.push({
         type: 'delegation',
         data: {
           fromAgent: state.routedAgent,
-          toAgent: parsed.delegateTo,
+          toAgent: resolvedDelegateTo,
         },
       });
     }
@@ -142,11 +163,11 @@ export async function parseAndExecuteNode(
     outputGuardrailResult: outputGuardrails,
     shouldDelegate,
     // If delegating, prepare state for the next loop iteration
-    ...(shouldDelegate && parsed.delegateTo
+    ...(shouldDelegate && resolvedDelegateTo
       ? {
-          routedAgent: parsed.delegateTo,
+          routedAgent: resolvedDelegateTo,
           userMessage: parsed.delegateContext ?? parsed.message,
-          delegationDepth: (state.delegationDepth ?? 0) + 1,
+          delegationDepth: currentDepth + 1,
         }
       : {}),
   };

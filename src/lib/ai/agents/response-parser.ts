@@ -291,6 +291,19 @@ export function parseAgentResponse(rawContent: string): ParsedResponse {
   if (delegateMatch) {
     delegateTo = delegateMatch[1].trim();
     delegateContext = delegateMatch[2].trim();
+    console.log(
+      `[ResponseParser] ✅ Found DELEGATE marker → agent: "${delegateTo}"` +
+      ` | context length: ${delegateContext.length}`,
+    );
+  } else {
+    // Check if there's a DELEGATE tag that our regex didn't match
+    const hasDelegate = rawContent.includes('[DELEGATE:');
+    if (hasDelegate) {
+      console.warn(
+        `[ResponseParser] ⚠️ Found "[DELEGATE:" in content but regex did NOT match!` +
+        ` Raw snippet: "${rawContent.substring(rawContent.indexOf('[DELEGATE:'), rawContent.indexOf('[DELEGATE:') + 120)}"`,
+      );
+    }
   }
 
   // ── Clean message text ───────────────────────────────────────────────────

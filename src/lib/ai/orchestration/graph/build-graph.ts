@@ -24,7 +24,7 @@
 //     ▼
 //   [parseAndExecute] ──► parse, guardrails, side effects, persist
 //     │
-//     ├──(delegateTo && depth < 3)──► back to [context]
+//     ├──(delegateTo && depth ≤ 5)──► back to [context]
 //     │
 //     ▼
 //   END
@@ -82,8 +82,12 @@ export function buildOrchestrationGraph() {
     .addEdge('llm', 'parseAndExecute')
 
     // parseAndExecute → context (if delegating) or END
+    // NOTE: Depth check must match MAX_DELEGATION_DEPTH (5) in parse-execute.ts
     .addConditionalEdges('parseAndExecute', (state) => {
-      if (state.shouldDelegate && (state.delegationDepth ?? 0) < 3) {
+      if (state.shouldDelegate && (state.delegationDepth ?? 0) <= 5) {
+        console.log(
+          `[BuildGraph] Delegation loop → context (depth: ${state.delegationDepth}, agent: ${state.routedAgent})`,
+        );
         return 'context';
       }
       return '__end__';

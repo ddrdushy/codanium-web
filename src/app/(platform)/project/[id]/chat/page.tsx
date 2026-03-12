@@ -219,23 +219,30 @@ export default function ChatPage() {
     }, 150);
   }, [messages, streamContent, streamThinking]);
 
-  // When the stream completes, add the final agent message to the messages array
+  // When the stream completes, refetch ALL messages from DB.
+  // This correctly handles delegation chains (BA → SA → PE etc.)
+  // where multiple agent messages are saved during a single stream.
   useEffect(() => {
-    if (completedMessageId && !isStreaming && streamContent) {
-      const respondingAgent = currentAgent
-        ? agents.find(a => a.shortName === currentAgent.shortName) ?? agents[0]
-        : agents[0];
-
-      const agentMsg: ChatMessage = {
-        id: completedMessageId,
-        role: 'agent',
-        agent: respondingAgent,
-        content: stripAgentMarkers(streamContent),
-        thinking: streamThinking || undefined,
-        artifacts: streamArtifacts.length > 0 ? streamArtifacts : undefined,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages(prev => [...prev, agentMsg]);
+    if (completedMessageId && !isStreaming && projectId) {
+      fetch(`/api/projects/${projectId}/chat`)
+        .then(r => r.json())
+        .then((data: any[]) => {
+          if (Array.isArray(data) && data.length > 0) {
+            setMessages(data.map((m: any) => ({
+              id: m.id,
+              role: m.role.toLowerCase() as 'user' | 'agent' | 'system',
+              agent: m.agent ? {
+                id: m.agent.id, name: m.agent.name, shortName: m.agent.shortName,
+                avatar: m.agent.avatar, status: m.agent.status?.toLowerCase() ?? 'idle',
+                group: 'core' as any, currentTask: null,
+              } : undefined,
+              content: stripAgentMarkers(m.content),
+              thinking: m.thinking ?? undefined,
+              timestamp: formatTime(m.createdAt),
+            })));
+          }
+        })
+        .catch(() => {});
       setSelectedOptions([]);
     }
   }, [completedMessageId, isStreaming]);

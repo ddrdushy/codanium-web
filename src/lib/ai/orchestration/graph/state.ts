@@ -89,7 +89,7 @@ export const GraphState = Annotation.Root({
   // ── Delegation ──────────────────────────────────────────────────────────
   /** Whether this response triggers a delegation to another agent. */
   shouldDelegate: Annotation<boolean>,
-  /** Current delegation depth (max 3 to prevent infinite loops). */
+  /** Current delegation depth (max 5 to prevent infinite loops). */
   delegationDepth: Annotation<number>,
 });
 

@@ -412,8 +412,9 @@ export function useAgentStream(): AgentStreamState {
             },
             onDelegation: (data) => {
               // When an agent delegates, update the current agent display.
-              // The next agent_start event will set the full name,
-              // but we can show the shortName immediately.
+              // DO NOT reset streamContent — the stream continues with the
+              // next agent and both agents' text accumulates. On stream end,
+              // the chat page refetches from DB to get properly separated messages.
               setCurrentAgent({ shortName: data.toAgent, name: data.toAgent });
             },
             onDone: (data) => {
