@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAgents } from '@/lib/api';
@@ -22,13 +22,25 @@ import remarkGfm from 'remark-gfm';
 /**
  * Strip raw agent markers ([ACTION:...], [DELEGATE:...], etc.) from content
  * before displaying in the chat UI. These markers are parsed server-side
- * for side effects but may leak through during streaming.
+ * for side effects but may leak through during streaming or DB storage.
+ * Handles multi-line markers, bold-wrapped markers, and partial markers.
  */
 function stripAgentMarkers(content: string): string {
   return content
+    // Full [ACTION:xxx]...content...[/ACTION] blocks (including multi-line)
     .replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '')
+    // Full [DELEGATE:xxx]...content...[/DELEGATE] blocks
     .replace(/\[DELEGATE:\w+\][\s\S]*?\[\/DELEGATE\]/g, '')
+    // Full [ARTIFACT:xxx]...content...[/ARTIFACT] blocks
     .replace(/\[ARTIFACT:[^\]]*\][\s\S]*?\[\/ARTIFACT\]/g, '')
+    // Bold-wrapped markers: **[ACTION:remember]**...
+    .replace(/\*{1,2}\[ACTION:\w+\]\*{0,2}[\s\S]*?\*{0,2}\[\/ACTION\]\*{0,2}/g, '')
+    // Standalone opening/closing tags (orphaned or partial)
+    .replace(/\[ACTION:\w+\][^[\n]*$/gm, '')
+    .replace(/^\s*\[\/ACTION\]/gm, '')
+    .replace(/\[DELEGATE:\w+\]\s*$/gm, '')
+    .replace(/^\s*\[\/DELEGATE\]/gm, '')
+    // Clean up whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -46,19 +58,23 @@ function extractOptions(content: string): {
 } {
   // Strip agent markers first
   const stripped = stripAgentMarkers(content);
-  const optionRegex = /^[-*]\s+\*\*([A-F])\)\*\*\s+(.+)$/gm;
+  // Flexible regex handles multiple format variations:
+  // "- **A)** text", "* **A)** text", "• **A)** text", "- **A) text**"
+  const optionRegex = /^[-*•]\s+\*{1,2}([A-F])\)\*{0,2}\s+(.+)$/gm;
   const options: { label: string; text: string; recommended: boolean }[] = [];
   let match;
   while ((match = optionRegex.exec(stripped)) !== null) {
-    const rawText = match[2].trim();
-    const recommended = /\(recommended\)/i.test(rawText);
-    const text = rawText.replace(/\s*\(recommended\)/i, '').trim();
+    let rawText = match[2].trim();
+    // Strip trailing bold markers: "text**" → "text"
+    rawText = rawText.replace(/\*{1,2}$/, '').trim();
+    const recommended = /\(recommended\)\.?/i.test(rawText);
+    const text = rawText.replace(/\s*\(recommended\)\.?/i, '').trim();
     options.push({ label: match[1], text, recommended });
   }
   if (options.length === 0) return { cleanContent: stripped.replace(/\n{3,}/g, '\n\n').trim(), options: [], multiSelect: false };
   const multiSelect = /\(select all that apply\)/i.test(stripped);
-  // Remove option lines from content
-  const cleanContent = stripped.replace(/^[-*]\s+\*\*[A-F]\)\*\*\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  // Remove option lines from content (same flexible pattern)
+  const cleanContent = stripped.replace(/^[-*•]\s+\*{1,2}[A-F]\)\*{0,2}\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
   return { cleanContent, options, multiSelect };
 }
 
@@ -162,7 +178,7 @@ export default function ChatPage() {
               avatar: m.agent.avatar, status: m.agent.status?.toLowerCase() ?? 'idle',
               group: 'core' as any, currentTask: null,
             } : undefined,
-            content: m.content,
+            content: stripAgentMarkers(m.content),
             thinking: m.thinking ?? undefined,
             timestamp: formatTime(m.createdAt),
           })));
@@ -207,7 +223,7 @@ export default function ChatPage() {
         id: completedMessageId,
         role: 'agent',
         agent: respondingAgent,
-        content: streamContent,
+        content: stripAgentMarkers(streamContent),
         thinking: streamThinking || undefined,
         artifacts: streamArtifacts.length > 0 ? streamArtifacts : undefined,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -265,6 +281,211 @@ export default function ChatPage() {
     }
   };
 
+  // ── Memoized message list ──────────────────────────────────────────────
+  // Critical performance optimization: during streaming, streamContent changes
+  // ~30 times/sec causing ChatPage re-renders. Without useMemo, messages.map()
+  // re-evaluates ALL messages (ReactMarkdown, framer-motion, etc.) on every token.
+  // With useMemo, messages only re-render when their deps actually change.
+  const renderedMessages = useMemo(() =>
+    messages.map((msg, i) => (
+      <motion.div
+        key={msg.id}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: Math.min(i, 5) * 0.03 }}
+      >
+        {msg.role === 'system' && (
+          <div className="flex items-center justify-center py-2">
+            <span className="text-[10px] text-muted-foreground/40 bg-white/[0.02] px-3 py-1 rounded-full">
+              {msg.content}
+            </span>
+          </div>
+        )}
+
+        {msg.role === 'user' && (
+          <div className="flex items-start gap-3 justify-end">
+            <div className="max-w-[80%]">
+              <div className="bg-amber/10 border border-amber/20 rounded-2xl rounded-tr-sm px-4 py-3">
+                <p className="text-sm text-foreground">{msg.content}</p>
+              </div>
+              <span className="text-[10px] text-muted-foreground/40 mt-1 block text-right">{msg.timestamp}</span>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-amber/20 flex items-center justify-center shrink-0">
+              <User className="w-4 h-4 text-amber" />
+            </div>
+          </div>
+        )}
+
+        {msg.role === 'agent' && (
+          <div className="flex items-start gap-3">
+            <div className="relative shrink-0">
+              <div className="w-8 h-8 rounded-full bg-[var(--surface)] border border-border flex items-center justify-center text-base">
+                {msg.agent?.avatar || '🤖'}
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-background" />
+            </div>
+            <div className="max-w-[85%] space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-foreground">{msg.agent?.name ?? 'Agent'}</span>
+                <span className="text-[10px] text-muted-foreground/40">{msg.timestamp}</span>
+              </div>
+
+              {msg.thinking && (
+                <button
+                  onClick={() => setShowThinking(prev => prev === msg.id ? null : msg.id)}
+                  className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                >
+                  <Eye className="w-3 h-3" />
+                  {showThinking === msg.id ? 'Hide reasoning' : 'Show reasoning'}
+                </button>
+              )}
+
+              <AnimatePresence>
+                {showThinking === msg.id && msg.thinking && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-violet-500/[0.06] border border-violet-500/15 rounded-lg px-3 py-2 text-[11px] text-muted-foreground/70 italic">
+                      <span className="text-violet-400 font-semibold not-italic text-[10px] uppercase tracking-wider">Reasoning</span>
+                      <p className="mt-1">{msg.thinking}</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {(() => {
+                const isLastAgentMsg = i === messages.length - 1 ||
+                  messages.slice(i + 1).every(m => m.role !== 'agent');
+                const { cleanContent, options, multiSelect } = isLastAgentMsg && !isStreaming
+                  ? extractOptions(msg.content)
+                  : { cleanContent: msg.content, options: [] as { label: string; text: string; recommended: boolean }[], multiSelect: false };
+                return (
+                  <>
+                    <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
+                      <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
+                        <MemoizedMarkdown content={cleanContent} />
+                      </div>
+                    </div>
+                    {options.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          {options.map((opt) => {
+                            const isSelected = multiSelect
+                              ? selectedOptions.includes(opt.text)
+                              : inputValue === opt.text;
+                            return (
+                              <button
+                                key={opt.label}
+                                onClick={() => {
+                                  if (multiSelect) {
+                                    setSelectedOptions(prev =>
+                                      prev.includes(opt.text)
+                                        ? prev.filter(t => t !== opt.text)
+                                        : [...prev, opt.text]
+                                    );
+                                  } else {
+                                    setInputValue(opt.text);
+                                  }
+                                }}
+                                className={cn(
+                                  "group flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-left",
+                                  isSelected
+                                    ? "border-amber bg-amber/10"
+                                    : opt.recommended
+                                      ? "border-amber/40 bg-amber/[0.04] hover:border-amber hover:bg-amber/10"
+                                      : "border-border bg-[var(--surface)] hover:border-amber/40 hover:bg-amber/[0.06]"
+                                )}
+                              >
+                                <span className={cn(
+                                  "flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold shrink-0",
+                                  isSelected
+                                    ? "bg-amber text-black"
+                                    : opt.recommended
+                                      ? "bg-amber/20 text-amber"
+                                      : "bg-amber/10 text-amber group-hover:bg-amber/20"
+                                )}>
+                                  {isSelected ? '✓' : opt.recommended ? '★' : opt.label}
+                                </span>
+                                <span className="text-xs text-foreground/80 group-hover:text-foreground">{opt.text}</span>
+                                {opt.recommended && (
+                                  <span className="text-[9px] font-medium text-amber/70 bg-amber/10 px-1.5 py-0.5 rounded-full ml-auto">
+                                    Recommended
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {multiSelect && selectedOptions.length > 0 && (
+                          <button
+                            onClick={() => {
+                              const text = selectedOptions.join(', ');
+                              setSelectedOptions([]);
+                              sendRef.current(text);
+                            }}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber text-black text-xs font-medium hover:bg-amber/90 transition-colors"
+                          >
+                            Continue <ArrowRight className="w-3 h-3" />
+                          </button>
+                        )}
+                        <p className="text-[10px] text-muted-foreground/40 pl-1">
+                          {multiSelect ? 'Select options above, then click Continue' : 'Click an option or type your own answer below ↓'}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {msg.codeBlock && (
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] border-b border-border">
+                    <span className="text-[10px] font-mono text-muted-foreground/60">{msg.codeBlock.language}</span>
+                    <button className="text-[10px] text-muted-foreground/40 hover:text-foreground flex items-center gap-1 transition-colors">
+                      <Copy className="w-3 h-3" /> Copy
+                    </button>
+                  </div>
+                  <pre className="px-4 py-3 text-[12px] leading-5 font-mono text-emerald-300/80 bg-black/30 overflow-x-auto">
+                    {msg.codeBlock.code}
+                  </pre>
+                </div>
+              )}
+
+              {msg.artifacts && msg.artifacts.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {msg.artifacts.map((art, j) => (
+                    <Badge key={j} variant="outline" className="text-[10px] bg-white/[0.03] cursor-pointer hover:bg-white/[0.06] transition-colors">
+                      {art.type === 'code' ? <Code2 className="w-2.5 h-2.5 mr-1 text-emerald-400" /> : <FileText className="w-2.5 h-2.5 mr-1 text-blue-400" />}
+                      {art.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {msg.action && (
+                <div className={cn(
+                  'rounded-lg border px-3 py-2 flex items-center gap-2',
+                  msg.action.status === 'approved' && 'border-emerald-500/20 bg-emerald-500/[0.04]',
+                  msg.action.status === 'pending' && 'border-amber/20 bg-amber/[0.04]',
+                )}>
+                  {msg.action.status === 'approved' && (
+                    <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" /><span className="text-xs text-emerald-400/80">{msg.action.label}</span></>
+                  )}
+                  {msg.action.status === 'pending' && (
+                    <><AlertTriangle className="w-3.5 h-3.5 text-amber shrink-0" /><span className="text-xs text-muted-foreground flex-1">{msg.action.label}</span></>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </motion.div>
+    ))
+  , [messages, selectedOptions, inputValue, showThinking, isStreaming]);
+
   return (
     <div className="flex h-full">
       <div className="flex-1 flex flex-col">
@@ -301,204 +522,7 @@ export default function ChatPage() {
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto space-y-4">
-            {messages.map((msg, i) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
-              >
-                {msg.role === 'system' && (
-                  <div className="flex items-center justify-center py-2">
-                    <span className="text-[10px] text-muted-foreground/40 bg-white/[0.02] px-3 py-1 rounded-full">
-                      {msg.content}
-                    </span>
-                  </div>
-                )}
-
-                {msg.role === 'user' && (
-                  <div className="flex items-start gap-3 justify-end">
-                    <div className="max-w-[80%]">
-                      <div className="bg-amber/10 border border-amber/20 rounded-2xl rounded-tr-sm px-4 py-3">
-                        <p className="text-sm text-foreground">{msg.content}</p>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground/40 mt-1 block text-right">{msg.timestamp}</span>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-amber/20 flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4 text-amber" />
-                    </div>
-                  </div>
-                )}
-
-                {msg.role === 'agent' && (
-                  <div className="flex items-start gap-3">
-                    <div className="relative shrink-0">
-                      <div className="w-8 h-8 rounded-full bg-[var(--surface)] border border-border flex items-center justify-center text-base">
-                        {msg.agent?.avatar || '🤖'}
-                      </div>
-                      <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-background" />
-                    </div>
-                    <div className="max-w-[85%] space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-semibold text-foreground">{msg.agent?.name ?? 'Agent'}</span>
-                        <span className="text-[10px] text-muted-foreground/40">{msg.timestamp}</span>
-                      </div>
-
-                      {msg.thinking && (
-                        <button
-                          onClick={() => setShowThinking(showThinking === msg.id ? null : msg.id)}
-                          className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                        >
-                          <Eye className="w-3 h-3" />
-                          {showThinking === msg.id ? 'Hide reasoning' : 'Show reasoning'}
-                        </button>
-                      )}
-
-                      <AnimatePresence>
-                        {showThinking === msg.id && msg.thinking && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="bg-violet-500/[0.06] border border-violet-500/15 rounded-lg px-3 py-2 text-[11px] text-muted-foreground/70 italic">
-                              <span className="text-violet-400 font-semibold not-italic text-[10px] uppercase tracking-wider">Reasoning</span>
-                              <p className="mt-1">{msg.thinking}</p>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {(() => {
-                        const isLastAgentMsg = i === messages.length - 1 ||
-                          messages.slice(i + 1).every(m => m.role !== 'agent');
-                        const { cleanContent, options, multiSelect } = isLastAgentMsg && !isStreaming
-                          ? extractOptions(msg.content)
-                          : { cleanContent: msg.content, options: [] as { label: string; text: string; recommended: boolean }[], multiSelect: false };
-                        return (
-                          <>
-                            <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
-                              <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
-                                <MemoizedMarkdown content={cleanContent} />
-                              </div>
-                            </div>
-                            {options.length > 0 && (
-                              <div className="mt-2 space-y-2">
-                                <div className="flex flex-wrap gap-2">
-                                  {options.map((opt) => {
-                                    const isSelected = multiSelect
-                                      ? selectedOptions.includes(opt.text)
-                                      : inputValue === opt.text;
-                                    return (
-                                      <button
-                                        key={opt.label}
-                                        onClick={() => {
-                                          if (multiSelect) {
-                                            setSelectedOptions(prev =>
-                                              prev.includes(opt.text)
-                                                ? prev.filter(t => t !== opt.text)
-                                                : [...prev, opt.text]
-                                            );
-                                          } else {
-                                            // Populate input — user reviews then sends with Enter/Send
-                                            setInputValue(opt.text);
-                                          }
-                                        }}
-                                        className={cn(
-                                          "group flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-left",
-                                          isSelected
-                                            ? "border-amber bg-amber/10"
-                                            : opt.recommended
-                                              ? "border-amber/40 bg-amber/[0.04] hover:border-amber hover:bg-amber/10"
-                                              : "border-border bg-[var(--surface)] hover:border-amber/40 hover:bg-amber/[0.06]"
-                                        )}
-                                      >
-                                        <span className={cn(
-                                          "flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold shrink-0",
-                                          isSelected
-                                            ? "bg-amber text-black"
-                                            : opt.recommended
-                                              ? "bg-amber/20 text-amber"
-                                              : "bg-amber/10 text-amber group-hover:bg-amber/20"
-                                        )}>
-                                          {isSelected ? '✓' : opt.recommended ? '★' : opt.label}
-                                        </span>
-                                        <span className="text-xs text-foreground/80 group-hover:text-foreground">{opt.text}</span>
-                                        {opt.recommended && (
-                                          <span className="text-[9px] font-medium text-amber/70 bg-amber/10 px-1.5 py-0.5 rounded-full ml-auto">
-                                            Recommended
-                                          </span>
-                                        )}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                {multiSelect && selectedOptions.length > 0 && (
-                                  <button
-                                    onClick={() => {
-                                      const text = selectedOptions.join(', ');
-                                      setSelectedOptions([]);
-                                      sendRef.current(text);
-                                    }}
-                                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber text-black text-xs font-medium hover:bg-amber/90 transition-colors"
-                                  >
-                                    Continue <ArrowRight className="w-3 h-3" />
-                                  </button>
-                                )}
-                                <p className="text-[10px] text-muted-foreground/40 pl-1">
-                                  {multiSelect ? 'Select options above, then click Continue' : 'Click an option or type your own answer below ↓'}
-                                </p>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-
-                      {msg.codeBlock && (
-                        <div className="rounded-xl border border-border overflow-hidden">
-                          <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] border-b border-border">
-                            <span className="text-[10px] font-mono text-muted-foreground/60">{msg.codeBlock.language}</span>
-                            <button className="text-[10px] text-muted-foreground/40 hover:text-foreground flex items-center gap-1 transition-colors">
-                              <Copy className="w-3 h-3" /> Copy
-                            </button>
-                          </div>
-                          <pre className="px-4 py-3 text-[12px] leading-5 font-mono text-emerald-300/80 bg-black/30 overflow-x-auto">
-                            {msg.codeBlock.code}
-                          </pre>
-                        </div>
-                      )}
-
-                      {msg.artifacts && msg.artifacts.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {msg.artifacts.map((art, j) => (
-                            <Badge key={j} variant="outline" className="text-[10px] bg-white/[0.03] cursor-pointer hover:bg-white/[0.06] transition-colors">
-                              {art.type === 'code' ? <Code2 className="w-2.5 h-2.5 mr-1 text-emerald-400" /> : <FileText className="w-2.5 h-2.5 mr-1 text-blue-400" />}
-                              {art.name}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-
-                      {msg.action && (
-                        <div className={cn(
-                          'rounded-lg border px-3 py-2 flex items-center gap-2',
-                          msg.action.status === 'approved' && 'border-emerald-500/20 bg-emerald-500/[0.04]',
-                          msg.action.status === 'pending' && 'border-amber/20 bg-amber/[0.04]',
-                        )}>
-                          {msg.action.status === 'approved' && (
-                            <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" /><span className="text-xs text-emerald-400/80">{msg.action.label}</span></>
-                          )}
-                          {msg.action.status === 'pending' && (
-                            <><AlertTriangle className="w-3.5 h-3.5 text-amber shrink-0" /><span className="text-xs text-muted-foreground flex-1">{msg.action.label}</span></>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            ))}
+            {renderedMessages}
 
             {isStreaming && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
