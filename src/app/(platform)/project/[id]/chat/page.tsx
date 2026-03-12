@@ -67,8 +67,12 @@ function extractOptions(content: string): {
     // Skip duplicate labels (agent sometimes outputs options twice in different formats)
     if (options.some(o => o.label === match![1])) continue;
     let rawText = match[2].trim();
+    // Skip recap items like "No email integration now** (you chose this option)."
+    if (/\(you chose/i.test(rawText)) continue;
     // Strip trailing bold markers: "text**" → "text"
     rawText = rawText.replace(/\*{1,2}$/, '').trim();
+    // Strip trailing bold+period: "text**." → "text"
+    rawText = rawText.replace(/\*{1,2}\.?\s*$/, '').trim();
     const recommended = /\(recommended\)\.?/i.test(rawText);
     const text = rawText.replace(/\s*\(recommended\)\.?/i, '').trim();
     options.push({ label: match[1], text, recommended });
@@ -289,12 +293,14 @@ export default function ChatPage() {
   // ~30 times/sec causing ChatPage re-renders. Without useMemo, messages.map()
   // re-evaluates ALL messages (ReactMarkdown, framer-motion, etc.) on every token.
   // With useMemo, messages only re-render when their deps actually change.
-  const visibleMessages = messages.slice(-visibleCount);
-  const renderedMessages = useMemo(() =>
-    visibleMessages.map((msg, i) => (
+  // IMPORTANT: slice INSIDE useMemo — slicing outside creates a new array reference
+  // on every render, defeating memoization entirely.
+  const renderedMessages = useMemo(() => {
+    const visible = messages.slice(-visibleCount);
+    return visible.map((msg, i) => (
       <motion.div
         key={msg.id}
-        initial={i >= visibleMessages.length - 3 ? { opacity: 0, y: 10 } : false}
+        initial={i >= visible.length - 3 ? { opacity: 0, y: 10 } : false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.15 }}
       >
@@ -361,8 +367,8 @@ export default function ChatPage() {
               </AnimatePresence>
 
               {(() => {
-                const isLastAgentMsg = i === visibleMessages.length - 1 ||
-                  visibleMessages.slice(i + 1).every(m => m.role !== 'agent');
+                const isLastAgentMsg = i === visible.length - 1 ||
+                  visible.slice(i + 1).every(m => m.role !== 'agent');
                 const { cleanContent, options, multiSelect } = isLastAgentMsg && !isStreaming
                   ? extractOptions(msg.content)
                   : { cleanContent: msg.content, options: [] as { label: string; text: string; recommended: boolean }[], multiSelect: false };
@@ -487,8 +493,8 @@ export default function ChatPage() {
           </div>
         )}
       </motion.div>
-    ))
-  , [visibleMessages, selectedOptions, showThinking, isStreaming]);
+    ));
+  }, [messages, visibleCount, selectedOptions, showThinking, isStreaming]);
 
   return (
     <div className="flex h-full">
