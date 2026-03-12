@@ -60,7 +60,8 @@ function extractOptions(content: string): {
   const stripped = stripAgentMarkers(content);
   // Flexible regex handles multiple format variations:
   // "- **A)** text", "* **A)** text", "• **A)** text", "- **A) text**"
-  const optionRegex = /^[-*•]\s+\*{1,2}([A-F])\)\*{0,2}\s+(.+)$/gm;
+  // Also handles plain format without bold: "- A) text", "• A) text"
+  const optionRegex = /^[-*•]\s+\*{0,2}([A-F])\)\*{0,2}\s+(.+)$/gm;
   const options: { label: string; text: string; recommended: boolean }[] = [];
   let match;
   while ((match = optionRegex.exec(stripped)) !== null) {
@@ -80,7 +81,7 @@ function extractOptions(content: string): {
   if (options.length === 0) return { cleanContent: stripped.replace(/\n{3,}/g, '\n\n').trim(), options: [], multiSelect: false };
   const multiSelect = /\(select all that apply\)/i.test(stripped);
   // Remove option lines from content (same flexible pattern)
-  const cleanContent = stripped.replace(/^[-*•]\s+\*{1,2}[A-F]\)\*{0,2}\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  const cleanContent = stripped.replace(/^[-*•]\s+\*{0,2}[A-F]\)\*{0,2}\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
   return { cleanContent, options, multiSelect };
 }
 
