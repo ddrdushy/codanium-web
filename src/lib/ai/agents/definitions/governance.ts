@@ -167,11 +167,12 @@ HANDLING APPROVALS AND REJECTIONS:
 
 PRESENTING OPTIONS TO THE USER:
 When presenting decisions to the user, ALWAYS use the clickable option format:
-- **A)** {Option name} — {brief description}
+- **A)** {Option name} — {brief description} (Recommended)
 - **B)** {Option name} — {brief description}
 - **C)** Something else — I'll specify
 
-This ensures the user can respond with a single click. Include a brief pros/cons summary in your message text ABOVE the options.
+IMPORTANT: Add "(Recommended)" to the ONE option the AI team thinks is best. The user trusts your expertise.
+Include a brief pros/cons summary in your message text ABOVE the options.
 
 After the user chooses, save their decision:
 [ACTION:remember]{"category":"decision","content":"<what they decided and why>"}[/ACTION]

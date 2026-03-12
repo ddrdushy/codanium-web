@@ -20,36 +20,56 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 /**
+ * Strip raw agent markers ([ACTION:...], [DELEGATE:...], etc.) from content
+ * before displaying in the chat UI. These markers are parsed server-side
+ * for side effects but may leak through during streaming.
+ */
+function stripAgentMarkers(content: string): string {
+  return content
+    .replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '')
+    .replace(/\[DELEGATE:\w+\][\s\S]*?\[\/DELEGATE\]/g, '')
+    .replace(/\[ARTIFACT:[^\]]*\][\s\S]*?\[\/ARTIFACT\]/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Extract option buttons from agent markdown content.
  * Matches patterns like "- **A)** Some option text" or "- **B)** Another option"
- * Returns the content without option lines + the extracted options.
+ * Detects "(Recommended)" suffix on options for visual highlighting.
  * Detects multi-select when content contains "(select all that apply)".
  */
 function extractOptions(content: string): {
   cleanContent: string;
-  options: { label: string; text: string }[];
+  options: { label: string; text: string; recommended: boolean }[];
   multiSelect: boolean;
 } {
+  // Strip agent markers first
+  const stripped = stripAgentMarkers(content);
   const optionRegex = /^[-*]\s+\*\*([A-F])\)\*\*\s+(.+)$/gm;
-  const options: { label: string; text: string }[] = [];
+  const options: { label: string; text: string; recommended: boolean }[] = [];
   let match;
-  while ((match = optionRegex.exec(content)) !== null) {
-    options.push({ label: match[1], text: match[2].trim() });
+  while ((match = optionRegex.exec(stripped)) !== null) {
+    const rawText = match[2].trim();
+    const recommended = /\(recommended\)/i.test(rawText);
+    const text = rawText.replace(/\s*\(recommended\)/i, '').trim();
+    options.push({ label: match[1], text, recommended });
   }
-  if (options.length === 0) return { cleanContent: content, options: [], multiSelect: false };
-  const multiSelect = /\(select all that apply\)/i.test(content);
+  if (options.length === 0) return { cleanContent: stripped.replace(/\n{3,}/g, '\n\n').trim(), options: [], multiSelect: false };
+  const multiSelect = /\(select all that apply\)/i.test(stripped);
   // Remove option lines from content
-  const cleanContent = content.replace(/^[-*]\s+\*\*[A-F]\)\*\*\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  const cleanContent = stripped.replace(/^[-*]\s+\*\*[A-F]\)\*\*\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
   return { cleanContent, options, multiSelect };
 }
 
 /**
  * Memoized markdown renderer — prevents expensive re-parsing
  * on parent re-renders when the content hasn't changed.
- * Critical during streaming where tokens trigger 50+ re-renders/sec.
+ * Also strips raw agent markers before rendering.
  */
 const MemoizedMarkdown = memo(function MemoizedMarkdown({ content }: { content: string }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>;
+  const cleaned = stripAgentMarkers(content);
+  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleaned}</ReactMarkdown>;
 });
 
 interface ChatMessage {
@@ -355,7 +375,7 @@ export default function ChatPage() {
                           messages.slice(i + 1).every(m => m.role !== 'agent');
                         const { cleanContent, options, multiSelect } = isLastAgentMsg && !isStreaming
                           ? extractOptions(msg.content)
-                          : { cleanContent: msg.content, options: [] as { label: string; text: string }[], multiSelect: false };
+                          : { cleanContent: msg.content, options: [] as { label: string; text: string; recommended: boolean }[], multiSelect: false };
                         return (
                           <>
                             <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
@@ -367,7 +387,9 @@ export default function ChatPage() {
                               <div className="mt-2 space-y-2">
                                 <div className="flex flex-wrap gap-2">
                                   {options.map((opt) => {
-                                    const isSelected = selectedOptions.includes(opt.text);
+                                    const isSelected = multiSelect
+                                      ? selectedOptions.includes(opt.text)
+                                      : inputValue === opt.text;
                                     return (
                                       <button
                                         key={opt.label}
@@ -379,26 +401,35 @@ export default function ChatPage() {
                                                 : [...prev, opt.text]
                                             );
                                           } else {
-                                            // Send full option text directly — no stale closure
-                                            sendRef.current(opt.text);
+                                            // Populate input — user reviews then sends with Enter/Send
+                                            setInputValue(opt.text);
                                           }
                                         }}
                                         className={cn(
                                           "group flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-left",
-                                          multiSelect && isSelected
+                                          isSelected
                                             ? "border-amber bg-amber/10"
-                                            : "border-border bg-[var(--surface)] hover:border-amber/40 hover:bg-amber/[0.06]"
+                                            : opt.recommended
+                                              ? "border-amber/40 bg-amber/[0.04] hover:border-amber hover:bg-amber/10"
+                                              : "border-border bg-[var(--surface)] hover:border-amber/40 hover:bg-amber/[0.06]"
                                         )}
                                       >
                                         <span className={cn(
                                           "flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold shrink-0",
-                                          multiSelect && isSelected
+                                          isSelected
                                             ? "bg-amber text-black"
-                                            : "bg-amber/10 text-amber group-hover:bg-amber/20"
+                                            : opt.recommended
+                                              ? "bg-amber/20 text-amber"
+                                              : "bg-amber/10 text-amber group-hover:bg-amber/20"
                                         )}>
-                                          {multiSelect && isSelected ? '✓' : opt.label}
+                                          {isSelected ? '✓' : opt.recommended ? '★' : opt.label}
                                         </span>
                                         <span className="text-xs text-foreground/80 group-hover:text-foreground">{opt.text}</span>
+                                        {opt.recommended && (
+                                          <span className="text-[9px] font-medium text-amber/70 bg-amber/10 px-1.5 py-0.5 rounded-full ml-auto">
+                                            Recommended
+                                          </span>
+                                        )}
                                       </button>
                                     );
                                   })}
@@ -416,7 +447,7 @@ export default function ChatPage() {
                                   </button>
                                 )}
                                 <p className="text-[10px] text-muted-foreground/40 pl-1">
-                                  Or type your own answer below ↓
+                                  {multiSelect ? 'Select options above, then click Continue' : 'Click an option or type your own answer below ↓'}
                                 </p>
                               </div>
                             )}
@@ -519,7 +550,7 @@ export default function ChatPage() {
                     {streamContent ? (
                       <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
                         <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamContent}</ReactMarkdown>
+                          <MemoizedMarkdown content={streamContent} />
                           <span className="inline-block w-1.5 h-4 bg-amber/60 animate-pulse ml-0.5 -mb-0.5 rounded-sm" />
                         </div>
                       </div>
