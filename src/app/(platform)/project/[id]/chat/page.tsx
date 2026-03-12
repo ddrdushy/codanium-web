@@ -64,6 +64,8 @@ function extractOptions(content: string): {
   const options: { label: string; text: string; recommended: boolean }[] = [];
   let match;
   while ((match = optionRegex.exec(stripped)) !== null) {
+    // Skip duplicate labels (agent sometimes outputs options twice in different formats)
+    if (options.some(o => o.label === match![1])) continue;
     let rawText = match[2].trim();
     // Strip trailing bold markers: "text**" → "text"
     rawText = rawText.replace(/\*{1,2}$/, '').trim();
@@ -141,6 +143,7 @@ export default function ChatPage() {
   const [loaded, setLoaded] = useState(false);
   const [showStreamThinking, setShowStreamThinking] = useState(true);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [visibleCount, setVisibleCount] = useState(30);
   const sendRef = useRef<(text: string) => void>(() => {});
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
@@ -286,13 +289,14 @@ export default function ChatPage() {
   // ~30 times/sec causing ChatPage re-renders. Without useMemo, messages.map()
   // re-evaluates ALL messages (ReactMarkdown, framer-motion, etc.) on every token.
   // With useMemo, messages only re-render when their deps actually change.
+  const visibleMessages = messages.slice(-visibleCount);
   const renderedMessages = useMemo(() =>
-    messages.map((msg, i) => (
+    visibleMessages.map((msg, i) => (
       <motion.div
         key={msg.id}
-        initial={{ opacity: 0, y: 10 }}
+        initial={i >= visibleMessages.length - 3 ? { opacity: 0, y: 10 } : false}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: Math.min(i, 5) * 0.03 }}
+        transition={{ duration: 0.15 }}
       >
         {msg.role === 'system' && (
           <div className="flex items-center justify-center py-2">
@@ -357,8 +361,8 @@ export default function ChatPage() {
               </AnimatePresence>
 
               {(() => {
-                const isLastAgentMsg = i === messages.length - 1 ||
-                  messages.slice(i + 1).every(m => m.role !== 'agent');
+                const isLastAgentMsg = i === visibleMessages.length - 1 ||
+                  visibleMessages.slice(i + 1).every(m => m.role !== 'agent');
                 const { cleanContent, options, multiSelect } = isLastAgentMsg && !isStreaming
                   ? extractOptions(msg.content)
                   : { cleanContent: msg.content, options: [] as { label: string; text: string; recommended: boolean }[], multiSelect: false };
@@ -375,7 +379,7 @@ export default function ChatPage() {
                           {options.map((opt) => {
                             const isSelected = multiSelect
                               ? selectedOptions.includes(opt.text)
-                              : inputValue === opt.text;
+                              : false; // Single-select highlight handled by input field
                             return (
                               <button
                                 key={opt.label}
@@ -484,7 +488,7 @@ export default function ChatPage() {
         )}
       </motion.div>
     ))
-  , [messages, selectedOptions, inputValue, showThinking, isStreaming]);
+  , [visibleMessages, selectedOptions, showThinking, isStreaming]);
 
   return (
     <div className="flex h-full">
@@ -522,6 +526,14 @@ export default function ChatPage() {
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto space-y-4">
+            {messages.length > visibleCount && (
+              <button
+                onClick={() => setVisibleCount(prev => prev + 30)}
+                className="w-full text-center py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground bg-white/[0.02] rounded-lg border border-border/50 hover:border-border transition-colors"
+              >
+                Show earlier messages ({messages.length - visibleCount} more)
+              </button>
+            )}
             {renderedMessages}
 
             {isStreaming && (
