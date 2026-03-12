@@ -15,8 +15,10 @@ import { AgentExecutionResult } from '@/lib/ai/agents/types';
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Maximum recursion depth for delegation chains. */
-const MAX_DELEGATION_DEPTH = 3;
+/** Maximum recursion depth for delegation chains.
+ *  Full chain: BA → SA → PE/DO/IE/SM → DEC → User = 4-5 levels.
+ *  Depth 3 would silently truncate; 5 gives room for the full pipeline. */
+const MAX_DELEGATION_DEPTH = 5;
 
 // ---------------------------------------------------------------------------
 // Types

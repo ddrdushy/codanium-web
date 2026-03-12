@@ -23,18 +23,24 @@ import remarkGfm from 'remark-gfm';
  * Extract option buttons from agent markdown content.
  * Matches patterns like "- **A)** Some option text" or "- **B)** Another option"
  * Returns the content without option lines + the extracted options.
+ * Detects multi-select when content contains "(select all that apply)".
  */
-function extractOptions(content: string): { cleanContent: string; options: { label: string; text: string }[] } {
+function extractOptions(content: string): {
+  cleanContent: string;
+  options: { label: string; text: string }[];
+  multiSelect: boolean;
+} {
   const optionRegex = /^[-*]\s+\*\*([A-F])\)\*\*\s+(.+)$/gm;
   const options: { label: string; text: string }[] = [];
   let match;
   while ((match = optionRegex.exec(content)) !== null) {
     options.push({ label: match[1], text: match[2].trim() });
   }
-  if (options.length === 0) return { cleanContent: content, options: [] };
+  if (options.length === 0) return { cleanContent: content, options: [], multiSelect: false };
+  const multiSelect = /\(select all that apply\)/i.test(content);
   // Remove option lines from content
   const cleanContent = content.replace(/^[-*]\s+\*\*[A-F]\)\*\*\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
-  return { cleanContent, options };
+  return { cleanContent, options, multiSelect };
 }
 
 interface ChatMessage {
@@ -89,6 +95,7 @@ export default function ChatPage() {
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [showStreamThinking, setShowStreamThinking] = useState(true);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -170,6 +177,7 @@ export default function ChatPage() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages(prev => [...prev, agentMsg]);
+      setSelectedOptions([]);
     }
   }, [completedMessageId, isStreaming]);
 
@@ -320,9 +328,9 @@ export default function ChatPage() {
                       {(() => {
                         const isLastAgentMsg = i === messages.length - 1 ||
                           messages.slice(i + 1).every(m => m.role !== 'agent');
-                        const { cleanContent, options } = isLastAgentMsg && !isStreaming
+                        const { cleanContent, options, multiSelect } = isLastAgentMsg && !isStreaming
                           ? extractOptions(msg.content)
-                          : { cleanContent: msg.content, options: [] };
+                          : { cleanContent: msg.content, options: [] as { label: string; text: string }[], multiSelect: false };
                         return (
                           <>
                             <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
@@ -331,22 +339,60 @@ export default function ChatPage() {
                               </div>
                             </div>
                             {options.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-1">
-                                {options.map((opt) => (
+                              <div className="mt-2 space-y-2">
+                                <div className="flex flex-wrap gap-2">
+                                  {options.map((opt) => {
+                                    const isSelected = selectedOptions.includes(opt.text);
+                                    return (
+                                      <button
+                                        key={opt.label}
+                                        onClick={() => {
+                                          if (multiSelect) {
+                                            setSelectedOptions(prev =>
+                                              prev.includes(opt.text)
+                                                ? prev.filter(t => t !== opt.text)
+                                                : [...prev, opt.text]
+                                            );
+                                          } else {
+                                            setInputValue(opt.text);
+                                            setTimeout(() => handleSend(), 50);
+                                          }
+                                        }}
+                                        className={cn(
+                                          "group flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-left",
+                                          multiSelect && isSelected
+                                            ? "border-amber bg-amber/10"
+                                            : "border-border bg-[var(--surface)] hover:border-amber/40 hover:bg-amber/[0.06]"
+                                        )}
+                                      >
+                                        <span className={cn(
+                                          "flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold shrink-0",
+                                          multiSelect && isSelected
+                                            ? "bg-amber text-black"
+                                            : "bg-amber/10 text-amber group-hover:bg-amber/20"
+                                        )}>
+                                          {multiSelect && isSelected ? '✓' : opt.label}
+                                        </span>
+                                        <span className="text-xs text-foreground/80 group-hover:text-foreground">{opt.text}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {multiSelect && selectedOptions.length > 0 && (
                                   <button
-                                    key={opt.label}
                                     onClick={() => {
-                                      setInputValue(opt.label);
+                                      setInputValue(selectedOptions.join(', '));
+                                      setSelectedOptions([]);
                                       setTimeout(() => handleSend(), 50);
                                     }}
-                                    className="group flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-[var(--surface)] hover:border-amber/40 hover:bg-amber/[0.06] transition-all text-left"
+                                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber text-black text-xs font-medium hover:bg-amber/90 transition-colors"
                                   >
-                                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-amber/10 text-amber text-[10px] font-bold shrink-0 group-hover:bg-amber/20">
-                                      {opt.label}
-                                    </span>
-                                    <span className="text-xs text-foreground/80 group-hover:text-foreground">{opt.text}</span>
+                                    Continue <ArrowRight className="w-3 h-3" />
                                   </button>
-                                ))}
+                                )}
+                                <p className="text-[10px] text-muted-foreground/40 pl-1">
+                                  Or type your own answer below ↓
+                                </p>
                               </div>
                             )}
                           </>
