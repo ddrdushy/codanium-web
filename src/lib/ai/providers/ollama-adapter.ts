@@ -4,6 +4,12 @@
 // Raw fetch-based adapter for the Ollama local inference API.
 // No SDK dependency — uses standard `fetch` for all HTTP calls.
 // Ollama uses newline-delimited JSON (NDJSON) for streaming, not SSE.
+//
+// Timeout & Retry:
+//   - Configurable timeouts for first-byte and total response
+//   - Automatic retry with exponential backoff for transient errors
+//   - Pre-warm ping before streaming to handle cold model loads
+//   - Graceful handling of Cloudflare 524 timeout errors
 // =============================================================================
 
 import type {
@@ -15,11 +21,39 @@ import type {
 } from './types';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants & Timeouts
 // ---------------------------------------------------------------------------
 
 const DEFAULT_BASE_URL = 'http://localhost:11434';
 const DEFAULT_MODEL = 'llama3';
+
+/**
+ * Timeout for the initial fetch connection (before first byte arrives).
+ * Must be generous because Ollama on CPU may take a while to load the model.
+ * Cloudflare free tunnels timeout at 100s, so this won't help there, but it
+ * protects against hanging requests when Ollama is truly down.
+ */
+const FETCH_TIMEOUT_MS = 300_000; // 5 minutes — CPU inference can be very slow
+
+/**
+ * Timeout for non-generation requests (list models, validate connection).
+ */
+const METADATA_TIMEOUT_MS = 15_000; // 15 seconds
+
+/**
+ * Number of retry attempts for transient errors (524, 502, 503, network).
+ */
+const MAX_RETRIES = 2;
+
+/**
+ * Base delay between retries (exponential backoff: delay * 2^attempt).
+ */
+const RETRY_BASE_DELAY_MS = 3_000; // 3 seconds
+
+/**
+ * Transient HTTP status codes that trigger a retry.
+ */
+const RETRYABLE_STATUS_CODES = new Set([502, 503, 504, 524]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,6 +78,48 @@ function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / 4));
 }
 
+/** Create a fetch with AbortController timeout. */
+function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): { promise: Promise<Response>; abort: () => void } {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const promise = fetch(url, {
+    ...options,
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeoutId));
+
+  return { promise, abort: () => controller.abort() };
+}
+
+/** Check if an error is a Cloudflare tunnel timeout (HTML 524 page). */
+function isCloudflareTimeout(status: number, body?: string): boolean {
+  return status === 524 || (body?.includes('524: A timeout occurred') ?? false);
+}
+
+/** Check if an error is retryable. */
+function isRetryable(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    // Network errors, abort errors, and tunnel timeouts
+    if (msg.includes('fetch failed') || msg.includes('econnrefused') ||
+        msg.includes('econnreset') || msg.includes('socket hang up') ||
+        msg.includes('network') || msg.includes('524') ||
+        msg.includes('abort')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Sleep for a given duration. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ---------------------------------------------------------------------------
 // Ollama Adapter
 // ---------------------------------------------------------------------------
@@ -52,15 +128,50 @@ export class OllamaAdapter implements LLMProvider {
   readonly name = 'Ollama';
 
   // -------------------------------------------------------------------------
+  // Pre-warm: send a tiny request to ensure model is loaded
+  // -------------------------------------------------------------------------
+
+  private async preWarm(config: ProviderConfig, model: string): Promise<void> {
+    try {
+      console.log(`[Ollama] Pre-warming model "${model}"...`);
+      const { promise } = fetchWithTimeout(
+        `${baseUrl(config)}/api/generate`,
+        {
+          method: 'POST',
+          headers: headers(config),
+          body: JSON.stringify({
+            model,
+            prompt: '',
+            stream: false,
+            options: { num_predict: 1 },
+            keep_alive: '10m',
+          }),
+        },
+        METADATA_TIMEOUT_MS,
+      );
+      await promise;
+      console.log(`[Ollama] Model "${model}" pre-warmed ✅`);
+    } catch {
+      // Pre-warm is best-effort — don't fail the actual request
+      console.warn(`[Ollama] Pre-warm failed (non-fatal)`);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Validate Connection
   // -------------------------------------------------------------------------
 
   async validateConnection(config: ProviderConfig): Promise<boolean> {
     try {
-      const res = await fetch(`${baseUrl(config)}/api/tags`, {
-        method: 'GET',
-        headers: headers(config),
-      });
+      const { promise } = fetchWithTimeout(
+        `${baseUrl(config)}/api/tags`,
+        {
+          method: 'GET',
+          headers: headers(config),
+        },
+        METADATA_TIMEOUT_MS,
+      );
+      const res = await promise;
       return res.ok;
     } catch {
       return false;
@@ -68,7 +179,7 @@ export class OllamaAdapter implements LLMProvider {
   }
 
   // -------------------------------------------------------------------------
-  // Non-Streaming Completion
+  // Non-Streaming Completion (with retry)
   // -------------------------------------------------------------------------
 
   async complete(
@@ -85,6 +196,7 @@ export class OllamaAdapter implements LLMProvider {
         content: m.content,
       })),
       stream: false,
+      keep_alive: '10m',
     };
 
     // Merge Ollama-specific options (num_predict = max output tokens)
@@ -96,48 +208,91 @@ export class OllamaAdapter implements LLMProvider {
     }
     body.options = ollamaOptions;
 
-    const res = await fetch(`${baseUrl(config)}/api/chat`, {
-      method: 'POST',
-      headers: headers(config),
-      body: JSON.stringify(body),
-    });
+    let lastError: Error | null = null;
 
-    if (!res.ok) {
-      let errorMsg = `Ollama API error (${res.status})`;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const errorData = await res.json();
-        if (errorData.error) errorMsg += `: ${errorData.error}`;
-      } catch {
-        // Could not parse error body
+        if (attempt > 0) {
+          const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          console.log(`[Ollama] Retry ${attempt}/${MAX_RETRIES} after ${delay}ms...`);
+          await sleep(delay);
+        }
+
+        const { promise } = fetchWithTimeout(
+          `${baseUrl(config)}/api/chat`,
+          {
+            method: 'POST',
+            headers: headers(config),
+            body: JSON.stringify(body),
+          },
+          FETCH_TIMEOUT_MS,
+        );
+
+        const res = await promise;
+
+        if (!res.ok) {
+          // Check for Cloudflare tunnel timeout
+          if (RETRYABLE_STATUS_CODES.has(res.status)) {
+            const errorBody = await res.text().catch(() => '');
+            const isCF = isCloudflareTimeout(res.status, errorBody);
+            lastError = new Error(
+              isCF
+                ? `Ollama: Cloudflare tunnel timeout (524). The model is taking too long to respond — it may be running on CPU. Try a smaller model or ensure GPU is available.`
+                : `Ollama API error (${res.status})`,
+            );
+            console.warn(`[Ollama] ${lastError.message} — attempt ${attempt + 1}/${MAX_RETRIES + 1}`);
+            continue; // retry
+          }
+
+          let errorMsg = `Ollama API error (${res.status})`;
+          try {
+            const contentType = res.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const errorData = await res.json();
+              if (errorData.error) errorMsg += `: ${errorData.error}`;
+            }
+          } catch {
+            // Could not parse error body
+          }
+          throw new Error(errorMsg);
+        }
+
+        const data = await res.json();
+        const content = data.message?.content ?? '';
+
+        // Ollama may provide token counts in eval_count / prompt_eval_count
+        const promptTokens = data.prompt_eval_count ?? estimateTokens(
+          options.messages.map((m) => m.content).join(' '),
+        );
+        const completionTokens = data.eval_count ?? estimateTokens(content);
+
+        return {
+          content,
+          tokensUsed: {
+            prompt: promptTokens,
+            completion: completionTokens,
+            total: promptTokens + completionTokens,
+          },
+          model,
+          provider: 'ollama',
+          latencyMs: Date.now() - startTime,
+          finishReason: data.done_reason === 'length' ? 'length' : 'stop',
+        };
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (isRetryable(err) && attempt < MAX_RETRIES) {
+          console.warn(`[Ollama] Transient error: ${lastError.message} — retrying...`);
+          continue;
+        }
+        throw lastError;
       }
-      throw new Error(errorMsg);
     }
 
-    const data = await res.json();
-    const content = data.message?.content ?? '';
-
-    // Ollama may provide token counts in eval_count / prompt_eval_count
-    const promptTokens = data.prompt_eval_count ?? estimateTokens(
-      options.messages.map((m) => m.content).join(' '),
-    );
-    const completionTokens = data.eval_count ?? estimateTokens(content);
-
-    return {
-      content,
-      tokensUsed: {
-        prompt: promptTokens,
-        completion: completionTokens,
-        total: promptTokens + completionTokens,
-      },
-      model,
-      provider: 'ollama',
-      latencyMs: Date.now() - startTime,
-      finishReason: data.done_reason === 'length' ? 'length' : 'stop',
-    };
+    throw lastError ?? new Error('Ollama: unknown error after retries');
   }
 
   // -------------------------------------------------------------------------
-  // Streaming Completion
+  // Streaming Completion (with retry)
   // -------------------------------------------------------------------------
 
   async *stream(
@@ -153,6 +308,7 @@ export class OllamaAdapter implements LLMProvider {
         content: m.content,
       })),
       stream: true,
+      keep_alive: '10m',
     };
 
     // Merge Ollama-specific options (num_predict = max output tokens)
@@ -164,28 +320,86 @@ export class OllamaAdapter implements LLMProvider {
     }
     body.options = ollamaOpts;
 
-    const res = await fetch(`${baseUrl(config)}/api/chat`, {
-      method: 'POST',
-      headers: headers(config),
-      body: JSON.stringify(body),
-    });
+    let lastError: Error | null = null;
 
-    if (!res.ok) {
-      let errorMsg = `Ollama streaming error (${res.status})`;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const errorData = await res.json();
-        if (errorData.error) errorMsg += `: ${errorData.error}`;
-      } catch {
-        // Could not parse error body
+        if (attempt > 0) {
+          const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          console.log(`[Ollama] Stream retry ${attempt}/${MAX_RETRIES} after ${delay}ms...`);
+          await sleep(delay);
+          // Pre-warm on retry to ensure model is loaded
+          await this.preWarm(config, model);
+        }
+
+        const { promise } = fetchWithTimeout(
+          `${baseUrl(config)}/api/chat`,
+          {
+            method: 'POST',
+            headers: headers(config),
+            body: JSON.stringify(body),
+          },
+          FETCH_TIMEOUT_MS,
+        );
+
+        const res = await promise;
+
+        if (!res.ok) {
+          // Check for Cloudflare tunnel timeout or other retryable errors
+          if (RETRYABLE_STATUS_CODES.has(res.status)) {
+            const errorBody = await res.text().catch(() => '');
+            const isCF = isCloudflareTimeout(res.status, errorBody);
+            lastError = new Error(
+              isCF
+                ? `Ollama: Cloudflare tunnel timeout (524). The model is taking too long to respond — it may be running on CPU. Try a smaller model or ensure GPU is available.`
+                : `Ollama streaming error (${res.status})`,
+            );
+            console.warn(`[Ollama] ${lastError.message} — attempt ${attempt + 1}/${MAX_RETRIES + 1}`);
+            continue; // retry
+          }
+
+          let errorMsg = `Ollama streaming error (${res.status})`;
+          try {
+            const contentType = res.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const errorData = await res.json();
+              if (errorData.error) errorMsg += `: ${errorData.error}`;
+            }
+          } catch {
+            // Could not parse error body
+          }
+          throw new Error(errorMsg);
+        }
+
+        if (!res.body) {
+          throw new Error('Ollama streaming: no response body');
+        }
+
+        // Successfully got a response — yield chunks from this stream
+        yield* this.readStream(res.body, options);
+        return; // success — don't retry
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (isRetryable(err) && attempt < MAX_RETRIES) {
+          console.warn(`[Ollama] Stream transient error: ${lastError.message} — retrying...`);
+          continue;
+        }
+        throw lastError;
       }
-      throw new Error(errorMsg);
     }
 
-    if (!res.body) {
-      throw new Error('Ollama streaming: no response body');
-    }
+    throw lastError ?? new Error('Ollama: unknown streaming error after retries');
+  }
 
-    const reader = res.body.getReader();
+  // -------------------------------------------------------------------------
+  // Stream Reader (extracted for retry logic)
+  // -------------------------------------------------------------------------
+
+  private async *readStream(
+    body: ReadableStream<Uint8Array>,
+    options: LLMRequestOptions,
+  ): AsyncIterable<LLMStreamChunk> {
+    const reader = body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let totalContent = '';
@@ -281,10 +495,15 @@ export class OllamaAdapter implements LLMProvider {
   // -------------------------------------------------------------------------
 
   async listModels(config: ProviderConfig): Promise<string[]> {
-    const res = await fetch(`${baseUrl(config)}/api/tags`, {
-      method: 'GET',
-      headers: headers(config),
-    });
+    const { promise } = fetchWithTimeout(
+      `${baseUrl(config)}/api/tags`,
+      {
+        method: 'GET',
+        headers: headers(config),
+      },
+      METADATA_TIMEOUT_MS,
+    );
+    const res = await promise;
 
     if (!res.ok) {
       throw new Error(`Ollama list models error (${res.status})`);
