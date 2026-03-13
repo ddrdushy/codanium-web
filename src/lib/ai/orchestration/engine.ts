@@ -36,6 +36,7 @@ import { agentStateManager } from './state-manager';
 import { eventBus } from './event-bus';
 import { delegationHandler, DelegationChainEntry } from './delegation';
 import { validateStageGate, validateDelegationGate } from './quality-gates';
+import { validateCardTransition, CardState as LifecycleCardState, CardType as LifecycleCardType } from './card-lifecycle';
 
 // ---------------------------------------------------------------------------
 // OrchestrationEngine
@@ -522,7 +523,34 @@ export class OrchestrationEngine {
           case 'update_card': {
             const updateData: Record<string, unknown> = {};
             if (action.data.state) {
-              updateData.state = this.mapCardState(action.data.state);
+              const newState = this.mapCardState(action.data.state);
+
+              // DoD validation: check if state transition is allowed
+              const existingCard = await prisma.card.findUnique({
+                where: { id: action.cardId },
+                select: { state: true, type: true },
+              });
+              if (existingCard) {
+                const transitionResult = await validateCardTransition(
+                  action.cardId,
+                  projectId,
+                  existingCard.state as LifecycleCardState,
+                  newState as LifecycleCardState,
+                  existingCard.type as LifecycleCardType,
+                );
+                if (!transitionResult.allowed) {
+                  console.warn(
+                    `[Engine] DoD blocked card ${action.cardId}: ${transitionResult.reason}`,
+                    transitionResult.requirements,
+                  );
+                  // Skip this state change but continue processing other fields
+                  // The agent will see the card is still in the old state on next invocation
+                } else {
+                  updateData.state = newState;
+                }
+              } else {
+                updateData.state = newState;
+              }
             }
             if (action.data.title) {
               updateData.title = action.data.title;
@@ -1443,7 +1471,33 @@ export async function executeSideEffects(
         case 'update_card': {
           const updateData: Record<string, unknown> = {};
           if (action.data.state) {
-            updateData.state = mapCardState(action.data.state);
+            const newState = mapCardState(action.data.state);
+
+            // DoD validation: check if state transition is allowed
+            const existingCard = await prisma.card.findUnique({
+              where: { id: action.cardId },
+              select: { state: true, type: true },
+            });
+            if (existingCard) {
+              const transitionResult = await validateCardTransition(
+                action.cardId,
+                projectId,
+                existingCard.state as LifecycleCardState,
+                newState as LifecycleCardState,
+                existingCard.type as LifecycleCardType,
+              );
+              if (!transitionResult.allowed) {
+                console.warn(
+                  `[Engine] DoD blocked card ${action.cardId}: ${transitionResult.reason}`,
+                  transitionResult.requirements,
+                );
+                // Skip this state change but continue processing other fields
+              } else {
+                updateData.state = newState;
+              }
+            } else {
+              updateData.state = newState;
+            }
           }
           if (action.data.title) {
             updateData.title = action.data.title;

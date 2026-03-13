@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { createCardBranch, mergeBranch } from '@/lib/git/repo-manager';
+import {
+  validateCardTransition,
+  CardState as LifecycleCardState,
+  CardType as LifecycleCardType,
+} from '@/lib/ai/orchestration/card-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,6 +68,29 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         { error: 'No valid fields to update' },
         { status: 400 }
       );
+    }
+
+    // ── Definition of Done Validation ───────────────────────────────────
+    // When changing card state, validate the transition is allowed
+    if (data.state && data.state !== existing.state) {
+      const transitionResult = await validateCardTransition(
+        cardId,
+        projectId,
+        existing.state as LifecycleCardState,
+        data.state as LifecycleCardState,
+        existing.type as LifecycleCardType,
+      );
+      if (!transitionResult.allowed) {
+        return NextResponse.json(
+          {
+            error: transitionResult.reason,
+            requirements: transitionResult.requirements,
+            currentState: existing.state,
+            requestedState: data.state,
+          },
+          { status: 422 }
+        );
+      }
     }
 
     const card = await prisma.card.update({

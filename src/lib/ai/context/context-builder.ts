@@ -14,6 +14,12 @@ import { AgentDefinition, ContextSource } from '@/lib/ai/agents/types';
 import { LLMMessage } from '@/lib/ai/providers/types';
 import * as sources from './context-sources';
 import { ContextScope } from './context-sources';
+import {
+  getValidTransitions,
+  getDoDRequirements,
+  CardState as LifecycleCardState,
+  CardType as LifecycleCardType,
+} from '@/lib/ai/orchestration/card-lifecycle';
 
 // ─── Public Interface ────────────────────────────────────────────────────────
 
@@ -396,6 +402,21 @@ function formatSDLCStages(data: unknown): string {
   return ['SDLC PIPELINE:', ...lines].join('\n');
 }
 
+/**
+ * Returns the next natural forward state in the card lifecycle.
+ * Used to show DoD requirements for the most likely next transition.
+ */
+function getNextNaturalState(current: LifecycleCardState): LifecycleCardState | null {
+  const progression: Record<string, LifecycleCardState> = {
+    PLANNED: 'IN_PROGRESS',
+    IN_PROGRESS: 'UNDER_REVIEW',
+    UNDER_REVIEW: 'DONE',
+    TESTING: 'DONE',
+    DONE: 'RELEASED',
+  };
+  return progression[current] ?? null;
+}
+
 function formatCards(data: unknown): string {
   const cards = data as Array<{
     id: string;
@@ -406,15 +427,48 @@ function formatCards(data: unknown): string {
     description?: string | null;
     module?: string | null;
     ownerAgent?: { shortName: string; name: string } | null;
+    children?: Array<{ id: string; state: string }> | null;
   }>;
   if (cards.length === 0) return '';
   const lines = cards.map((c) => {
     const agent = c.ownerAgent ? ` (${c.ownerAgent.shortName})` : '';
     const mod = c.module ? ` [${c.module}]` : '';
     const desc = c.description ? `\n    Description: ${c.description.substring(0, 200)}` : '';
-    return `  [${c.type}] id="${c.id}" ${c.title} — ${c.state} ${c.priority}${agent}${mod}${desc}`;
+
+    // Show valid transitions and DoD hints
+    const transitions = getValidTransitions(c.state as LifecycleCardState);
+    const transitionStr = transitions.length > 0 ? `\n    → Next states: ${transitions.join(', ')}` : '';
+
+    // Show DoD requirements for the next natural state
+    const nextState = getNextNaturalState(c.state as LifecycleCardState);
+    const dodReqs = nextState ? getDoDRequirements(c.type as LifecycleCardType, nextState) : [];
+    const dodStr = dodReqs.length > 0 ? `\n    ✓ DoD for ${nextState}: ${dodReqs.join('; ')}` : '';
+
+    // Show incomplete children count for parent cards
+    let childStr = '';
+    if (c.children && c.children.length > 0) {
+      const incomplete = c.children.filter(ch => ch.state !== 'DONE' && ch.state !== 'RELEASED');
+      const done = c.children.length - incomplete.length;
+      childStr = `\n    Children: ${done}/${c.children.length} complete`;
+      if (incomplete.length > 0 && (c.state === 'UNDER_REVIEW' || c.state === 'TESTING')) {
+        childStr += ' ⚠️ Cannot move to DONE until all children complete';
+      }
+    }
+
+    return `  [${c.type}] id="${c.id}" ${c.title} — ${c.state} ${c.priority}${agent}${mod}${desc}${transitionStr}${dodStr}${childStr}`;
   });
-  return [`BOARD (${cards.length} cards):`, ...lines].join('\n');
+
+  // Add card lifecycle rules summary at the top
+  const lifecycleSummary = [
+    'CARD LIFECYCLE RULES:',
+    '  PLANNED → IN_PROGRESS → UNDER_REVIEW → TESTING → DONE → RELEASED',
+    '  BLOCKED can be entered from any active state',
+    '  Parent cards (EPIC/FEATURE) cannot be DONE until all children are DONE',
+    '  Cards must have a description before moving to IN_PROGRESS',
+    '  TASK cards should have code artifacts before review/done',
+  ];
+
+  return [...lifecycleSummary, '', `BOARD (${cards.length} cards):`, ...lines].join('\n');
 }
 
 function formatDecisions(data: unknown): string {

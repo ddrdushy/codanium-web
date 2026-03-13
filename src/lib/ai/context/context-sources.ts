@@ -71,6 +71,9 @@ export async function fetchCards(projectId: string, scope?: ContextScope) {
     ownerAgent: {
       select: { shortName: true, name: true },
     },
+    children: {
+      select: { id: true, state: true },
+    },
   } as const;
 
   if (scope?.cardId) {
