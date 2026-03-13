@@ -237,6 +237,17 @@ function parseAction(actionType: string, rawJson: string): AgentAction | null {
         },
       };
 
+    case 'update_document':
+      if (!parsed.type || !parsed.content) return null;
+      return {
+        type: 'update_document',
+        data: {
+          type: String(parsed.type),
+          content: String(parsed.content),
+          mode: parsed.mode === 'replace' ? 'replace' : 'append',
+        },
+      };
+
     case 'remember':
       if (!parsed.category || !parsed.content) return null;
       return {

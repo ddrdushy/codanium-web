@@ -616,6 +616,61 @@ export class OrchestrationEngine {
             break;
           }
 
+          case 'update_document': {
+            // Find existing DRAFT document of this type and append/replace content.
+            // If none exists, create a new staging document.
+            const updateDocType = this.mapDocumentType(action.data.type);
+            const existingDoc = await prisma.document.findFirst({
+              where: { projectId, type: updateDocType, status: 'DRAFT' },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            if (existingDoc) {
+              const mode = action.data.mode ?? 'append';
+              const newContent = mode === 'append'
+                ? existingDoc.content + '\n\n' + action.data.content
+                : action.data.content;
+              await prisma.document.update({
+                where: { id: existingDoc.id },
+                data: {
+                  content: newContent,
+                  wordCount: newContent.split(/\s+/).filter(Boolean).length,
+                },
+              });
+              console.log(
+                `[Engine] 📝 Updated staging ${action.data.type} (${mode}) — ${newContent.split(/\s+/).filter(Boolean).length} words`,
+              );
+            } else {
+              // Create new staging document
+              const content = action.data.content;
+              await prisma.document.create({
+                data: {
+                  title: `Staging: ${action.data.type} Requirements`,
+                  type: updateDocType,
+                  content,
+                  wordCount: content.split(/\s+/).filter(Boolean).length,
+                  owner: 'BA',
+                  projectId,
+                },
+              });
+              console.log(
+                `[Engine] 📝 Created staging ${action.data.type} document`,
+              );
+            }
+
+            await eventBus.emit({
+              type: 'action.executed',
+              actor: 'system',
+              projectId,
+              payload: {
+                actionType: 'update_document',
+                docType: action.data.type,
+                mode: action.data.mode ?? 'append',
+              },
+            });
+            break;
+          }
+
           case 'approve_document': {
             // Mark documents of this type as APPROVED for the project
             const approveDocType = this.mapDocumentType(action.data.type);
@@ -1477,6 +1532,58 @@ export async function executeSideEffects(
             payload: {
               actionType: 'create_document',
               title: action.data.title,
+            },
+          });
+          break;
+        }
+
+        case 'update_document': {
+          const updateDocType = mapDocumentType(action.data.type);
+          const existingDoc = await prisma.document.findFirst({
+            where: { projectId, type: updateDocType, status: 'DRAFT' },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (existingDoc) {
+            const mode = action.data.mode ?? 'append';
+            const newContent = mode === 'append'
+              ? existingDoc.content + '\n\n' + action.data.content
+              : action.data.content;
+            await prisma.document.update({
+              where: { id: existingDoc.id },
+              data: {
+                content: newContent,
+                wordCount: newContent.split(/\s+/).filter(Boolean).length,
+              },
+            });
+            console.log(
+              `[Engine] 📝 Updated staging ${action.data.type} (${mode}) — ${newContent.split(/\s+/).filter(Boolean).length} words`,
+            );
+          } else {
+            const content = action.data.content;
+            await prisma.document.create({
+              data: {
+                title: `Staging: ${action.data.type} Requirements`,
+                type: updateDocType,
+                content,
+                wordCount: content.split(/\s+/).filter(Boolean).length,
+                owner: 'BA',
+                projectId,
+              },
+            });
+            console.log(
+              `[Engine] 📝 Created staging ${action.data.type} document`,
+            );
+          }
+
+          await eventBus.emit({
+            type: 'action.executed',
+            actor: 'system',
+            projectId,
+            payload: {
+              actionType: 'update_document',
+              docType: action.data.type,
+              mode: action.data.mode ?? 'append',
             },
           });
           break;

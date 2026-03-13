@@ -37,6 +37,7 @@ export type AgentAction =
   | { type: 'update_agent_status'; agentId: string; status: string; task?: string }
   | { type: 'create_document'; data: { title: string; type: string; content: string; owner?: string } }
   | { type: 'approve_document'; data: { type: string } }
+  | { type: 'update_document'; data: { type: string; content: string; mode?: 'append' | 'replace' } }
   | { type: 'advance_sdlc'; stageName: string }
   | { type: 'delegate'; targetAgent: string; context: string }
   | { type: 'create_branch'; data: { name: string; baseBranch?: string } }

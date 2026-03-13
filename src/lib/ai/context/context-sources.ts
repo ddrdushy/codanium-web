@@ -166,6 +166,7 @@ export async function fetchDocuments(projectId: string, _scope?: ContextScope) {
     select: {
       id: true, title: true, type: true, status: true,
       wordCount: true, sections: true, owner: true,
+      content: true, // Include content so agents can read staging BRD notes
     },
   });
 }

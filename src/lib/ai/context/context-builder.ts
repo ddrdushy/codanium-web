@@ -451,6 +451,7 @@ function formatDocuments(data: unknown): string {
     status: string;
     wordCount: number;
     owner: string;
+    content?: string;
   }>;
   if (docs.length === 0) return '';
   const statusIcon: Record<string, string> = {
@@ -459,10 +460,27 @@ function formatDocuments(data: unknown): string {
     APPROVED: '✅ APPROVED',
     PUBLISHED: '📢 PUBLISHED',
   };
-  const lines = docs.map(
-    (d) => `  ${d.title} (${d.type}) — ${statusIcon[d.status] ?? d.status} [${d.wordCount} words, owner: ${d.owner}]`,
-  );
-  return [`DOCUMENTS (${docs.length}):`, ...lines].join('\n');
+  const lines: string[] = [];
+  const stagingDocs: string[] = [];
+
+  for (const d of docs) {
+    lines.push(`  ${d.title} (${d.type}) — ${statusIcon[d.status] ?? d.status} [${d.wordCount} words, owner: ${d.owner}]`);
+
+    // Include staging BRD content so BA can compile it into final BRD
+    if (d.title.startsWith('Staging:') && d.status === 'DRAFT' && d.content && d.content.length > 0) {
+      // Truncate to ~3000 chars to keep context manageable
+      const truncated = d.content.length > 3000
+        ? d.content.substring(0, 3000) + '\n... (truncated)'
+        : d.content;
+      stagingDocs.push(`\n--- STAGING ${d.type} CONTENT ---\n${truncated}\n--- END STAGING ---`);
+    }
+  }
+
+  const result = [`DOCUMENTS (${docs.length}):`, ...lines];
+  if (stagingDocs.length > 0) {
+    result.push(...stagingDocs);
+  }
+  return result.join('\n');
 }
 
 function formatAgentsStatus(data: unknown): string {
