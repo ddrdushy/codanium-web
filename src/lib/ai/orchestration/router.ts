@@ -258,11 +258,22 @@ export class MessageRouter {
         }
       }
 
-      console.log(
-        `[MessageRouter] Conversation continuity → replying to ${lastContext.agentShortName}` +
-        ` (last msg asked question, user reply is ${message.length} chars)`,
-      );
-      return lastContext.agentShortName;
+      // Guard: ORC is a coordinator, not a conversational agent. If ORC
+      // asked a clarifying question and the user responds with a substantive
+      // request (not just a short reply), let keyword routing pick the right
+      // specialist agent instead of bouncing back to ORC.
+      if (lastContext.agentShortName === 'ORC' && !isLikelyReply(message)) {
+        console.log(
+          `[MessageRouter] ORC continuity OVERRIDDEN → user has substantive request, falling through to keyword routing`,
+        );
+        // Fall through to keyword routing below
+      } else {
+        console.log(
+          `[MessageRouter] Conversation continuity → replying to ${lastContext.agentShortName}` +
+          ` (last msg asked question, user reply is ${message.length} chars)`,
+        );
+        return lastContext.agentShortName;
+      }
     }
 
     // ── Priority 3: Keyword intent classification ─────────────────────
