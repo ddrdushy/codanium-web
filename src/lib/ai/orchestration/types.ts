@@ -85,6 +85,7 @@ export type UserIntent =
   | 'deployment'
   | 'testing'
   | 'architecture'
+  | 'code_generation'
   | 'general';
 
 // ---------------------------------------------------------------------------

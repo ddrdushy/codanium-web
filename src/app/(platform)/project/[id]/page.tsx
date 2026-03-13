@@ -72,10 +72,10 @@ export default function ProjectDashboard() {
   const params = useParams();
   const projectId = params.id as string;
 
-  const [project, setProject] = useState<Project>(mockProject);
-  const [cards, setCards] = useState<Card[]>(mockCards);
-  const [agents, setAgents] = useState<Agent[]>(mockAgents);
-  const [decisions, setDecisions] = useState<Decision[]>(mockDecisions);
+  const [project, setProject] = useState<Project | null>(null);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
   const [sdlcStages, setSdlcStages] = useState<SDLCStage[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -94,13 +94,34 @@ export default function ProjectDashboard() {
         }))))
         .catch(() => {}),
     ])
-      .catch(() => {/* keep mock data */})
+      .catch(() => {
+        setProject(mockProject);
+        setCards(mockCards);
+        setAgents(mockAgents);
+        setDecisions(mockDecisions);
+      })
       .finally(() => setLoading(false));
   }, [projectId]);
 
   const activeAgents = agents.filter(a => a.status === 'working');
   const completedStages = sdlcStages.filter(s => s.status === 'completed').length;
   const activeStage = sdlcStages.find(s => s.status === 'active');
+
+  if (!project) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        <div className="animate-pulse space-y-3">
+          <div className="h-8 w-64 rounded bg-white/[0.06]" />
+          <div className="h-4 w-96 rounded bg-white/[0.06]" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <MetricSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAgents } from '@/lib/api';
@@ -20,6 +20,42 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 /**
+ * Error boundary that catches render errors in the chat area
+ * and shows a recovery UI instead of crashing the entire tab.
+ */
+class ChatErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: string | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-3 p-8">
+          <AlertTriangle className="w-8 h-8 text-amber" />
+          <p className="text-sm text-muted-foreground">Something went wrong rendering the chat.</p>
+          <button
+            onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber/10 text-amber border border-amber/20 rounded-lg hover:bg-amber/20 transition-colors"
+          >
+            <RotateCcw className="w-3 h-3" /> Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/**
  * Strip raw agent markers ([ACTION:...], [DELEGATE:...], etc.) from content
  * before displaying in the chat UI. These markers are parsed server-side
  * for side effects but may leak through during streaming or DB storage.
@@ -28,18 +64,19 @@ import remarkGfm from 'remark-gfm';
 function stripAgentMarkers(content: string): string {
   return content
     // Full [ACTION:xxx]...content...[/ACTION] blocks (including multi-line)
-    .replace(/\[ACTION:\w+\][\s\S]*?\[\/ACTION\]/g, '')
-    // Full [DELEGATE:xxx]...content...[/DELEGATE] or [/DELEGATE:xxx] blocks
-    .replace(/\[DELEGATE:\w+\][\s\S]*?\[\/DELEGATE(?::\w+)?\]/g, '')
-    // Full [ARTIFACT:xxx]...content...[/ARTIFACT] blocks
-    .replace(/\[ARTIFACT:[^\]]*\][\s\S]*?\[\/ARTIFACT\]/g, '')
-    // Bold-wrapped markers: **[ACTION:remember]**...
-    .replace(/\*{1,2}\[ACTION:\w+\]\*{0,2}[\s\S]*?\*{0,2}\[\/ACTION\]\*{0,2}/g, '')
-    // Standalone opening/closing tags (orphaned or partial)
-    .replace(/\[ACTION:\w+\][^[\n]*$/gm, '')
-    .replace(/^\s*\[\/ACTION\]/gm, '')
-    .replace(/\[DELEGATE:\w+\]\s*$/gm, '')
-    .replace(/^\s*\[\/DELEGATE(?::\w+)?\]/gm, '')
+    // Handles spaces: [ ACTION:remember ], [ACTION:remember], **[ACTION:remember]** etc.
+    .replace(/\*{0,2}\[\s*ACTION\s*:\s*\w+\s*\]\*{0,2}[\s\S]*?\*{0,2}\[\s*\/\s*ACTION\s*\]\*{0,2}/gi, '')
+    // Full [DELEGATE:xxx]...content...[/DELEGATE] blocks (with optional spaces)
+    .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\][\s\S]*?\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gi, '')
+    // Full [ARTIFACT:xxx]...content...[/ARTIFACT] blocks (with optional spaces)
+    .replace(/\[\s*ARTIFACT\s*:[^\]]*\][\s\S]*?\[\s*\/\s*ARTIFACT\s*\]/gi, '')
+    // Standalone opening tags (orphaned — no closing tag found)
+    .replace(/\*{0,2}\[\s*ACTION\s*:\s*\w+\s*\]\*{0,2}[^[\n]*$/gm, '')
+    .replace(/^\s*\*{0,2}\[\s*\/\s*ACTION\s*\]\*{0,2}/gm, '')
+    .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\]\s*$/gm, '')
+    .replace(/^\s*\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gm, '')
+    // Strip agent name prefixes like "[BA]", "[SA]", "[DEC]", "[ORC]" at start of lines
+    .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*/gm, '')
     // Clean up whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -95,6 +132,42 @@ const MemoizedMarkdown = memo(function MemoizedMarkdown({ content }: { content: 
   return <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleaned}</ReactMarkdown>;
 });
 
+/**
+ * Lightweight streaming text renderer — displays plain text during streaming
+ * instead of running ReactMarkdown on every token batch (~30fps).
+ *
+ * ReactMarkdown parses markdown into an AST and generates a full React tree
+ * on every render. At 30fps with growing content, this causes exponential
+ * CPU usage and crashes the browser tab.
+ *
+ * This component strips agent markers (cheap regex) and renders as
+ * pre-wrapped text. Full markdown formatting is applied after streaming
+ * completes when messages refetch from DB.
+ */
+const StreamingText = memo(function StreamingText({ content }: { content: string }) {
+  // Strip agent markers and option lines (lightweight vs full markdown parse)
+  const cleaned = content
+    .replace(/\*{0,2}\[\s*ACTION\s*:\s*\w+\s*\]\*{0,2}[\s\S]*?\*{0,2}\[\s*\/\s*ACTION\s*\]\*{0,2}/gi, '')
+    .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\][\s\S]*?\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gi, '')
+    .replace(/\[\s*ARTIFACT\s*:[^\]]*\][\s\S]*?\[\s*\/\s*ARTIFACT\s*\]/gi, '')
+    .replace(/\*{0,2}\[\s*ACTION\s*:\s*\w+\s*\]\*{0,2}[^[\n]*$/gm, '')
+    .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  // Render bold text minimally: **text** → <strong>text</strong>
+  const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <div className="whitespace-pre-wrap">
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </div>
+  );
+});
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'agent' | 'system';
@@ -139,7 +212,7 @@ export default function ChatPage() {
   const router = useRouter();
   const cardId = searchParams.get('cardId') ?? undefined;
 
-  const [agents, setAgents] = useState<Agent[]>(mockAgents);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -150,6 +223,7 @@ export default function ChatPage() {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(30);
   const sendRef = useRef<(text: string) => void>(() => {});
+  const isSendingRef = useRef(false); // Prevent double-sends (race condition guard)
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -172,7 +246,7 @@ export default function ChatPage() {
 
     fetchAgents(projectId)
       .then(setAgents)
-      .catch(() => {});
+      .catch(() => { setAgents(mockAgents); });
 
     fetch(`/api/projects/${projectId}/chat`)
       .then(r => r.json())
@@ -211,14 +285,17 @@ export default function ChatPage() {
     }
   }, [agents, messages.length, loaded]);
 
-  // Throttled scroll-to-bottom — prevents layout thrashing during streaming
+  // Scroll to bottom on new messages and stream state changes.
+  // IMPORTANT: Do NOT depend on streamContent/streamThinking — those change
+  // ~30 times/sec during streaming and would trigger layout reflow each time,
+  // contributing to browser tab crashes.
   useEffect(() => {
     if (scrollThrottleRef.current) return;
     scrollThrottleRef.current = setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       scrollThrottleRef.current = null;
-    }, 150);
-  }, [messages, streamContent, streamThinking]);
+    }, 200);
+  }, [messages, isStreaming]);
 
   // When the stream completes, refetch ALL messages from DB.
   // This correctly handles delegation chains (BA → SA → PE etc.)
@@ -255,6 +332,12 @@ export default function ChatPage() {
     const trimmed = text.trim();
     if (!trimmed || isStreaming) return;
 
+    // Prevent double-sends — if a send is already in flight, bail out.
+    // This guards against race conditions where two clicks/keypresses
+    // fire within milliseconds of each other.
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
+
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const tempId = `temp-${Date.now()}`;
     const userMsg: ChatMessage = { id: tempId, role: 'user', content: trimmed, timestamp: now };
@@ -277,6 +360,9 @@ export default function ChatPage() {
     } catch {
       // DB save failed — user message is still shown optimistically
     }
+
+    // Release the send guard AFTER DB save completes (stream will set isStreaming)
+    isSendingRef.current = false;
 
     // Start AI streaming via the orchestration engine
     streamSend(projectId, trimmed, selectedAgent?.shortName, cardId);
@@ -405,7 +491,9 @@ export default function ChatPage() {
                                         : [...prev, opt.text]
                                     );
                                   } else {
-                                    setInputValue(opt.text);
+                                    // Single-select: send full option text immediately
+                                    // Use sendRef.current to avoid stale closure on sendMessage
+                                    sendRef.current(opt.text);
                                   }
                                 }}
                                 className={cn(
@@ -505,6 +593,7 @@ export default function ChatPage() {
   }, [messages, visibleCount, selectedOptions, showThinking, isStreaming]);
 
   return (
+    <ChatErrorBoundary>
     <div className="flex h-full">
       <div className="flex-1 flex flex-col">
         <div className="px-6 py-3 border-b border-border flex items-center justify-between">
@@ -600,7 +689,7 @@ export default function ChatPage() {
                     {streamContent ? (
                       <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
                         <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
-                          <MemoizedMarkdown content={streamContent} />
+                          <StreamingText content={streamContent} />
                           <span className="inline-block w-1.5 h-4 bg-amber/60 animate-pulse ml-0.5 -mb-0.5 rounded-sm" />
                         </div>
                       </div>
@@ -815,5 +904,6 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+    </ChatErrorBoundary>
   );
 }

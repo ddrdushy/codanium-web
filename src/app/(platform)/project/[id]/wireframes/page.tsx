@@ -222,8 +222,8 @@ export default function WireframesPage() {
   const params = useParams();
   const projectId = params.id as string;
 
-  const [wireframes, setWireframes] = useState<Wireframe[]>(mockWireframes);
-  const [selectedWireframe, setSelectedWireframe] = useState<Wireframe | null>(mockWireframes[0]);
+  const [wireframes, setWireframes] = useState<Wireframe[]>([]);
+  const [selectedWireframe, setSelectedWireframe] = useState<Wireframe | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Modal state
@@ -241,7 +241,10 @@ export default function WireframesPage() {
           setSelectedWireframe(mapped[0]);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setWireframes(mockWireframes);
+        setSelectedWireframe(mockWireframes[0]);
+      });
   }, [projectId]);
 
   // ── Handlers ──────────────────────────────────────────────────────────
@@ -326,7 +329,13 @@ export default function WireframesPage() {
 
         {/* Wireframe Items */}
         <div className="flex-1 overflow-y-auto p-2">
-          {viewMode === 'grid' ? (
+          {wireframes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <PenTool className="w-8 h-8 text-muted-foreground/20 mb-2" />
+              <p className="text-sm text-muted-foreground/50">No designs yet</p>
+              <p className="text-[11px] text-muted-foreground/30 mt-1">Create a new design to get started</p>
+            </div>
+          ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 gap-2">
               {wireframes.map((wf, i) => {
                 const isSelected = selectedWireframe?.id === wf.id;

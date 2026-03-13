@@ -35,6 +35,7 @@ import { messageRouter } from './router';
 import { agentStateManager } from './state-manager';
 import { eventBus } from './event-bus';
 import { delegationHandler, DelegationChainEntry } from './delegation';
+import { validateStageGate, validateDelegationGate } from './quality-gates';
 
 // ---------------------------------------------------------------------------
 // OrchestrationEngine
@@ -615,8 +616,57 @@ export class OrchestrationEngine {
             break;
           }
 
+          case 'approve_document': {
+            // Mark documents of this type as APPROVED for the project
+            const approveDocType = this.mapDocumentType(action.data.type);
+            const updated = await prisma.document.updateMany({
+              where: {
+                projectId,
+                type: approveDocType,
+                status: { not: 'APPROVED' },
+              },
+              data: { status: 'APPROVED' },
+            });
+
+            console.log(
+              `[Engine] ✅ Approved ${updated.count} ${action.data.type} document(s) for project ${projectId}`,
+            );
+
+            await eventBus.emit({
+              type: 'action.executed',
+              actor: 'system',
+              projectId,
+              payload: {
+                actionType: 'approve_document',
+                docType: action.data.type,
+                count: updated.count,
+              },
+            });
+            break;
+          }
+
           case 'advance_sdlc': {
-            // Set the current active stage to COMPLETED, then set the next stage to ACTIVE
+            // ── Quality Gate Check ──────────────────────────────────────
+            const gateResult = await validateStageGate(projectId, action.stageName);
+            if (!gateResult.passed) {
+              console.warn(
+                `[Engine] ⛔ advance_sdlc BLOCKED for "${action.stageName}": ${gateResult.reason}`,
+              );
+              await eventBus.emit({
+                type: 'action.executed',
+                actor: 'system',
+                projectId,
+                payload: {
+                  actionType: 'advance_sdlc_blocked',
+                  stageName: action.stageName,
+                  reason: gateResult.reason,
+                  blockedBy: gateResult.blockedBy,
+                },
+              });
+              break; // Skip advancement — gate not passed
+            }
+
+            // ── Gate passed — proceed with stage advancement ───────────
             const stages = await prisma.sDLCStage.findMany({
               where: { projectId },
               orderBy: { order: 'asc' },
@@ -898,7 +948,7 @@ export class OrchestrationEngine {
     try {
       if (category === 'DOCUMENT') {
         // Legacy path: save to Document table
-        const docType = this.inferDocumentType(artifact.type);
+        const docType = this.inferDocumentType(artifact.type, artifact.name);
         const wordCount = artifact.content.split(/\s+/).filter(Boolean).length;
 
         await prisma.document.create({
@@ -1101,18 +1151,21 @@ export class OrchestrationEngine {
    */
   private inferDocumentType(
     artifactType: string,
+    artifactName?: string,
   ): 'BRD' | 'SDD' | 'API_SPEC' | 'RUNBOOK' | 'ADR' {
     const lower = artifactType.toLowerCase();
-    if (lower.includes('api') || lower.includes('openapi') || lower.includes('swagger')) {
+    const nameLower = (artifactName ?? '').toLowerCase();
+    const combined = `${lower} ${nameLower}`;
+    if (combined.includes('api') || combined.includes('openapi') || combined.includes('swagger')) {
       return 'API_SPEC';
     }
-    if (lower.includes('architecture') || lower.includes('design') || lower.includes('sdd')) {
+    if (combined.includes('architecture') || combined.includes('design') || combined.includes('sdd')) {
       return 'SDD';
     }
-    if (lower.includes('runbook') || lower.includes('ops') || lower.includes('deploy')) {
+    if (combined.includes('runbook') || combined.includes('ops') || combined.includes('deploy')) {
       return 'RUNBOOK';
     }
-    if (lower.includes('adr') || lower.includes('decision')) {
+    if (combined.includes('adr') || combined.includes('decision')) {
       return 'ADR';
     }
     return 'BRD';
@@ -1241,7 +1294,7 @@ export async function persistArtifact(
     }
 
     if (category === 'DOCUMENT') {
-      const docType = inferDocumentType(artifact.type);
+      const docType = inferDocumentType(artifact.type, artifact.name);
       const wordCount = artifact.content.split(/\s+/).filter(Boolean).length;
 
       await prisma.document.create({
@@ -1316,6 +1369,7 @@ export async function executeSideEffects(
               projectId,
               ownerAgentId: agentDbId ?? undefined,
               parentId: action.data.parentId ?? undefined,
+              module: action.data.module ?? null,
             },
           });
 
@@ -1428,7 +1482,55 @@ export async function executeSideEffects(
           break;
         }
 
+        case 'approve_document': {
+          const approveDocType = mapDocumentType(action.data.type);
+          const updated = await prisma.document.updateMany({
+            where: {
+              projectId,
+              type: approveDocType,
+              status: { not: 'APPROVED' },
+            },
+            data: { status: 'APPROVED' },
+          });
+
+          console.log(
+            `[Engine] ✅ Approved ${updated.count} ${action.data.type} document(s) for project ${projectId}`,
+          );
+
+          await eventBus.emit({
+            type: 'action.executed',
+            actor: 'system',
+            projectId,
+            payload: {
+              actionType: 'approve_document',
+              docType: action.data.type,
+              count: updated.count,
+            },
+          });
+          break;
+        }
+
         case 'advance_sdlc': {
+          // ── Quality Gate Check ──────────────────────────────────────
+          const gateResult = await validateStageGate(projectId, action.stageName);
+          if (!gateResult.passed) {
+            console.warn(
+              `[Engine] ⛔ advance_sdlc BLOCKED for "${action.stageName}": ${gateResult.reason}`,
+            );
+            await eventBus.emit({
+              type: 'action.executed',
+              actor: 'system',
+              projectId,
+              payload: {
+                actionType: 'advance_sdlc_blocked',
+                stageName: action.stageName,
+                reason: gateResult.reason,
+                blockedBy: gateResult.blockedBy,
+              },
+            });
+            break;
+          }
+
           const stages = await prisma.sDLCStage.findMany({
             where: { projectId },
             orderBy: { order: 'asc' },
@@ -1705,18 +1807,21 @@ export function inferArtifactCategory(
 
 export function inferDocumentType(
   artifactType: string,
+  artifactName?: string,
 ): 'BRD' | 'SDD' | 'API_SPEC' | 'RUNBOOK' | 'ADR' {
   const lower = artifactType.toLowerCase();
-  if (lower.includes('api') || lower.includes('openapi') || lower.includes('swagger')) {
+  const nameLower = (artifactName ?? '').toLowerCase();
+  const combined = `${lower} ${nameLower}`;
+  if (combined.includes('api') || combined.includes('openapi') || combined.includes('swagger')) {
     return 'API_SPEC';
   }
-  if (lower.includes('architecture') || lower.includes('design') || lower.includes('sdd')) {
+  if (combined.includes('architecture') || combined.includes('design') || combined.includes('sdd')) {
     return 'SDD';
   }
-  if (lower.includes('runbook') || lower.includes('ops') || lower.includes('deploy')) {
+  if (combined.includes('runbook') || combined.includes('ops') || combined.includes('deploy')) {
     return 'RUNBOOK';
   }
-  if (lower.includes('adr') || lower.includes('decision')) {
+  if (combined.includes('adr') || combined.includes('decision')) {
     return 'ADR';
   }
   return 'BRD';

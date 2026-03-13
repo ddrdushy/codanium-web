@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { mockAgents } from '@/lib/mock-data';
 import {
   Layers, Box, Wrench, FlaskConical, AlertOctagon,
   Clock, AlertTriangle, Flame, ChevronRight, MessageSquare
@@ -31,7 +30,6 @@ export function BoardCard({ card, index }: { card: Card; index: number }) {
   const priorityInfo = priorityConfig[card.priority] || priorityConfig.medium;
   const TypeIcon = typeInfo.icon;
   const PriorityIcon = priorityInfo.icon;
-  const agent = mockAgents.find(a => a.id === card.owner_agent);
   const router = useRouter();
   const params = useParams();
   const projectId = params.id as string;
@@ -88,10 +86,9 @@ export function BoardCard({ card, index }: { card: Card; index: number }) {
         {/* Bottom: Agent + Children count + Chat button */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {agent && (
+            {card.owner_agent && (
               <div className="flex items-center gap-1.5">
-                <span className="text-xs">{agent.avatar}</span>
-                <span className="text-[10px] text-muted-foreground font-medium">{agent.shortName}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{card.owner_agent}</span>
               </div>
             )}
             {card.children.length > 0 && (

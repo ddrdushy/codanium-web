@@ -10,6 +10,7 @@
 // =============================================================================
 
 import { AgentExecutionResult } from '@/lib/ai/agents/types';
+import { validateDelegationGate } from './quality-gates';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -81,6 +82,26 @@ export class DelegationHandler {
         `Stopping chain at: ${fromAgent} -> ${targetAgent}`,
       );
       return [];
+    }
+
+    // Guard: quality gate check for delegation
+    const gateResult = await validateDelegationGate(projectId, fromAgent, targetAgent);
+    if (!gateResult.passed) {
+      console.warn(
+        `[DelegationHandler] ⛔ Delegation ${fromAgent} -> ${targetAgent} BLOCKED: ${gateResult.reason}`,
+      );
+      // Return a synthetic result explaining the block
+      const blockedEntry: DelegationChainEntry = {
+        fromAgent,
+        toAgent: targetAgent,
+        context: delegationContext,
+        result: {
+          message: `⚠️ Quality gate blocked this handoff: ${gateResult.reason} Please ask the user to review and approve the document before proceeding.`,
+          agentShortName: targetAgent,
+          actions: [],
+        },
+      };
+      return [blockedEntry];
     }
 
     // Execute the target agent

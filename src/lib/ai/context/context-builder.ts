@@ -132,7 +132,10 @@ export class ContextBuilder {
         ? `\n\nSCOPE: You are working on a specific task. Focus your response on this task only.`
         : '';
 
-    const systemMessage = agentDef.systemPrompt + scopeBlock + contextBlock;
+    // Build pipeline state summary — tells the agent where we are in the workflow
+    const pipelineState = this.buildPipelineState(agentDef.shortName, contextData);
+
+    const systemMessage = agentDef.systemPrompt + scopeBlock + pipelineState + contextBlock;
 
     // Log estimated token count for observability
     const estimatedTokens = Math.ceil(systemMessage.length / 4);
@@ -149,6 +152,159 @@ export class ContextBuilder {
     );
 
     return { systemMessage, recentHistory };
+  }
+
+  /**
+   * Build a pipeline state summary that tells the agent exactly where we are.
+   * This prevents agents from repeating work or asking questions that were
+   * already answered by earlier agents in the delegation chain.
+   */
+  private buildPipelineState(
+    currentAgentShortName: string,
+    contextData: Map<ContextSource, unknown>,
+  ): string {
+    const lines: string[] = [];
+
+    // Check which agents have already spoken
+    const chatHistory = contextData.get('chat_history') as Array<{
+      role: string;
+      content: string;
+      agent?: { shortName: string; name: string } | null;
+    }> | undefined;
+
+    const agentsThatSpoke = new Set<string>();
+    if (chatHistory) {
+      for (const msg of chatHistory) {
+        if (msg.role === 'AGENT' && msg.agent?.shortName) {
+          agentsThatSpoke.add(msg.agent.shortName);
+        }
+      }
+    }
+
+    // Check what documents exist
+    const docs = contextData.get('documents') as Array<{
+      title: string;
+      type: string;
+    }> | undefined;
+
+    const hasBRD = docs?.some(d => d.type === 'BRD' || d.title.toLowerCase().includes('business requirements')) ?? false;
+    const hasSDD = docs?.some(d => d.type === 'SDD' || d.title.toLowerCase().includes('system design') || d.title.toLowerCase().includes('sdd')) ?? false;
+
+    // Check cards
+    const cards = contextData.get('cards') as Array<{
+      title: string;
+      type: string;
+    }> | undefined;
+    const cardCount = cards?.length ?? 0;
+    const epicCount = cards?.filter(c => c.type === 'EPIC').length ?? 0;
+    const featureCount = cards?.filter(c => c.type === 'FEATURE').length ?? 0;
+    const taskCount = cards?.filter(c => c.type === 'TASK').length ?? 0;
+
+    // Check memories
+    const memories = contextData.get('project_memory') as Array<{
+      category: string;
+      content: string;
+    }> | undefined;
+    const memoryCount = memories?.length ?? 0;
+
+    // Build the state summary
+    lines.push('\n\n═══════════════════════════════════════════════════════════');
+    lines.push('PIPELINE STATE — WHERE WE ARE RIGHT NOW');
+    lines.push('═══════════════════════════════════════════════════════════');
+    lines.push(`You are: ${currentAgentShortName}`);
+
+    // Agent participation
+    if (agentsThatSpoke.size > 0) {
+      const agentList = Array.from(agentsThatSpoke).join(', ');
+      lines.push(`Agents who have already spoken in this conversation: ${agentList}`);
+    }
+
+    // Pipeline completion status
+    const completionLines: string[] = [];
+    if (agentsThatSpoke.has('BA')) completionLines.push('  ✅ BA (Business Analyst) — requirements gathered');
+    if (hasBRD) completionLines.push('  ✅ BRD (Business Requirements Document) — created');
+    if (agentsThatSpoke.has('SA')) completionLines.push('  ✅ SA (Solution Architect) — architecture designed');
+    if (hasSDD) completionLines.push('  ✅ SDD (System Design Document) — created');
+    if (cardCount > 0) completionLines.push(`  ✅ Cards created — ${cardCount} total (${epicCount} epics, ${featureCount} features, ${taskCount} tasks)`);
+    if (agentsThatSpoke.has('PM')) completionLines.push('  ✅ PM (Product Manager) — backlog organized');
+    if (agentsThatSpoke.has('TL')) completionLines.push('  ✅ TL (Tech Lead) — execution planned');
+    if (agentsThatSpoke.has('PE')) completionLines.push('  ✅ PE (Platform Engineer) — infrastructure designed');
+    if (agentsThatSpoke.has('JD')) completionLines.push('  ✅ JD (Junior Developer) — writing code');
+    if (agentsThatSpoke.has('SD')) completionLines.push('  ✅ SD (Senior Developer) — writing code');
+
+    if (completionLines.length > 0) {
+      lines.push('Completed steps:');
+      lines.push(...completionLines);
+    }
+
+    // Check for code artifacts
+    const codeArtifacts = contextData.get('artifacts') as Array<{
+      name: string;
+      type: string;
+      ownerAgent: string;
+    }> | undefined;
+    const codeArtifactCount = codeArtifacts?.length ?? 0;
+
+    if (codeArtifactCount > 0) {
+      lines.push(`Code artifacts: ${codeArtifactCount} files generated`);
+    }
+
+    // Count card states
+    const cardsWithState = contextData.get('cards') as Array<{
+      title: string;
+      type: string;
+      state: string;
+    }> | undefined;
+    const inProgressCards = cardsWithState?.filter(c => c.state === 'IN_PROGRESS').length ?? 0;
+    const doneCards = cardsWithState?.filter(c => c.state === 'DONE' || c.state === 'COMPLETED').length ?? 0;
+    const plannedCards = cardsWithState?.filter(c => c.state === 'PLANNED' || c.state === 'OPEN').length ?? 0;
+
+    if (doneCards > 0 || inProgressCards > 0) {
+      lines.push(`Card progress: ${doneCards} done, ${inProgressCards} in progress, ${plannedCards} planned`);
+    }
+
+    // Memory state
+    if (memoryCount > 0) {
+      lines.push(`Project memory: ${memoryCount} facts saved`);
+    }
+
+    // Determine pipeline phase
+    const isInExecution = agentsThatSpoke.has('JD') || agentsThatSpoke.has('SD') || inProgressCards > 0 || doneCards > 0;
+
+    if (isInExecution) {
+      lines.push('🔨 CURRENT PHASE: CODE EXECUTION — Developers are writing code');
+    } else if (agentsThatSpoke.has('TL')) {
+      lines.push('📋 CURRENT PHASE: EXECUTION PLANNING — Tech Lead has planned');
+    } else if (agentsThatSpoke.has('PM')) {
+      lines.push('📋 CURRENT PHASE: BACKLOG MANAGEMENT — PM has organized');
+    } else if (hasSDD && cardCount > 0) {
+      lines.push('📐 CURRENT PHASE: ARCHITECTURE COMPLETE — Ready for PM/TL');
+    } else if (hasBRD) {
+      lines.push('📝 CURRENT PHASE: REQUIREMENTS COMPLETE — Ready for SA');
+    } else {
+      lines.push('💡 CURRENT PHASE: DISCOVERY — BA is gathering requirements');
+    }
+
+    // Critical instruction for this agent
+    if (hasBRD && currentAgentShortName === 'BA') {
+      lines.push('⚠️ The BRD already exists. DO NOT re-gather requirements. If the user has a follow-up, address it directly.');
+    }
+    if (hasSDD && currentAgentShortName === 'SA') {
+      lines.push('⚠️ The SDD already exists. DO NOT create another SDD or re-ask tech stack questions. If the user has a follow-up, address it directly.');
+    }
+    if (cardCount > 0 && currentAgentShortName === 'SA') {
+      lines.push(`⚠️ ${cardCount} cards already exist on the board. DO NOT create duplicate cards.`);
+    }
+    if (currentAgentShortName === 'TL' && isInExecution) {
+      lines.push('⚠️ Development is already in progress. Pick the NEXT planned task from the board and assign it to JD or SD.');
+    }
+    if ((currentAgentShortName === 'JD' || currentAgentShortName === 'SD') && codeArtifactCount > 0) {
+      lines.push(`⚠️ ${codeArtifactCount} code files already exist. Review them in the artifacts context to avoid duplicating work.`);
+    }
+
+    lines.push('═══════════════════════════════════════════════════════════');
+
+    return lines.join('\n');
   }
 
   /**
@@ -219,18 +375,35 @@ function formatSDLCStages(data: unknown): string {
     gatePassed: boolean;
   }>;
   if (stages.length === 0) return '';
-  const lines = stages.map(
-    (s) => `  ${s.order}. ${s.name} — ${s.status}${s.gatePassed ? ' [GATE PASSED]' : ''}`,
-  );
+
+  // Gate requirements for each stage (what's needed to advance past it)
+  const gateReqs: Record<string, string> = {
+    'Business Analysis': 'Gate: BRD must be APPROVED by user before advancing',
+    'Architecture': 'Gate: SDD must be APPROVED by user before advancing',
+    'UI/UX Design': 'Gate: Wireframes must be APPROVED by user before advancing',
+    'Planning': 'Gate: Task cards must exist on the board before advancing',
+  };
+
+  const lines = stages.map((s) => {
+    let line = `  ${s.order}. ${s.name} — ${s.status}`;
+    if (s.gatePassed) line += ' [GATE PASSED ✅]';
+    const req = gateReqs[s.name];
+    if (req && !s.gatePassed && s.status !== 'COMPLETED') {
+      line += `\n     ${req}`;
+    }
+    return line;
+  });
   return ['SDLC PIPELINE:', ...lines].join('\n');
 }
 
 function formatCards(data: unknown): string {
   const cards = data as Array<{
+    id: string;
     title: string;
     type: string;
     state: string;
     priority: string;
+    description?: string | null;
     module?: string | null;
     ownerAgent?: { shortName: string; name: string } | null;
   }>;
@@ -238,7 +411,8 @@ function formatCards(data: unknown): string {
   const lines = cards.map((c) => {
     const agent = c.ownerAgent ? ` (${c.ownerAgent.shortName})` : '';
     const mod = c.module ? ` [${c.module}]` : '';
-    return `  [${c.type}] ${c.title} — ${c.state} ${c.priority}${agent}${mod}`;
+    const desc = c.description ? `\n    Description: ${c.description.substring(0, 200)}` : '';
+    return `  [${c.type}] id="${c.id}" ${c.title} — ${c.state} ${c.priority}${agent}${mod}${desc}`;
   });
   return [`BOARD (${cards.length} cards):`, ...lines].join('\n');
 }
@@ -279,8 +453,14 @@ function formatDocuments(data: unknown): string {
     owner: string;
   }>;
   if (docs.length === 0) return '';
+  const statusIcon: Record<string, string> = {
+    DRAFT: '📝 DRAFT',
+    REVIEW: '👀 REVIEW',
+    APPROVED: '✅ APPROVED',
+    PUBLISHED: '📢 PUBLISHED',
+  };
   const lines = docs.map(
-    (d) => `  ${d.title} (${d.type}) — ${d.status} [${d.wordCount} words, owner: ${d.owner}]`,
+    (d) => `  ${d.title} (${d.type}) — ${statusIcon[d.status] ?? d.status} [${d.wordCount} words, owner: ${d.owner}]`,
   );
   return [`DOCUMENTS (${docs.length}):`, ...lines].join('\n');
 }

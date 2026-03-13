@@ -100,7 +100,23 @@ export async function PATCH(
       updateData.content = body.content;
       updateData.wordCount = body.content.split(/\s+/).filter(Boolean).length;
     }
-    if (body.status !== undefined) updateData.status = body.status;
+    if (body.status !== undefined) {
+      // Validate document status transitions
+      const validTransitions: Record<string, string[]> = {
+        DRAFT: ['REVIEW', 'APPROVED'],
+        REVIEW: ['DRAFT', 'APPROVED'],
+        APPROVED: ['PUBLISHED'],
+        PUBLISHED: [],
+      };
+      const allowed = validTransitions[doc.status] ?? [];
+      if (!allowed.includes(body.status)) {
+        return NextResponse.json(
+          { error: `Cannot transition from ${doc.status} to ${body.status}` },
+          { status: 400 },
+        );
+      }
+      updateData.status = body.status;
+    }
     if (body.locked !== undefined) updateData.locked = body.locked;
     if (body.sections !== undefined) updateData.sections = body.sections;
 

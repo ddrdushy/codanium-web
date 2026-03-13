@@ -35,6 +35,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # Bundle standalone worker entrypoint with esbuild (ESM for import.meta support)
+# --banner adds a CJS compat shim so externalized packages (bullmq, ioredis)
+# that use require() still work in the ESM bundle.
 RUN npx esbuild src/lib/queue/worker-entrypoint.ts \
   --bundle \
   --format=esm \
@@ -42,6 +44,7 @@ RUN npx esbuild src/lib/queue/worker-entrypoint.ts \
   --target=node22 \
   --outfile=worker.mjs \
   --alias:@=./src \
+  --banner:js='import { createRequire } from "module"; const require = createRequire(import.meta.url);' \
   --external:@prisma/client \
   --external:@prisma/adapter-pg \
   --external:pg \

@@ -32,7 +32,7 @@ type FilterMode = 'all' | 'active' | 'paused' | 'completed';
 
 export default function ProjectsPage() {
   const { data: session } = useSession();
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
@@ -45,7 +45,7 @@ export default function ProjectsPage() {
   useEffect(() => {
     fetchProjects()
       .then(setProjects)
-      .catch(() => {/* keep mock data */})
+      .catch(() => { setProjects(mockProjects); })
       .finally(() => setLoading(false));
   }, []);
 

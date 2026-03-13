@@ -154,7 +154,7 @@ export default function PipelinePage() {
   const [activeTab, setActiveTab] = useState<TabKey>('delivery');
 
   // ── SDLC state (Delivery Progress tab) ──
-  const [stages, setStages] = useState<SDLCProgress[]>(mockSDLCProgress);
+  const [stages, setStages] = useState<SDLCProgress[]>([]);
   const [sdlcLoading, setSdlcLoading] = useState(true);
 
   useEffect(() => {
@@ -168,7 +168,7 @@ export default function PipelinePage() {
             gate_passed: s.gatePassed,
           })));
         })
-        .catch(() => {/* keep mock data */})
+        .catch(() => { setStages(mockSDLCProgress); })
         .finally(() => setSdlcLoading(false));
     } else {
       setSdlcLoading(false);
@@ -342,6 +342,15 @@ function DeliveryProgressTab({
 
       {/* Pipeline Flow */}
       <div className="space-y-3">
+        {stages.length === 0 && (
+          <div className="rounded-xl border border-border bg-[var(--surface)] p-8 text-center">
+            <Workflow className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+            <h3 className="text-sm font-semibold text-foreground mb-1">No delivery stages yet</h3>
+            <p className="text-xs text-muted-foreground/60 max-w-sm mx-auto">
+              Delivery stages will appear here once your project is set up.
+            </p>
+          </div>
+        )}
         {stages.map((stage, i) => {
           const icon = stageIcons[stage.stage] || '\u{1F4CB}';
           const gate = gateDescriptions[stage.stage] || '';

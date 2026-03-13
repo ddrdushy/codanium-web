@@ -292,7 +292,7 @@ export default function CodePage() {
   const projectId = params.id as string;
 
   // State
-  const [artifacts, setArtifacts] = useState<Artifact[]>(mockArtifacts);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedContent, setSelectedContent] = useState<string | null>(null);
   const [loadingContent, setLoadingContent] = useState(false);
@@ -328,7 +328,7 @@ export default function CodePage() {
           setArtifacts(mapped);
         }
       })
-      .catch(() => {/* keep mock data */});
+      .catch(() => { setArtifacts(mockArtifacts); });
 
     // Fetch git config for push modal
     fetch(`/api/projects/${projectId}/git/config`)

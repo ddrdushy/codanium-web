@@ -102,15 +102,8 @@ const statusConfig: Record<AgentStatus, {
   },
 };
 
-// Mock activity events for selected agent
-const mockAgentEvents = [
-  { time: '2 min ago', action: 'Started working on', target: 'Login System', type: 'task' },
-  { time: '8 min ago', action: 'Finished reviewing', target: 'User Dashboard', type: 'review' },
-  { time: '15 min ago', action: 'Submitted code update for', target: 'Settings Page', type: 'pr' },
-  { time: '32 min ago', action: 'Updated the', target: 'Design Specifications', type: 'artifact' },
-  { time: '1h ago', action: 'Tested', target: 'Payment Flow', type: 'test' },
-  { time: '1h 20min ago', action: 'Completed work on', target: 'User Authentication', type: 'commit' },
-];
+// Activity events populated from agent's real current task (no mock data)
+// Real events come from the agent status in the database
 
 const eventIcons: Record<string, React.ElementType> = {
   task: Terminal,
@@ -153,18 +146,18 @@ export default function AgentsPage() {
   const params = useParams();
   const projectId = params.id as string;
 
-  const [agents, setAgents] = useState<Agent[]>(mockAgents);
-  const [cards, setCards] = useState<Card[]>(mockCards);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
   useEffect(() => {
     Promise.all([
-      fetchAgents(projectId).then(setAgents).catch(() => {}),
-      fetchCards(projectId).then(setCards).catch(() => {}),
+      fetchAgents(projectId).then(setAgents).catch(() => setAgents(mockAgents)),
+      fetchCards(projectId).then(setCards).catch(() => setCards(mockCards)),
     ])
-      .catch(() => {/* keep mock data */})
+      .catch(() => {/* keep whatever was set */})
       .finally(() => setLoading(false));
   }, [projectId]);
 
@@ -500,42 +493,34 @@ export default function AgentsPage() {
                 )}
               </div>
 
-              {/* Activity Timeline */}
+              {/* Activity Status */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <Activity className="w-4 h-4 text-amber" />
-                  Recent Activity
+                  Status
                 </h3>
-                <div className="relative">
-                  {/* Vertical line */}
-                  <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
-
-                  <div className="space-y-0">
-                    {mockAgentEvents.map((event, i) => {
-                      const EventIcon = eventIcons[event.type] || Activity;
-                      return (
-                        <motion.div
-                          key={i}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.2 + i * 0.06 }}
-                          className="flex items-start gap-3 py-2.5 relative"
-                        >
-                          <div className="w-6 h-6 rounded-full bg-[var(--surface)] border border-border flex items-center justify-center z-10 shrink-0">
-                            <EventIcon className="w-3 h-3 text-muted-foreground/60" />
-                          </div>
-                          <div className="flex-1 min-w-0 pt-0.5">
-                            <p className="text-xs text-muted-foreground">
-                              {event.action}{' '}
-                              <span className="font-semibold text-foreground">{event.target}</span>
-                            </p>
-                            <span className="text-[10px] text-muted-foreground/40">{event.time}</span>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                {selectedAgent.currentTask ? (
+                  <div className="flex items-start gap-3 py-2.5 relative">
+                    <div className="w-6 h-6 rounded-full bg-[var(--surface)] border border-emerald-500/30 flex items-center justify-center z-10 shrink-0">
+                      <Zap className="w-3 h-3 text-emerald-400" />
+                    </div>
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <p className="text-xs text-muted-foreground">
+                        Currently working on{' '}
+                        <span className="font-semibold text-foreground">{selectedAgent.currentTask}</span>
+                      </p>
+                      <span className="text-[10px] text-muted-foreground/40">Active now</span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-center py-6 text-xs text-muted-foreground/30 rounded-lg border border-dashed border-border">
+                    {selectedAgent.status === 'idle'
+                      ? 'Idle — waiting for task assignment'
+                      : selectedAgent.status === 'blocked'
+                        ? 'Blocked — needs resolution'
+                        : 'No recent activity'}
+                  </div>
+                )}
               </div>
 
               {/* Agent Capabilities */}

@@ -45,18 +45,21 @@ export default function DecisionsPage() {
   const params = useParams();
   const projectId = params.id as string;
 
-  const [decisions, setDecisions] = useState<Decision[]>(mockDecisions);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDecision, setSelectedDecision] = useState<Decision | null>(mockDecisions[2]);
+  const [selectedDecision, setSelectedDecision] = useState<Decision | null>(null);
   const [approving, setApproving] = useState(false);
 
   useEffect(() => {
     fetchDecisions(projectId)
       .then((data) => {
         setDecisions(data);
-        if (data.length > 0) setSelectedDecision(data[Math.min(2, data.length - 1)]);
+        if (data.length > 0) setSelectedDecision(data[0]);
       })
-      .catch(() => {/* keep mock data */})
+      .catch(() => {
+        setDecisions(mockDecisions);
+        if (mockDecisions.length > 0) setSelectedDecision(mockDecisions[0]);
+      })
       .finally(() => setLoading(false));
   }, [projectId]);
 
@@ -117,6 +120,15 @@ export default function DecisionsPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
+          {decisions.length === 0 && !loading && (
+            <div className="flex flex-col items-center justify-center h-full text-center px-6 py-12">
+              <Scale className="w-10 h-10 text-muted-foreground/20 mb-3" />
+              <p className="text-sm text-muted-foreground/40 mb-1">No decisions yet</p>
+              <p className="text-xs text-muted-foreground/25">
+                Decisions will appear here as your AI team identifies choices that need your input
+              </p>
+            </div>
+          )}
           {decisions.map((dec, i) => {
             const config = statusConfig[dec.status] || statusConfig['Drafted'];
             const StatusIcon = config.icon;

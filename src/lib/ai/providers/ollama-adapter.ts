@@ -87,9 +87,14 @@ export class OllamaAdapter implements LLMProvider {
       stream: false,
     };
 
+    // Merge Ollama-specific options (num_predict = max output tokens)
+    const ollamaOptions: Record<string, unknown> = {
+      num_predict: options.maxTokens ?? 8192,
+    };
     if (options.temperature !== undefined) {
-      body.options = { temperature: options.temperature };
+      ollamaOptions.temperature = options.temperature;
     }
+    body.options = ollamaOptions;
 
     const res = await fetch(`${baseUrl(config)}/api/chat`, {
       method: 'POST',
@@ -150,9 +155,14 @@ export class OllamaAdapter implements LLMProvider {
       stream: true,
     };
 
+    // Merge Ollama-specific options (num_predict = max output tokens)
+    const ollamaOpts: Record<string, unknown> = {
+      num_predict: options.maxTokens ?? 8192,
+    };
     if (options.temperature !== undefined) {
-      body.options = { temperature: options.temperature };
+      ollamaOpts.temperature = options.temperature;
     }
+    body.options = ollamaOpts;
 
     const res = await fetch(`${baseUrl(config)}/api/chat`, {
       method: 'POST',

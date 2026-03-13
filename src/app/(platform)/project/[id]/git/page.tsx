@@ -110,9 +110,9 @@ export default function GitPage() {
   const projectId = params.id as string;
 
   const [activeTab, setActiveTab] = useState<ViewTab>('prs');
-  const [branches, setBranches] = useState<Branch[]>(mockBranches);
-  const [pullRequests, setPullRequests] = useState<PullRequest[]>(mockPRs);
-  const [releases, setReleases] = useState<Release[]>(mockReleases);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
+  const [releases, setReleases] = useState<Release[]>([]);
   const [pushModalOpen, setPushModalOpen] = useState(false);
   const [gitConfig, setGitConfig] = useState<{
     hasToken: boolean;
@@ -154,7 +154,11 @@ export default function GitPage() {
           })));
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setBranches(mockBranches);
+        setPullRequests(mockPRs);
+        setReleases(mockReleases);
+      });
 
     // Fetch git config and artifact count for push modal
     fetch(`/api/projects/${projectId}/git/config`)
@@ -278,6 +282,12 @@ export default function GitPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2"
         >
+          {pullRequests.length === 0 && (
+            <div className="rounded-xl border border-border bg-[var(--surface)] p-8 text-center">
+              <GitPullRequest className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground/50">No pull requests yet</p>
+            </div>
+          )}
           {pullRequests.map((pr, i) => (
             <motion.div
               key={pr.id}
@@ -376,6 +386,12 @@ export default function GitPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2"
         >
+          {branches.length === 0 && (
+            <div className="rounded-xl border border-border bg-[var(--surface)] p-8 text-center">
+              <GitBranch className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground/50">No branches yet</p>
+            </div>
+          )}
           {branches.map((branch, i) => (
             <motion.div
               key={branch.name}
@@ -432,6 +448,12 @@ export default function GitPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-3"
         >
+          {releases.length === 0 && (
+            <div className="rounded-xl border border-border bg-[var(--surface)] p-8 text-center">
+              <Tag className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground/50">No releases yet</p>
+            </div>
+          )}
           {releases.map((release, i) => (
             <motion.div
               key={release.version}

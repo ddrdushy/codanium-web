@@ -258,7 +258,7 @@ export function BoardView() {
   const params = useParams();
   const projectId = params.id as string;
 
-  const [cards, setCards] = useState<Card[]>(mockCards);
+  const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<CardType | 'All'>('All');
   const [createCardOpen, setCreateCardOpen] = useState(false);
@@ -269,7 +269,7 @@ export function BoardView() {
     if (projectId) {
       fetchCards(projectId)
         .then(setCards)
-        .catch(() => {/* keep mock data */})
+        .catch(() => setCards(mockCards))
         .finally(() => setLoading(false));
     } else {
       setLoading(false);

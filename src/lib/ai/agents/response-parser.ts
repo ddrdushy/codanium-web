@@ -30,14 +30,17 @@ export interface ParsedResponse {
 // ─── Regex Patterns ──────────────────────────────────────────────────────────
 
 // [ACTION:create_card]{"title":"..."}[/ACTION]
-const ACTION_REGEX = /\[ACTION:(\w+)\]([\s\S]*?)\[\/ACTION\]/g;
+// Tolerates optional spaces inside brackets: [ ACTION:remember ] or [ACTION:remember]
+const ACTION_REGEX = /\[\s*ACTION\s*:\s*(\w+)\s*\]([\s\S]*?)\[\s*\/\s*ACTION\s*\]/gi;
 
 // [ARTIFACT:filename.ext]content here[/ARTIFACT]
-const ARTIFACT_REGEX = /\[ARTIFACT:([^\]]+)\]([\s\S]*?)\[\/ARTIFACT\]/g;
+// Tolerates optional spaces: [ ARTIFACT:file.md ] or [ARTIFACT:file.md]
+const ARTIFACT_REGEX = /\[\s*ARTIFACT\s*:\s*([^\]]+?)\s*\]([\s\S]*?)\[\s*\/\s*ARTIFACT\s*\]/gi;
 
 // [DELEGATE:BA]context for the BA agent[/DELEGATE]
 // Also handles [/DELEGATE:AGENT_NAME] closing tag (LLMs sometimes add the name)
-const DELEGATE_REGEX = /\[DELEGATE:(\w+)\]([\s\S]*?)\[\/DELEGATE(?::\w+)?\]/g;
+// Tolerates optional spaces: [ DELEGATE:SA ] or [DELEGATE:SA]
+const DELEGATE_REGEX = /\[\s*DELEGATE\s*:\s*(\w+)\s*\]([\s\S]*?)\[\s*\/\s*DELEGATE\s*(?:\s*:\s*\w+\s*)?\]/gi;
 
 // ─── File Extension to Type Mapping ──────────────────────────────────────────
 
@@ -225,6 +228,15 @@ function parseAction(actionType: string, rawJson: string): AgentAction | null {
         },
       };
 
+    case 'approve_document':
+      if (!parsed.type) return null;
+      return {
+        type: 'approve_document',
+        data: {
+          type: String(parsed.type),
+        },
+      };
+
     case 'remember':
       if (!parsed.category || !parsed.content) return null;
       return {
@@ -257,11 +269,45 @@ export function parseAgentResponse(rawContent: string): ParsedResponse {
   let delegateTo: string | undefined;
   let delegateContext: string | undefined;
 
-  // ── Extract Actions ──────────────────────────────────────────────────────
+  // ── Extract Delegation FIRST ──────────────────────────────────────────────
+  // We need to know where the delegate block starts so we can extract
+  // actions/artifacts only from the AGENT's own content, not from
+  // instructions meant for the delegate.
+
+  DELEGATE_REGEX.lastIndex = 0;
+  const delegateMatch = DELEGATE_REGEX.exec(rawContent);
+  let delegateStartIdx = rawContent.length; // Default: no delegate block
+
+  if (delegateMatch) {
+    delegateTo = delegateMatch[1].trim();
+    delegateContext = delegateMatch[2].trim();
+    delegateStartIdx = delegateMatch.index;
+    console.log(
+      `[ResponseParser] ✅ Found DELEGATE marker → agent: "${delegateTo}"` +
+      ` | context length: ${delegateContext.length}`,
+    );
+  } else {
+    // Fallback: handle unclosed [DELEGATE:XX] blocks (model ran out of tokens)
+    const unclosedMatch = /\[\s*DELEGATE\s*:\s*(\w+)\s*\]([\s\S]*)$/.exec(rawContent);
+    if (unclosedMatch) {
+      delegateTo = unclosedMatch[1].trim();
+      delegateContext = unclosedMatch[2].trim();
+      delegateStartIdx = unclosedMatch.index;
+      console.warn(
+        `[ResponseParser] ⚠️ Found UNCLOSED [DELEGATE:${delegateTo}] — using rest of content as context` +
+        ` | context length: ${delegateContext.length}`,
+      );
+    }
+  }
+
+  // Content BEFORE the delegate block belongs to this agent
+  const ownContent = rawContent.substring(0, delegateStartIdx);
+
+  // ── Extract Actions (only from agent's own content) ────────────────────
 
   let match: RegExpExecArray | null;
   ACTION_REGEX.lastIndex = 0;
-  while ((match = ACTION_REGEX.exec(rawContent)) !== null) {
+  while ((match = ACTION_REGEX.exec(ownContent)) !== null) {
     const actionType = match[1];
     const actionBody = match[2];
     const action = parseAction(actionType, actionBody);
@@ -270,10 +316,10 @@ export function parseAgentResponse(rawContent: string): ParsedResponse {
     }
   }
 
-  // ── Extract Artifacts ────────────────────────────────────────────────────
+  // ── Extract Artifacts (only from agent's own content) ──────────────────
 
   ARTIFACT_REGEX.lastIndex = 0;
-  while ((match = ARTIFACT_REGEX.exec(rawContent)) !== null) {
+  while ((match = ARTIFACT_REGEX.exec(ownContent)) !== null) {
     const filename = match[1].trim();
     const content = match[2];
     artifacts.push({
@@ -283,29 +329,6 @@ export function parseAgentResponse(rawContent: string): ParsedResponse {
     });
   }
 
-  // ── Extract Delegation ───────────────────────────────────────────────────
-  // Only the first [DELEGATE] marker is used; subsequent ones are ignored.
-
-  DELEGATE_REGEX.lastIndex = 0;
-  const delegateMatch = DELEGATE_REGEX.exec(rawContent);
-  if (delegateMatch) {
-    delegateTo = delegateMatch[1].trim();
-    delegateContext = delegateMatch[2].trim();
-    console.log(
-      `[ResponseParser] ✅ Found DELEGATE marker → agent: "${delegateTo}"` +
-      ` | context length: ${delegateContext.length}`,
-    );
-  } else {
-    // Check if there's a DELEGATE tag that our regex didn't match
-    const hasDelegate = rawContent.includes('[DELEGATE:');
-    if (hasDelegate) {
-      console.warn(
-        `[ResponseParser] ⚠️ Found "[DELEGATE:" in content but regex did NOT match!` +
-        ` Raw snippet: "${rawContent.substring(rawContent.indexOf('[DELEGATE:'), rawContent.indexOf('[DELEGATE:') + 120)}"`,
-      );
-    }
-  }
-
   // ── Clean message text ───────────────────────────────────────────────────
   // Remove all markers and clean up resulting whitespace.
 
@@ -313,6 +336,11 @@ export function parseAgentResponse(rawContent: string): ParsedResponse {
     .replace(ACTION_REGEX, '')
     .replace(ARTIFACT_REGEX, '')
     .replace(DELEGATE_REGEX, '');
+
+  // Also strip unclosed [DELEGATE:XX]...rest of content (if delegation was extracted above)
+  if (delegateTo) {
+    message = message.replace(/\[\s*DELEGATE\s*:\s*\w+\s*\][\s\S]*$/, '');
+  }
 
   // Collapse multiple blank lines into a single blank line
   message = message.replace(/\n{3,}/g, '\n\n').trim();
