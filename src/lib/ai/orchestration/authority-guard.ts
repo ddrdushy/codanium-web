@@ -81,6 +81,9 @@ function getRequiredResource(action: AgentAction): string | null {
     case 'trigger_deploy':
       return 'infrastructure';
 
+    case 'run_code':
+      return 'code_artifacts';
+
     case 'remember':
       // All agents can save to project memory
       return null;

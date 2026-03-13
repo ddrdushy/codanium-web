@@ -61,7 +61,7 @@ RUN npx esbuild src/lib/queue/worker-entrypoint.ts \
 
 # ── Stage 4: Production Runner ─────────────────────────────────────────────────
 FROM node:22-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl
+RUN apk add --no-cache libc6-compat openssl docker-cli
 WORKDIR /app
 
 ENV NODE_ENV=production

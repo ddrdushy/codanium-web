@@ -45,7 +45,8 @@ export type AgentAction =
   | { type: 'create_release'; data: { version: string; features?: string[] } }
   | { type: 'trigger_deploy'; data: { pipelineName?: string; environment?: string; branch?: string } }
   | { type: 'create_pipeline'; data: { name: string; environment: string; trigger: string; config?: string } }
-  | { type: 'remember'; data: { category: string; content: string } };
+  | { type: 'remember'; data: { category: string; content: string } }
+  | { type: 'run_code'; data: { language: string; code: string; stdin?: string; artifactName?: string } };
 
 export interface AgentExecutionResult {
   message: string;

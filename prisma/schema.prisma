@@ -203,6 +203,7 @@ model Project {
   invitations          ProjectInvitation[]
   webhookEndpoints     WebhookEndpoint[]
   memories             ProjectMemory[]
+  codeExecutions       CodeExecution[]
 
   @@map("projects")
 }
@@ -790,8 +791,9 @@ model Artifact {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  card    Card?   @relation(fields: [cardId], references: [id])
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  card           Card?           @relation(fields: [cardId], references: [id])
+  codeExecutions CodeExecution[]
 
   @@index([projectId])
   @@index([projectId, ownerAgent])
@@ -1167,4 +1169,44 @@ model AdminSetting {
   updatedBy String   @default("")
 
   @@map("admin_settings")
+}
+
+// ─── Code Execution (Sandboxed Runs) ────────────────────────────────────────
+
+model CodeExecution {
+  id           String          @id @default(cuid())
+  status       ExecutionStatus @default(QUEUED)
+  language     String                           // typescript, javascript, python, etc.
+  code         String          @db.Text         // Source code to execute
+  stdin        String          @default("")     // Optional stdin input
+  stdout       String          @default("") @db.Text  // Captured stdout
+  stderr       String          @default("") @db.Text  // Captured stderr
+  exitCode     Int?                              // Process exit code (null = not completed)
+  durationMs   Int             @default(0)       // Wall-clock execution time
+  memoryUsedMb Float           @default(0)       // Peak memory usage
+  errorMessage String?                           // System-level error (not stderr)
+  artifactId   String?                           // Source artifact (if from agent code)
+  cardId       String?                           // Scoped to card context
+  triggeredBy  String          @default("user")  // "user", agent shortName, or "system"
+  projectId    String
+  createdAt    DateTime        @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  artifact Artifact? @relation(fields: [artifactId], references: [id])
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([createdAt])
+  @@map("code_executions")
+}
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  TIMEOUT
+  CANCELLED
 }

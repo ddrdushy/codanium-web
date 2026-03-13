@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import {
   Code2, FileText, Settings, TestTube, Copy, Download,
   Search, ChevronRight, ChevronDown, Check, File, Upload,
+  Play, Square, Terminal, Loader2, CheckCircle2, XCircle, Clock,
 } from 'lucide-react';
 import { PushToGitHubModal } from '@/components/modals/push-to-github-modal';
 
@@ -284,6 +285,31 @@ function formatRelative(iso: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Code Execution Helpers
+// ---------------------------------------------------------------------------
+
+interface CodeExecution {
+  id: string;
+  status: 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'CANCELLED';
+  language: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  durationMs: number;
+  errorMessage: string | null;
+}
+
+const EXT_TO_LANGUAGE: Record<string, string> = {
+  ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+  py: 'python', go: 'go', rs: 'rust', sh: 'bash', bash: 'bash',
+};
+
+function getExecutableLanguage(filename: string): string | null {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return EXT_TO_LANGUAGE[ext] ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -300,6 +326,11 @@ export default function CodePage() {
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<ArtifactType>>(new Set());
+
+  // Code execution state
+  const [execution, setExecution] = useState<CodeExecution | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
 
   // Push modal state
   const [pushModalOpen, setPushModalOpen] = useState(false);
@@ -430,6 +461,109 @@ export default function CodePage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  // Code execution
+  const executableLanguage = selected ? getExecutableLanguage(selected.name) : null;
+  const canRun = !!executableLanguage && !!selectedContent && (selected?.type === 'CODE' || selected?.type === 'TEST');
+
+  const handleRun = async () => {
+    if (!selected || !selectedContent || !executableLanguage) return;
+    setIsRunning(true);
+    setShowTerminal(true);
+    setExecution({
+      id: '',
+      status: 'QUEUED',
+      language: executableLanguage,
+      stdout: '',
+      stderr: '',
+      exitCode: null,
+      durationMs: 0,
+      errorMessage: null,
+    });
+
+    try {
+      // Submit code for execution
+      const res = await fetch(`/api/projects/${projectId}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language: executableLanguage,
+          code: selectedContent,
+          artifactId: selected.id,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to start execution' }));
+        setExecution(prev => prev ? {
+          ...prev,
+          status: 'FAILED',
+          stderr: err.error || 'Failed to start execution',
+          errorMessage: err.error,
+        } : null);
+        setIsRunning(false);
+        return;
+      }
+
+      const data = await res.json();
+      setExecution(prev => prev ? { ...prev, id: data.id, status: 'QUEUED' } : null);
+
+      // Poll for completion
+      const executionId = data.id;
+      let attempts = 0;
+      const maxAttempts = 60; // 60 * 1s = 60s max
+
+      const poll = async () => {
+        if (attempts >= maxAttempts) {
+          setExecution(prev => prev ? {
+            ...prev,
+            status: 'TIMEOUT',
+            stderr: 'Polling timed out — execution may still be running.',
+          } : null);
+          setIsRunning(false);
+          return;
+        }
+
+        try {
+          const statusRes = await fetch(`/api/projects/${projectId}/execute/${executionId}`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            setExecution({
+              id: statusData.id,
+              status: statusData.status,
+              language: statusData.language,
+              stdout: statusData.stdout || '',
+              stderr: statusData.stderr || '',
+              exitCode: statusData.exitCode,
+              durationMs: statusData.durationMs || 0,
+              errorMessage: statusData.errorMessage,
+            });
+
+            if (['SUCCESS', 'FAILED', 'TIMEOUT', 'CANCELLED'].includes(statusData.status)) {
+              setIsRunning(false);
+              return;
+            }
+          }
+        } catch {
+          // Keep polling on network errors
+        }
+
+        attempts++;
+        setTimeout(poll, 1000);
+      };
+
+      // Start polling after a brief delay
+      setTimeout(poll, 500);
+    } catch (err) {
+      setExecution(prev => prev ? {
+        ...prev,
+        status: 'FAILED',
+        stderr: err instanceof Error ? err.message : 'Unknown error',
+        errorMessage: err instanceof Error ? err.message : 'Unknown error',
+      } : null);
+      setIsRunning(false);
+    }
   };
 
   // Render line numbers + content
@@ -619,6 +753,35 @@ export default function CodePage() {
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2">
+                  {canRun && (
+                    <Button
+                      size="sm"
+                      onClick={handleRun}
+                      disabled={isRunning}
+                      className={cn(
+                        'h-7 text-[11px]',
+                        isRunning
+                          ? 'bg-zinc-700 text-zinc-400'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white',
+                      )}
+                    >
+                      {isRunning ? (
+                        <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Running...</>
+                      ) : (
+                        <><Play className="w-3 h-3 mr-1" /> Run</>
+                      )}
+                    </Button>
+                  )}
+                  {showTerminal && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={() => setShowTerminal(!showTerminal)}
+                    >
+                      <Terminal className="w-3 h-3 mr-1" /> Terminal
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
@@ -649,41 +812,129 @@ export default function CodePage() {
                 </div>
               </div>
 
-              {/* Code display */}
-              <div className="flex-1 overflow-auto bg-black/30">
-                {loadingContent && !selectedContent ? (
-                  <div className="flex items-center justify-center h-full">
-                    <span className="text-xs text-muted-foreground/40">Loading...</span>
-                  </div>
-                ) : selectedContent ? (
-                  <div className="flex min-h-full">
-                    {/* Line numbers gutter */}
-                    <div className="shrink-0 select-none py-4 pr-2 text-right border-r border-white/[0.04]">
-                      {lines.map((_, i) => (
-                        <div
-                          key={i}
-                          className="px-3 text-[12px] leading-5 font-mono text-zinc-600"
-                        >
-                          {i + 1}
-                        </div>
-                      ))}
+              {/* Code display + Terminal */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Code viewer */}
+                <div className={cn(
+                  'overflow-auto bg-black/30',
+                  showTerminal && execution ? 'flex-1 min-h-0' : 'flex-1',
+                )}>
+                  {loadingContent && !selectedContent ? (
+                    <div className="flex items-center justify-center h-full">
+                      <span className="text-xs text-muted-foreground/40">Loading...</span>
+                    </div>
+                  ) : selectedContent ? (
+                    <div className="flex min-h-full">
+                      {/* Line numbers gutter */}
+                      <div className="shrink-0 select-none py-4 pr-2 text-right border-r border-white/[0.04]">
+                        {lines.map((_, i) => (
+                          <div
+                            key={i}
+                            className="px-3 text-[12px] leading-5 font-mono text-zinc-600"
+                          >
+                            {i + 1}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Code content */}
+                      <pre className={cn(
+                        'flex-1 py-4 px-4 text-[12px] leading-5 font-mono overflow-x-auto',
+                        typeConfig[selected.type].contentColor,
+                      )}>
+                        {lines.map((line, i) => (
+                          <div key={i} className="whitespace-pre">
+                            {line || '\u00A0'}
+                          </div>
+                        ))}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <span className="text-xs text-muted-foreground/40">No content available</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Terminal Output Panel */}
+                {showTerminal && execution && (
+                  <div className="border-t border-border bg-[#0d1117] shrink-0" style={{ maxHeight: '40%', minHeight: '120px' }}>
+                    {/* Terminal header */}
+                    <div className="flex items-center justify-between px-4 py-1.5 bg-[#161b22] border-b border-border">
+                      <div className="flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-muted-foreground/60" />
+                        <span className="text-[11px] font-medium text-muted-foreground/70">Output</span>
+                        {execution.status === 'QUEUED' && (
+                          <Badge className="text-[9px] h-4 px-1.5 bg-zinc-700/50 text-zinc-400 border-zinc-600">
+                            <Clock className="w-2.5 h-2.5 mr-0.5" /> Queued
+                          </Badge>
+                        )}
+                        {execution.status === 'RUNNING' && (
+                          <Badge className="text-[9px] h-4 px-1.5 bg-blue-500/10 text-blue-400 border-blue-500/20">
+                            <Loader2 className="w-2.5 h-2.5 mr-0.5 animate-spin" /> Running
+                          </Badge>
+                        )}
+                        {execution.status === 'SUCCESS' && (
+                          <Badge className="text-[9px] h-4 px-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                            <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> Exit 0
+                          </Badge>
+                        )}
+                        {execution.status === 'FAILED' && (
+                          <Badge className="text-[9px] h-4 px-1.5 bg-red-500/10 text-red-400 border-red-500/20">
+                            <XCircle className="w-2.5 h-2.5 mr-0.5" /> Exit {execution.exitCode ?? '?'}
+                          </Badge>
+                        )}
+                        {execution.status === 'TIMEOUT' && (
+                          <Badge className="text-[9px] h-4 px-1.5 bg-amber/10 text-amber border-amber/20">
+                            <Clock className="w-2.5 h-2.5 mr-0.5" /> Timed Out
+                          </Badge>
+                        )}
+                        {execution.durationMs > 0 && (
+                          <span className="text-[10px] text-muted-foreground/40">
+                            {execution.durationMs < 1000
+                              ? `${execution.durationMs}ms`
+                              : `${(execution.durationMs / 1000).toFixed(1)}s`}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setShowTerminal(false)}
+                        className="text-muted-foreground/40 hover:text-foreground transition-colors"
+                      >
+                        <Square className="w-3 h-3" />
+                      </button>
                     </div>
 
-                    {/* Code content */}
-                    <pre className={cn(
-                      'flex-1 py-4 px-4 text-[12px] leading-5 font-mono overflow-x-auto',
-                      typeConfig[selected.type].contentColor,
-                    )}>
-                      {lines.map((line, i) => (
-                        <div key={i} className="whitespace-pre">
-                          {line || '\u00A0'}
+                    {/* Terminal content */}
+                    <div className="overflow-auto p-4" style={{ maxHeight: 'calc(40vh - 40px)' }}>
+                      {(execution.status === 'QUEUED' || execution.status === 'RUNNING') && !execution.stdout && !execution.stderr && (
+                        <div className="flex items-center gap-2 text-zinc-500 text-[12px] font-mono">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          {execution.status === 'QUEUED' ? 'Waiting for sandbox...' : 'Executing...'}
                         </div>
-                      ))}
-                    </pre>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <span className="text-xs text-muted-foreground/40">No content available</span>
+                      )}
+
+                      {/* stdout */}
+                      {execution.stdout && (
+                        <pre className="text-[12px] leading-5 font-mono text-emerald-300/90 whitespace-pre-wrap break-words">
+                          {execution.stdout}
+                        </pre>
+                      )}
+
+                      {/* stderr */}
+                      {execution.stderr && (
+                        <pre className="text-[12px] leading-5 font-mono text-red-400/90 whitespace-pre-wrap break-words mt-1">
+                          {execution.stderr}
+                        </pre>
+                      )}
+
+                      {/* Error message */}
+                      {execution.errorMessage && !execution.stderr.includes(execution.errorMessage) && (
+                        <pre className="text-[12px] leading-5 font-mono text-red-400/70 whitespace-pre-wrap break-words mt-1">
+                          {execution.errorMessage}
+                        </pre>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

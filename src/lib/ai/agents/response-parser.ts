@@ -258,6 +258,18 @@ function parseAction(actionType: string, rawJson: string): AgentAction | null {
         },
       };
 
+    case 'run_code':
+      if (!parsed.language || !parsed.code) return null;
+      return {
+        type: 'run_code',
+        data: {
+          language: String(parsed.language),
+          code: String(parsed.code),
+          stdin: parsed.stdin != null ? String(parsed.stdin) : undefined,
+          artifactName: parsed.artifactName != null ? String(parsed.artifactName) : undefined,
+        },
+      };
+
     default:
       console.warn(
         `[ResponseParser] Unrecognized action type: "${actionType}", skipping.`,

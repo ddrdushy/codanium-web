@@ -21,6 +21,7 @@ import { createEmailWorker } from './email-worker';
 import { createGitSyncWorker } from './git-sync-worker';
 import { createGitPushWorker } from './git-push-worker';
 import { createWebhookWorker } from './webhook-worker';
+import { createCodeExecutionWorker } from './code-execution-worker';
 
 async function main() {
   console.log('AI Team Studio — Worker starting...');
@@ -34,12 +35,14 @@ async function main() {
   const gitSyncWorker = createGitSyncWorker();
   const gitPushWorker = createGitPushWorker();
   const webhookWorker = createWebhookWorker();
+  const codeExecWorker = createCodeExecutionWorker();
 
   console.log('[Worker] Orchestration worker started');
   console.log('[Worker] Email worker started');
   console.log('[Worker] Git Sync worker started');
   console.log('[Worker] Git Push worker started');
   console.log('[Worker] Webhook Delivery worker started');
+  console.log('[Worker] Code Execution worker started');
 
   // ── Graceful Shutdown ───────────────────────────────────────────────────
 
@@ -51,6 +54,7 @@ async function main() {
       gitSyncWorker.close(),
       gitPushWorker.close(),
       webhookWorker.close(),
+      codeExecWorker.close(),
     ]);
     console.log('[Worker] All workers closed. Exiting.');
     process.exit(0);

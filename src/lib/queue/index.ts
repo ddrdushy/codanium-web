@@ -54,4 +54,14 @@ export type { WebhookDeliveryJobData } from './webhook-queue';
 
 export { createWebhookWorker } from './webhook-worker';
 
+export {
+  getCodeExecutionQueue,
+  addCodeExecutionJob,
+  CODE_EXECUTION_QUEUE_NAME,
+} from './code-execution-queue';
+
+export type { CodeExecutionJobData } from './code-execution-queue';
+
+export { createCodeExecutionWorker } from './code-execution-worker';
+
 export { getQueueConnection } from './connection';

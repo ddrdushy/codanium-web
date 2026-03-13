@@ -948,6 +948,54 @@ export class OrchestrationEngine {
             break;
           }
 
+          case 'run_code': {
+            const runData = action.data as { language: string; code: string; stdin?: string; artifactName?: string };
+
+            // Find linked artifact if artifactName was provided
+            let artifactId: string | null = null;
+            if (runData.artifactName) {
+              const artifact = await prisma.artifact.findFirst({
+                where: { projectId, name: runData.artifactName },
+                orderBy: { version: 'desc' },
+                select: { id: true },
+              });
+              artifactId = artifact?.id ?? null;
+            }
+
+            // Create CodeExecution record
+            const execution = await prisma.codeExecution.create({
+              data: {
+                language: runData.language,
+                code: runData.code,
+                stdin: runData.stdin ?? '',
+                artifactId,
+                triggeredBy: agentDbId ?? 'agent',
+                projectId,
+              },
+            });
+
+            // Enqueue execution job (dynamic import to avoid circular deps)
+            const { addCodeExecutionJob } = await import('@/lib/queue/code-execution-queue');
+            await addCodeExecutionJob({
+              executionId: execution.id,
+              projectId,
+            });
+
+            console.log(`[OrchestrationEngine] Queued code execution ${execution.id}: ${runData.language}`);
+
+            await eventBus.emit({
+              type: 'action.executed',
+              actor: 'system',
+              projectId,
+              payload: {
+                actionType: 'run_code',
+                executionId: execution.id,
+                language: runData.language,
+              },
+            });
+            break;
+          }
+
           default: {
             // TypeScript exhaustive check — if we get here, a new action type
             // was added to the union but not handled.
@@ -1867,6 +1915,54 @@ export async function executeSideEffects(
             },
           });
           console.log(`[executeSideEffects] Saved memory: [${memoryData.category}] ${memoryData.content.slice(0, 80)}`);
+          break;
+        }
+
+        case 'run_code': {
+          const runData = action.data as { language: string; code: string; stdin?: string; artifactName?: string };
+
+          // Find linked artifact if artifactName was provided
+          let artifactId: string | null = null;
+          if (runData.artifactName) {
+            const artifact = await prisma.artifact.findFirst({
+              where: { projectId, name: runData.artifactName },
+              orderBy: { version: 'desc' },
+              select: { id: true },
+            });
+            artifactId = artifact?.id ?? null;
+          }
+
+          // Create CodeExecution record
+          const execution = await prisma.codeExecution.create({
+            data: {
+              language: runData.language,
+              code: runData.code,
+              stdin: runData.stdin ?? '',
+              artifactId,
+              triggeredBy: agentDbId ?? 'agent',
+              projectId,
+            },
+          });
+
+          // Enqueue execution job
+          const { addCodeExecutionJob } = await import('@/lib/queue/code-execution-queue');
+          await addCodeExecutionJob({
+            executionId: execution.id,
+            projectId,
+          });
+
+          console.log(`[executeSideEffects] Queued code execution ${execution.id}: ${runData.language}`);
+
+          await eventBus.emit({
+            type: 'action.executed',
+            actor: 'system',
+            projectId,
+            payload: {
+              actionType: 'run_code',
+              executionId: execution.id,
+              language: runData.language,
+            },
+          });
           break;
         }
 

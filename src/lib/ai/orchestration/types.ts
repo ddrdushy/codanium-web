@@ -64,7 +64,8 @@ export interface SSEEvent {
     | 'done'          // Agent finished processing
     | 'error'         // Recoverable error
     | 'delegation'    // Agent delegating to another agent
-    | 'info';         // Informational message (authority blocks, etc.)
+    | 'info'          // Informational message (authority blocks, etc.)
+    | 'execution';    // Code execution queued/started/completed
   data: Record<string, unknown>;
 }
 
