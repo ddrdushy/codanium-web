@@ -308,6 +308,20 @@ export class ContextBuilder {
       lines.push(`⚠️ ${codeArtifactCount} code files already exist. Review them in the artifacts context to avoid duplicating work.`);
     }
 
+    // Authority boundaries reminder
+    const { getAgentDefinition } = require('@/lib/ai/agents/registry');
+    try {
+      const agentDef = getAgentDefinition(currentAgentShortName);
+      if (agentDef.authority.canNever.length > 0) {
+        lines.push(`🚫 AUTHORITY: You are NEVER allowed to: ${agentDef.authority.canNever.join(', ')}. Actions attempting these will be blocked.`);
+      }
+      if (agentDef.authority.canWrite.length > 0) {
+        lines.push(`✅ AUTHORITY: You CAN write: ${agentDef.authority.canWrite.join(', ')}`);
+      }
+    } catch {
+      // Agent definition not found — skip authority info
+    }
+
     lines.push('═══════════════════════════════════════════════════════════');
 
     return lines.join('\n');

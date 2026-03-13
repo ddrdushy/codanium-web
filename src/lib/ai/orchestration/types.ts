@@ -63,7 +63,8 @@ export interface SSEEvent {
     | 'usage'         // Token usage summary (on final chunk)
     | 'done'          // Agent finished processing
     | 'error'         // Recoverable error
-    | 'delegation';   // Agent delegating to another agent
+    | 'delegation'    // Agent delegating to another agent
+    | 'info';         // Informational message (authority blocks, etc.)
   data: Record<string, unknown>;
 }
 

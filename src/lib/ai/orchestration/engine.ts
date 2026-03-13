@@ -37,6 +37,7 @@ import { eventBus } from './event-bus';
 import { delegationHandler, DelegationChainEntry } from './delegation';
 import { validateStageGate, validateDelegationGate } from './quality-gates';
 import { validateCardTransition, CardState as LifecycleCardState, CardType as LifecycleCardType } from './card-lifecycle';
+import { filterAuthorizedActions } from './authority-guard';
 
 // ---------------------------------------------------------------------------
 // OrchestrationEngine
@@ -254,9 +255,19 @@ export class OrchestrationEngine {
         };
       }
 
-      // ── Step 7: Execute side effects ──────────────────────────────────
+      // ── Step 7: Authority guard + execute side effects ──────────────
+      const { allowed: authorizedActions, blocked: blockedActions } =
+        filterAuthorizedActions(agentDef, parsed.actions);
+      if (blockedActions.length > 0) {
+        yield {
+          type: 'info',
+          data: {
+            message: `Authority guard blocked ${blockedActions.length} action(s) from ${agentDef.shortName}: ${blockedActions.map(b => b.action.type).join(', ')}`,
+          },
+        };
+      }
       const agentRecord = await agentStateManager.getAgent(projectId, targetShortName);
-      await this.executeSideEffects(parsed.actions, projectId, userId, agentRecord?.id);
+      await this.executeSideEffects(authorizedActions, projectId, userId, agentRecord?.id);
 
       // ── Step 8: Persist agent response ────────────────────────────────
       const savedMessage = await this.saveAgentMessage(
@@ -414,9 +425,10 @@ export class OrchestrationEngine {
       // Parse response
       const parsed = parseAgentResponse(llmResponse.content);
 
-      // Execute side effects
+      // Authority guard + Execute side effects
+      const { allowed: authorizedActions } = filterAuthorizedActions(agentDef, parsed.actions);
       const agentRecord = await agentStateManager.getAgent(projectId, shortName);
-      await this.executeSideEffects(parsed.actions, projectId, userId, agentRecord?.id);
+      await this.executeSideEffects(authorizedActions, projectId, userId, agentRecord?.id);
 
       // Persist agent response
       const savedMessage = await this.saveAgentMessage(

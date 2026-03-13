@@ -24,6 +24,8 @@ import {
 } from '../../engine';
 import { agentStateManager } from '../../state-manager';
 import { eventBus } from '../../event-bus';
+import { getAgentDefinition } from '@/lib/ai/agents/registry';
+import { filterAuthorizedActions } from '../../authority-guard';
 
 /** Maximum delegation depth — must match build-graph.ts conditional edge. */
 const MAX_DELEGATION_DEPTH = 5;
@@ -67,13 +69,24 @@ export async function parseAndExecuteNode(
     }
   }
 
-  // ── 4. Execute side effects ───────────────────────────────────────────
+  // ── 4. Authority guard + execute side effects ────────────────────────
+  const agentDef = getAgentDefinition(state.routedAgent);
+  const { allowed: authorizedActions, blocked: blockedActions } =
+    filterAuthorizedActions(agentDef, parsed.actions);
+  if (blockedActions.length > 0 && writer) {
+    writer.push({
+      type: 'info',
+      data: {
+        message: `Authority guard blocked ${blockedActions.length} action(s) from ${agentDef.shortName}: ${blockedActions.map(b => b.action.type).join(', ')}`,
+      },
+    });
+  }
   const agentRecord = await agentStateManager.getAgent(
     state.projectId,
     state.routedAgent,
   );
   await executeSideEffects(
-    parsed.actions,
+    authorizedActions,
     state.projectId,
     state.userId,
     agentRecord?.id,
