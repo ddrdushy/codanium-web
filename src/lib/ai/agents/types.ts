@@ -46,7 +46,8 @@ export type AgentAction =
   | { type: 'trigger_deploy'; data: { pipelineName?: string; environment?: string; branch?: string } }
   | { type: 'create_pipeline'; data: { name: string; environment: string; trigger: string; config?: string } }
   | { type: 'remember'; data: { category: string; content: string } }
-  | { type: 'run_code'; data: { language: string; code: string; stdin?: string; artifactName?: string } };
+  | { type: 'run_code'; data: { language: string; code: string; stdin?: string; artifactName?: string } }
+  | { type: 'create_repo'; data: { name: string; description?: string; isPrivate?: boolean } };
 
 export interface AgentExecutionResult {
   message: string;

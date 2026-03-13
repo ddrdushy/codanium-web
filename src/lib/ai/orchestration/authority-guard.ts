@@ -76,6 +76,7 @@ function getRequiredResource(action: AgentAction): string | null {
     case 'create_pr':
     case 'create_release':
     case 'create_pipeline':
+    case 'create_repo':
       return 'code_artifacts';
 
     case 'trigger_deploy':

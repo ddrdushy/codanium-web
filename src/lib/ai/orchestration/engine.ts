@@ -836,6 +836,7 @@ export class OrchestrationEngine {
 
           case 'create_branch': {
             const branchData = action.data as { name: string; baseBranch?: string };
+            // Create DB record
             await prisma.gitBranch.create({
               data: {
                 name: branchData.name,
@@ -844,6 +845,23 @@ export class OrchestrationEngine {
                 projectId,
               },
             });
+            // Also create on GitHub if configured
+            try {
+              const gitProject = await prisma.project.findUnique({
+                where: { id: projectId },
+                select: { gitTokenEncrypted: true, gitRepoOwner: true, gitRepoName: true, gitDefaultBranch: true },
+              });
+              if (gitProject?.gitTokenEncrypted && gitProject.gitRepoOwner && gitProject.gitRepoName) {
+                const { createGitHubClient, getRef, createBranchRef } = await import('@/lib/git/github-client');
+                const ghClient = createGitHubClient(gitProject.gitTokenEncrypted);
+                const baseBranch = branchData.baseBranch ?? gitProject.gitDefaultBranch ?? 'main';
+                const baseSha = await getRef(ghClient, gitProject.gitRepoOwner, gitProject.gitRepoName, baseBranch);
+                await createBranchRef(ghClient, gitProject.gitRepoOwner, gitProject.gitRepoName, branchData.name, baseSha);
+                console.log(`[OrchestrationEngine] Created branch on GitHub: ${branchData.name}`);
+              }
+            } catch (ghErr) {
+              console.warn(`[OrchestrationEngine] GitHub branch creation failed (DB record saved):`, ghErr);
+            }
             console.log(`[OrchestrationEngine] Created branch: ${branchData.name}`);
             break;
           }
@@ -857,9 +875,30 @@ export class OrchestrationEngine {
               select: { number: true },
             });
             const nextNumber = (maxPr?.number ?? 0) + 1;
+            // Try GitHub first, then save to DB
+            let ghPrNumber = nextNumber;
+            try {
+              const gitProject = await prisma.project.findUnique({
+                where: { id: projectId },
+                select: { gitTokenEncrypted: true, gitRepoOwner: true, gitRepoName: true, gitDefaultBranch: true },
+              });
+              if (gitProject?.gitTokenEncrypted && gitProject.gitRepoOwner && gitProject.gitRepoName) {
+                const { createGitHubClient, createPullRequest: ghCreatePR } = await import('@/lib/git/github-client');
+                const ghClient = createGitHubClient(gitProject.gitTokenEncrypted);
+                const baseBranch = gitProject.gitDefaultBranch ?? 'main';
+                const prResult = await ghCreatePR(
+                  ghClient, gitProject.gitRepoOwner, gitProject.gitRepoName,
+                  prData.title, prData.description ?? '', prData.branch, baseBranch,
+                );
+                ghPrNumber = prResult.number;
+                console.log(`[OrchestrationEngine] Created PR #${ghPrNumber} on GitHub`);
+              }
+            } catch (ghErr) {
+              console.warn(`[OrchestrationEngine] GitHub PR creation failed (saving to DB only):`, ghErr);
+            }
             await prisma.gitPullRequest.create({
               data: {
-                number: nextNumber,
+                number: ghPrNumber,
                 title: prData.title,
                 branch: prData.branch,
                 status: 'OPEN',
@@ -867,7 +906,7 @@ export class OrchestrationEngine {
                 projectId,
               },
             });
-            console.log(`[OrchestrationEngine] Created PR #${nextNumber}: ${prData.title}`);
+            console.log(`[OrchestrationEngine] Created PR #${ghPrNumber}: ${prData.title}`);
             break;
           }
 
@@ -882,6 +921,46 @@ export class OrchestrationEngine {
               },
             });
             console.log(`[OrchestrationEngine] Created release: ${releaseData.version}`);
+            break;
+          }
+
+          case 'create_repo': {
+            const repoData = action.data as { name: string; description?: string; isPrivate?: boolean };
+            try {
+              const gitProject = await prisma.project.findUnique({
+                where: { id: projectId },
+                select: { gitTokenEncrypted: true, gitRepoOwner: true, gitRepoName: true },
+              });
+              if (gitProject?.gitRepoOwner && gitProject?.gitRepoName) {
+                console.log(`[OrchestrationEngine] Repo already configured: ${gitProject.gitRepoOwner}/${gitProject.gitRepoName}, skipping create_repo`);
+              } else if (gitProject?.gitTokenEncrypted) {
+                const { createGitHubClient, createRepository } = await import('@/lib/git/github-client');
+                const { initializeRepo } = await import('@/lib/git/repo-manager');
+                const ghClient = createGitHubClient(gitProject.gitTokenEncrypted);
+                const repo = await createRepository(ghClient, {
+                  name: repoData.name,
+                  description: repoData.description,
+                  isPrivate: repoData.isPrivate ?? true,
+                  autoInit: true,
+                });
+                await prisma.project.update({
+                  where: { id: projectId },
+                  data: {
+                    gitProvider: 'github',
+                    gitRepoOwner: repo.owner,
+                    gitRepoName: repo.name,
+                    gitDefaultBranch: repo.defaultBranch,
+                    gitSyncEnabled: true,
+                  },
+                });
+                await initializeRepo(projectId);
+                console.log(`[OrchestrationEngine] Created GitHub repo: ${repo.fullName}`);
+              } else {
+                console.warn(`[OrchestrationEngine] No GitHub token configured, cannot create_repo`);
+              }
+            } catch (ghErr) {
+              console.warn(`[OrchestrationEngine] GitHub repo creation failed:`, ghErr);
+            }
             break;
           }
 
@@ -1830,6 +1909,22 @@ export async function executeSideEffects(
               projectId,
             },
           });
+          // Also create on GitHub if configured
+          try {
+            const gitProject = await prisma.project.findUnique({
+              where: { id: projectId },
+              select: { gitTokenEncrypted: true, gitRepoOwner: true, gitRepoName: true, gitDefaultBranch: true },
+            });
+            if (gitProject?.gitTokenEncrypted && gitProject.gitRepoOwner && gitProject.gitRepoName) {
+              const { createGitHubClient, getRef, createBranchRef } = await import('@/lib/git/github-client');
+              const ghClient = createGitHubClient(gitProject.gitTokenEncrypted);
+              const baseBranch = branchData.baseBranch ?? gitProject.gitDefaultBranch ?? 'main';
+              const baseSha = await getRef(ghClient, gitProject.gitRepoOwner, gitProject.gitRepoName, baseBranch);
+              await createBranchRef(ghClient, gitProject.gitRepoOwner, gitProject.gitRepoName, branchData.name, baseSha);
+            }
+          } catch (ghErr) {
+            console.warn(`[Engine] GitHub branch creation failed (DB record saved):`, ghErr);
+          }
           break;
         }
 
@@ -1841,9 +1936,28 @@ export async function executeSideEffects(
             select: { number: true },
           });
           const nextNumber = (maxPr?.number ?? 0) + 1;
+          let ghPrNumber = nextNumber;
+          try {
+            const gitProject = await prisma.project.findUnique({
+              where: { id: projectId },
+              select: { gitTokenEncrypted: true, gitRepoOwner: true, gitRepoName: true, gitDefaultBranch: true },
+            });
+            if (gitProject?.gitTokenEncrypted && gitProject.gitRepoOwner && gitProject.gitRepoName) {
+              const { createGitHubClient, createPullRequest: ghCreatePR } = await import('@/lib/git/github-client');
+              const ghClient = createGitHubClient(gitProject.gitTokenEncrypted);
+              const baseBranch = gitProject.gitDefaultBranch ?? 'main';
+              const prResult = await ghCreatePR(
+                ghClient, gitProject.gitRepoOwner, gitProject.gitRepoName,
+                prData.title, prData.description ?? '', prData.branch, baseBranch,
+              );
+              ghPrNumber = prResult.number;
+            }
+          } catch (ghErr) {
+            console.warn(`[Engine] GitHub PR creation failed (saving to DB only):`, ghErr);
+          }
           await prisma.gitPullRequest.create({
             data: {
-              number: nextNumber,
+              number: ghPrNumber,
               title: prData.title,
               branch: prData.branch,
               status: 'OPEN',
@@ -1864,6 +1978,44 @@ export async function executeSideEffects(
               projectId,
             },
           });
+          break;
+        }
+
+        case 'create_repo': {
+          const repoData = action.data as { name: string; description?: string; isPrivate?: boolean };
+          try {
+            const gitProject = await prisma.project.findUnique({
+              where: { id: projectId },
+              select: { gitTokenEncrypted: true, gitRepoOwner: true, gitRepoName: true },
+            });
+            if (gitProject?.gitRepoOwner && gitProject?.gitRepoName) {
+              console.log(`[Engine] Repo already configured, skipping create_repo`);
+            } else if (gitProject?.gitTokenEncrypted) {
+              const { createGitHubClient, createRepository } = await import('@/lib/git/github-client');
+              const { initializeRepo } = await import('@/lib/git/repo-manager');
+              const ghClient = createGitHubClient(gitProject.gitTokenEncrypted);
+              const repo = await createRepository(ghClient, {
+                name: repoData.name,
+                description: repoData.description,
+                isPrivate: repoData.isPrivate ?? true,
+                autoInit: true,
+              });
+              await prisma.project.update({
+                where: { id: projectId },
+                data: {
+                  gitProvider: 'github',
+                  gitRepoOwner: repo.owner,
+                  gitRepoName: repo.name,
+                  gitDefaultBranch: repo.defaultBranch,
+                  gitSyncEnabled: true,
+                },
+              });
+              await initializeRepo(projectId);
+              console.log(`[Engine] Created GitHub repo: ${repo.fullName}`);
+            }
+          } catch (ghErr) {
+            console.warn(`[Engine] GitHub repo creation failed:`, ghErr);
+          }
           break;
         }
 

@@ -316,3 +316,104 @@ export async function createPullRequest(
     htmlUrl: data.html_url,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Repository Creation
+// ---------------------------------------------------------------------------
+
+export interface CreateRepoOptions {
+  name: string;
+  description?: string;
+  isPrivate?: boolean;
+  autoInit?: boolean;          // Create with README
+  org?: string;                // If set, create under this GitHub org
+}
+
+export interface CreateRepoResult {
+  owner: string;
+  name: string;
+  fullName: string;            // "owner/name"
+  htmlUrl: string;
+  cloneUrl: string;
+  defaultBranch: string;
+  isPrivate: boolean;
+}
+
+/**
+ * Create a new GitHub repository.
+ * If `org` is provided, creates under that organization; otherwise under the
+ * authenticated user's account.
+ */
+export async function createRepository(
+  client: Octokit,
+  options: CreateRepoOptions,
+): Promise<CreateRepoResult> {
+  const { name, description, isPrivate = true, autoInit = true, org } = options;
+
+  let data: any;
+
+  if (org) {
+    // Organization repo
+    const res = await client.rest.repos.createInOrg({
+      org,
+      name,
+      description: description ?? '',
+      private: isPrivate,
+      auto_init: autoInit,
+    });
+    data = res.data;
+  } else {
+    // User repo
+    const res = await client.rest.repos.createForAuthenticatedUser({
+      name,
+      description: description ?? '',
+      private: isPrivate,
+      auto_init: autoInit,
+    });
+    data = res.data;
+  }
+
+  return {
+    owner: data.owner.login,
+    name: data.name,
+    fullName: data.full_name,
+    htmlUrl: data.html_url,
+    cloneUrl: data.clone_url,
+    defaultBranch: data.default_branch ?? 'main',
+    isPrivate: data.private,
+  };
+}
+
+/**
+ * Fetch the authenticated user's login and list of organizations.
+ * Used by the UI to populate owner selection.
+ */
+export async function fetchUserAndOrgs(
+  client: Octokit,
+): Promise<{ login: string; orgs: string[] }> {
+  const [{ data: user }, { data: orgs }] = await Promise.all([
+    client.rest.users.getAuthenticated(),
+    client.rest.orgs.listForAuthenticatedUser({ per_page: 50 }),
+  ]);
+
+  return {
+    login: user.login,
+    orgs: orgs.map((o) => o.login),
+  };
+}
+
+/**
+ * Check if a repository exists.
+ */
+export async function repoExists(
+  client: Octokit,
+  owner: string,
+  repo: string,
+): Promise<boolean> {
+  try {
+    await client.rest.repos.get({ owner, repo });
+    return true;
+  } catch {
+    return false;
+  }
+}

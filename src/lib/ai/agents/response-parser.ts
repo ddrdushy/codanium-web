@@ -270,6 +270,17 @@ function parseAction(actionType: string, rawJson: string): AgentAction | null {
         },
       };
 
+    case 'create_repo':
+      if (!parsed.name) return null;
+      return {
+        type: 'create_repo',
+        data: {
+          name: String(parsed.name),
+          description: parsed.description != null ? String(parsed.description) : undefined,
+          isPrivate: parsed.isPrivate != null ? Boolean(parsed.isPrivate) : undefined,
+        },
+      };
+
     default:
       console.warn(
         `[ResponseParser] Unrecognized action type: "${actionType}", skipping.`,
