@@ -193,6 +193,12 @@ export class LLMGateway {
 
   async complete(options: LLMRequestOptions): Promise<LLMResponse> {
     const userId = options.metadata?.userId;
+
+    // Pre-flight: monthly budget gate
+    if (userId) {
+      await this.enforceBudget(userId);
+    }
+
     const { provider, config, isMock } = await this.resolve(
       options.projectId,
       options.agentId,
@@ -230,6 +236,12 @@ export class LLMGateway {
 
   async *stream(options: LLMRequestOptions): AsyncIterable<LLMStreamChunk> {
     const userId = options.metadata?.userId;
+
+    // Pre-flight: monthly budget gate
+    if (userId) {
+      await this.enforceBudget(userId);
+    }
+
     const { provider, config, isMock } = await this.resolve(
       options.projectId,
       options.agentId,
@@ -309,6 +321,53 @@ export class LLMGateway {
       response.tokensUsed.prompt * rate.prompt +
       response.tokensUsed.completion * rate.completion
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Budget Enforcement
+  // -------------------------------------------------------------------------
+
+  /**
+   * Check if the user's monthly LLM spending exceeds their budget.
+   * Throws an error if over budget, preventing the LLM call.
+   */
+  private async enforceBudget(userId: string): Promise<void> {
+    try {
+      // Get user's monthly budget (default: $500)
+      const prefs = await prisma.userPreferences.findUnique({
+        where: { userId },
+        select: { monthlyBudget: true },
+      });
+      const budget = prefs?.monthlyBudget ?? 500;
+      if (budget <= 0) return; // 0 = unlimited
+
+      // Sum this month's spending across all user's projects
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const result = await prisma.lLMUsage.aggregate({
+        where: {
+          project: { ownerId: userId },
+          createdAt: { gte: startOfMonth },
+        },
+        _sum: { cost: true },
+      });
+
+      const spent = result._sum.cost ?? 0;
+      if (spent >= budget) {
+        console.warn(`[LLMGateway] Budget exceeded for user ${userId}: $${spent.toFixed(2)} / $${budget}`);
+        throw new Error(
+          `Monthly budget exceeded ($${spent.toFixed(2)} of $${budget}). ` +
+          `Increase your budget in Settings or wait until next month.`,
+        );
+      }
+    } catch (err) {
+      // If it's our budget error, re-throw
+      if (err instanceof Error && err.message.includes('Monthly budget exceeded')) throw err;
+      // Otherwise swallow — don't block calls if budget check itself fails
+      console.warn('[LLMGateway] Budget check failed (non-blocking):', err);
+    }
   }
 }
 

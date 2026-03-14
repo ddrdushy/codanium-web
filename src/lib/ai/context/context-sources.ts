@@ -10,6 +10,7 @@
 // =============================================================================
 
 import { prisma } from '@/lib/prisma';
+import { getCached, setCache, CACHEABLE_SOURCES } from './context-cache';
 
 // ─── Scope Interface ────────────────────────────────────────────────────────
 
@@ -24,7 +25,9 @@ export interface ContextScope {
  * Fetch core project metadata (always project-wide).
  */
 export async function fetchProjectInfo(projectId: string, _scope?: ContextScope) {
-  return prisma.project.findUnique({
+  const cached = getCached('project_info', projectId);
+  if (cached) return cached;
+  const data = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
       id: true,
@@ -36,13 +39,17 @@ export async function fetchProjectInfo(projectId: string, _scope?: ContextScope)
       color: true,
     },
   });
+  if (data) setCache('project_info', projectId, data);
+  return data;
 }
 
 /**
  * Fetch the SDLC pipeline stages in order (always project-wide).
  */
 export async function fetchSDLCStages(projectId: string, _scope?: ContextScope) {
-  return prisma.sDLCStage.findMany({
+  const cached = getCached('sdlc_stages', projectId);
+  if (cached) return cached;
+  const data = await prisma.sDLCStage.findMany({
     where: { projectId },
     orderBy: { order: 'asc' },
     select: {
@@ -52,6 +59,8 @@ export async function fetchSDLCStages(projectId: string, _scope?: ContextScope) 
       gatePassed: true,
     },
   });
+  setCache('sdlc_stages', projectId, data);
+  return data;
 }
 
 /**
@@ -215,7 +224,9 @@ export async function fetchChatHistory(projectId: string, limit: number = 30, sc
  * Fetch all agents and their current status for team awareness (always project-wide).
  */
 export async function fetchAgentsStatus(projectId: string, _scope?: ContextScope) {
-  return prisma.agent.findMany({
+  const cached = getCached('agents_status', projectId);
+  if (cached) return cached;
+  const data = await prisma.agent.findMany({
     where: { projectId },
     orderBy: { shortName: 'asc' },
     select: {
@@ -223,6 +234,8 @@ export async function fetchAgentsStatus(projectId: string, _scope?: ContextScope
       group: true, status: true, currentTask: true,
     },
   });
+  setCache('agents_status', projectId, data);
+  return data;
 }
 
 /**
@@ -244,7 +257,9 @@ export async function fetchLLMUsage(projectId: string, _scope?: ContextScope) {
  * Fetch wireframes for UI/design context (always project-wide).
  */
 export async function fetchWireframes(projectId: string, _scope?: ContextScope) {
-  return prisma.wireframe.findMany({
+  const cached = getCached('wireframes', projectId);
+  if (cached) return cached;
+  const data = await prisma.wireframe.findMany({
     where: { projectId },
     orderBy: { updatedAt: 'desc' },
     select: {
@@ -252,6 +267,8 @@ export async function fetchWireframes(projectId: string, _scope?: ContextScope) 
       device: true, owner: true, components: true, version: true,
     },
   });
+  setCache('wireframes', projectId, data);
+  return data;
 }
 
 /**

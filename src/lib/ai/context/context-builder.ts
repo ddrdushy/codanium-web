@@ -12,6 +12,7 @@
 
 import { AgentDefinition, ContextSource } from '@/lib/ai/agents/types';
 import { LLMMessage } from '@/lib/ai/providers/types';
+import { AGENT_BASE_PROMPT } from '@/lib/ai/agents/prompt-base';
 import * as sources from './context-sources';
 import { ContextScope } from './context-sources';
 import {
@@ -31,6 +32,7 @@ export interface AgentContext {
 export interface ContextBuildOptions {
   maxHistoryMessages?: number;
   scope?: ContextScope;
+  isDelegation?: boolean; // Skip chat_history for delegated calls (context from delegator)
 }
 
 // ─── Fetcher Registry ────────────────────────────────────────────────────────
@@ -69,6 +71,30 @@ const FORMATTER_MAP: Record<ContextSource, ContextFormatter> = {
   project_memory:  formatProjectMemory,
 };
 
+// ─── Token Budget ────────────────────────────────────────────────────────────
+
+/** Soft token budget for the system message (excluding chat history messages). */
+const SYSTEM_TOKEN_BUDGET = 6000;
+
+/**
+ * Priority ranking for context sources.
+ * When the system message exceeds the budget, lowest-priority sources are
+ * dropped first. Higher number = higher priority (kept longer).
+ */
+const SOURCE_PRIORITY: Record<ContextSource, number> = {
+  project_info:   10, // always keep
+  cards:           9, // core context (card-centric philosophy)
+  documents:       8, // phase awareness
+  project_memory:  7, // accumulated knowledge
+  sdlc_stages:     5, // phase awareness
+  decisions:       4, // important but often empty
+  artifacts:       3, // code context
+  chat_history:    6, // handled separately as recentHistory
+  agents_status:   2, // least critical
+  wireframes:      2, // least critical
+  llm_usage:       1, // drop first
+};
+
 // ─── ContextBuilder ──────────────────────────────────────────────────────────
 
 export class ContextBuilder {
@@ -80,11 +106,14 @@ export class ContextBuilder {
     projectId: string,
     options?: ContextBuildOptions,
   ): Promise<AgentContext> {
-    const maxHistory = options?.maxHistoryMessages ?? 20;
+    const maxHistory = options?.maxHistoryMessages ?? agentDef.maxHistory ?? 10;
     const scope = options?.scope;
 
     // Determine which sources to fetch
-    const neededSources = agentDef.contextSources;
+    // For delegated calls, skip chat_history — delegator passes context in the message
+    const neededSources = options?.isDelegation
+      ? agentDef.contextSources.filter(s => s !== 'chat_history')
+      : agentDef.contextSources;
 
     // Parallel-fetch all required context sources, passing scope
     const fetchEntries = neededSources.map(
@@ -115,21 +144,17 @@ export class ContextBuilder {
     });
 
     // Build the formatted context block (excluding chat_history, which goes into recentHistory)
-    const contextSections: string[] = [];
+    // Track source → formatted text for budget trimming
+    const sectionMap = new Map<ContextSource, string>();
     for (const source of neededSources) {
       if (source === 'chat_history') continue;
       const data = contextData.get(source);
       if (data == null) continue;
       const formatted = FORMATTER_MAP[source](data);
       if (formatted) {
-        contextSections.push(formatted);
+        sectionMap.set(source, formatted);
       }
     }
-
-    // Compose system message
-    const contextBlock = contextSections.length > 0
-      ? `\n\n--- PROJECT CONTEXT ---\n${contextSections.join('\n\n')}\n--- END CONTEXT ---`
-      : '';
 
     // Add scope instruction when module-scoped
     const scopeBlock = scope?.module
@@ -141,7 +166,34 @@ export class ContextBuilder {
     // Build pipeline state summary — tells the agent where we are in the workflow
     const pipelineState = this.buildPipelineState(agentDef.shortName, contextData);
 
-    const systemMessage = agentDef.systemPrompt + scopeBlock + pipelineState + contextBlock;
+    // Fixed parts (always included)
+    // Base prompt (shared rules) + agent-specific prompt + scope + pipeline state
+    const fixedPart = AGENT_BASE_PROMPT + agentDef.systemPrompt + scopeBlock + pipelineState;
+    const fixedTokens = Math.ceil(fixedPart.length / 4);
+
+    // Budget trimming: drop lowest-priority sources if over budget
+    const remainingBudget = SYSTEM_TOKEN_BUDGET - fixedTokens;
+    const sortedSections = Array.from(sectionMap.entries())
+      .sort((a, b) => (SOURCE_PRIORITY[b[0]] ?? 0) - (SOURCE_PRIORITY[a[0]] ?? 0));
+
+    const contextSections: string[] = [];
+    let usedTokens = 0;
+    for (const [source, text] of sortedSections) {
+      const sectionTokens = Math.ceil(text.length / 4);
+      if (usedTokens + sectionTokens > remainingBudget && contextSections.length > 0) {
+        console.log(`[ContextBuilder] Budget trim: dropped ${source} (~${sectionTokens} tokens)`);
+        continue;
+      }
+      contextSections.push(text);
+      usedTokens += sectionTokens;
+    }
+
+    // Compose system message
+    const contextBlock = contextSections.length > 0
+      ? `\n\n--- PROJECT CONTEXT ---\n${contextSections.join('\n\n')}\n--- END CONTEXT ---`
+      : '';
+
+    const systemMessage = fixedPart + contextBlock;
 
     // Log estimated token count for observability
     const estimatedTokens = Math.ceil(systemMessage.length / 4);
@@ -213,10 +265,8 @@ export class ContextBuilder {
     }> | undefined;
     const memoryCount = memories?.length ?? 0;
 
-    // Build the state summary
-    lines.push('\n\n═══════════════════════════════════════════════════════════');
-    lines.push('PIPELINE STATE — WHERE WE ARE RIGHT NOW');
-    lines.push('═══════════════════════════════════════════════════════════');
+    // Build the state summary (compact to save tokens)
+    lines.push('\n\nPIPELINE STATE:');
     lines.push(`You are: ${currentAgentShortName}`);
 
     // Agent participation
@@ -308,21 +358,8 @@ export class ContextBuilder {
       lines.push(`⚠️ ${codeArtifactCount} code files already exist. Review them in the artifacts context to avoid duplicating work.`);
     }
 
-    // Authority boundaries reminder
-    const { getAgentDefinition } = require('@/lib/ai/agents/registry');
-    try {
-      const agentDef = getAgentDefinition(currentAgentShortName);
-      if (agentDef.authority.canNever.length > 0) {
-        lines.push(`🚫 AUTHORITY: You are NEVER allowed to: ${agentDef.authority.canNever.join(', ')}. Actions attempting these will be blocked.`);
-      }
-      if (agentDef.authority.canWrite.length > 0) {
-        lines.push(`✅ AUTHORITY: You CAN write: ${agentDef.authority.canWrite.join(', ')}`);
-      }
-    } catch {
-      // Agent definition not found — skip authority info
-    }
-
-    lines.push('═══════════════════════════════════════════════════════════');
+    // Authority info removed — agents already have this in their system prompt
+    // and the authority guard enforces it at runtime regardless
 
     return lines.join('\n');
   }
@@ -447,42 +484,30 @@ function formatCards(data: unknown): string {
   const lines = cards.map((c) => {
     const agent = c.ownerAgent ? ` (${c.ownerAgent.shortName})` : '';
     const mod = c.module ? ` [${c.module}]` : '';
-    const desc = c.description ? `\n    Description: ${c.description.substring(0, 200)}` : '';
+    // Compact description — 100 chars max
+    const desc = c.description ? ` — ${c.description.substring(0, 100)}${c.description.length > 100 ? '…' : ''}` : '';
 
-    // Show valid transitions and DoD hints
-    const transitions = getValidTransitions(c.state as LifecycleCardState);
-    const transitionStr = transitions.length > 0 ? `\n    → Next states: ${transitions.join(', ')}` : '';
+    // Only show DoD hints for IN_PROGRESS cards (actionable)
+    let dodStr = '';
+    if (c.state === 'IN_PROGRESS') {
+      const nextState = getNextNaturalState(c.state as LifecycleCardState);
+      const dodReqs = nextState ? getDoDRequirements(c.type as LifecycleCardType, nextState) : [];
+      dodStr = dodReqs.length > 0 ? `\n    ✓ DoD: ${dodReqs.join('; ')}` : '';
+    }
 
-    // Show DoD requirements for the next natural state
-    const nextState = getNextNaturalState(c.state as LifecycleCardState);
-    const dodReqs = nextState ? getDoDRequirements(c.type as LifecycleCardType, nextState) : [];
-    const dodStr = dodReqs.length > 0 ? `\n    ✓ DoD for ${nextState}: ${dodReqs.join('; ')}` : '';
-
-    // Show incomplete children count for parent cards
+    // Show children progress only for parent cards with incomplete children
     let childStr = '';
     if (c.children && c.children.length > 0) {
-      const incomplete = c.children.filter(ch => ch.state !== 'DONE' && ch.state !== 'RELEASED');
-      const done = c.children.length - incomplete.length;
-      childStr = `\n    Children: ${done}/${c.children.length} complete`;
-      if (incomplete.length > 0 && (c.state === 'UNDER_REVIEW' || c.state === 'TESTING')) {
-        childStr += ' ⚠️ Cannot move to DONE until all children complete';
+      const done = c.children.filter(ch => ch.state === 'DONE' || ch.state === 'RELEASED').length;
+      if (done < c.children.length) {
+        childStr = ` [${done}/${c.children.length} done]`;
       }
     }
 
-    return `  [${c.type}] id="${c.id}" ${c.title} — ${c.state} ${c.priority}${agent}${mod}${desc}${transitionStr}${dodStr}${childStr}`;
+    return `  [${c.type}] id="${c.id}" ${c.title} — ${c.state} ${c.priority}${agent}${mod}${childStr}${desc}${dodStr}`;
   });
 
-  // Add card lifecycle rules summary at the top
-  const lifecycleSummary = [
-    'CARD LIFECYCLE RULES:',
-    '  PLANNED → IN_PROGRESS → UNDER_REVIEW → TESTING → DONE → RELEASED',
-    '  BLOCKED can be entered from any active state',
-    '  Parent cards (EPIC/FEATURE) cannot be DONE until all children are DONE',
-    '  Cards must have a description before moving to IN_PROGRESS',
-    '  TASK cards should have code artifacts before review/done',
-  ];
-
-  return [...lifecycleSummary, '', `BOARD (${cards.length} cards):`, ...lines].join('\n');
+  return [`BOARD (${cards.length} cards):`, ...lines].join('\n');
 }
 
 function formatDecisions(data: unknown): string {
@@ -503,11 +528,14 @@ function formatDecisions(data: unknown): string {
   }>;
   if (decisions.length === 0) return '';
   const lines = decisions.map((d) => {
+    // Compact: only show options for PENDING decisions (actionable)
+    if (d.approvedOption) {
+      return `  ${d.trigger} — ${d.status} ✅ ${d.approvedOption}`;
+    }
     const optionsSummary = d.options.length > 0
       ? ` | Options: ${d.options.map((o) => o.name).join(', ')}`
       : '';
-    const approved = d.approvedOption ? ` | Approved: ${d.approvedOption}` : '';
-    return `  ${d.trigger} — ${d.status} [${d.riskRating}]${approved}${optionsSummary}`;
+    return `  ${d.trigger} — ${d.status} [${d.riskRating}]${optionsSummary}`;
   });
   return [`DECISIONS (${decisions.length}):`, ...lines].join('\n');
 }
@@ -532,7 +560,7 @@ function formatDocuments(data: unknown): string {
   const stagingDocs: string[] = [];
 
   for (const d of docs) {
-    lines.push(`  ${d.title} (${d.type}) — ${statusIcon[d.status] ?? d.status} [${d.wordCount} words, owner: ${d.owner}]`);
+    lines.push(`  ${d.title} (${d.type}) — ${statusIcon[d.status] ?? d.status}`);
 
     // Include staging BRD content so BA can compile it into final BRD
     if (d.title.startsWith('Staging:') && d.status === 'DRAFT' && d.content && d.content.length > 0) {
@@ -560,11 +588,14 @@ function formatAgentsStatus(data: unknown): string {
     currentTask: string | null;
   }>;
   if (agents.length === 0) return '';
-  const lines = agents.map((a) => {
+  // Only show active (non-idle) agents to save tokens
+  const active = agents.filter(a => a.status !== 'IDLE');
+  if (active.length === 0) return 'TEAM: All agents available';
+  const lines = active.map((a) => {
     const task = a.currentTask ? ` — ${a.currentTask}` : '';
-    return `  ${a.shortName} (${a.name}): ${a.status}${task}`;
+    return `  ${a.shortName}: ${a.status}${task}`;
   });
-  return ['TEAM STATUS:', ...lines].join('\n');
+  return [`TEAM (${active.length} active):`, ...lines].join('\n');
 }
 
 function formatLLMUsage(data: unknown): string {
@@ -581,25 +612,8 @@ function formatLLMUsage(data: unknown): string {
   const totalTokens = records.reduce((sum, r) => sum + r.tokensUsed, 0);
   const totalCost = records.reduce((sum, r) => sum + r.cost, 0);
 
-  const byProvider = new Map<string, { tokens: number; cost: number }>();
-  for (const r of records) {
-    const key = r.provider;
-    const current = byProvider.get(key) ?? { tokens: 0, cost: 0 };
-    current.tokens += r.tokensUsed;
-    current.cost += r.cost;
-    byProvider.set(key, current);
-  }
-
-  const providerLines = Array.from(byProvider.entries()).map(
-    ([provider, stats]) =>
-      `  ${provider}: ${stats.tokens.toLocaleString()} tokens, $${stats.cost.toFixed(4)}`,
-  );
-
-  return [
-    `LLM USAGE (last ${records.length} calls):`,
-    `  Total: ${totalTokens.toLocaleString()} tokens, $${totalCost.toFixed(4)}`,
-    ...providerLines,
-  ].join('\n');
+  // Compact: single line summary instead of per-provider breakdown
+  return `LLM USAGE: ${totalTokens.toLocaleString()} tokens, $${totalCost.toFixed(4)} (${records.length} calls)`;
 }
 
 function formatWireframes(data: unknown): string {

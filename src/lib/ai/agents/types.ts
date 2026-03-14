@@ -12,6 +12,7 @@ export interface AgentDefinition {
     canNever: string[];
   };
   temperature: number;         // Default temperature for this agent
+  maxHistory?: number;         // Max chat history messages (default: 10)
 }
 
 export type AgentCapability =

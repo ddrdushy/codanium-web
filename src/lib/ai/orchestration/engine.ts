@@ -38,6 +38,7 @@ import { delegationHandler, DelegationChainEntry } from './delegation';
 import { validateStageGate, validateDelegationGate } from './quality-gates';
 import { validateCardTransition, CardState as LifecycleCardState, CardType as LifecycleCardType } from './card-lifecycle';
 import { filterAuthorizedActions } from './authority-guard';
+import { invalidateProjectCache } from '@/lib/ai/context/context-cache';
 
 // ---------------------------------------------------------------------------
 // OrchestrationEngine
@@ -268,6 +269,7 @@ export class OrchestrationEngine {
       }
       const agentRecord = await agentStateManager.getAgent(projectId, targetShortName);
       await this.executeSideEffects(authorizedActions, projectId, userId, agentRecord?.id);
+      if (authorizedActions.length > 0) invalidateProjectCache(projectId);
 
       // ── Step 8: Persist agent response ────────────────────────────────
       const savedMessage = await this.saveAgentMessage(
@@ -302,7 +304,7 @@ export class OrchestrationEngine {
           delegateContext,
           projectId,
           (shortName, message, pid) =>
-            this.executeAgentPipeline(shortName, message, pid, userId),
+            this.executeAgentPipeline(shortName, message, pid, userId, scope),
           targetShortName,
         );
 
@@ -385,6 +387,7 @@ export class OrchestrationEngine {
     message: string,
     projectId: string,
     userId: string,
+    delegationScope?: { cardId?: string; module?: string },
   ): Promise<AgentExecutionResult & { delegateContext?: string }> {
     const agentDef = getAgentDefinition(shortName);
 
@@ -403,8 +406,11 @@ export class OrchestrationEngine {
     });
 
     try {
-      // Build context
-      const context = await contextBuilder.build(agentDef, projectId);
+      // Build context — delegated agents skip chat history (context comes from delegator)
+      const context = await contextBuilder.build(agentDef, projectId, {
+        scope: delegationScope,
+        isDelegation: true,
+      });
 
       // Construct LLM messages array
       const llmMessages: LLMMessage[] = [
@@ -429,6 +435,7 @@ export class OrchestrationEngine {
       const { allowed: authorizedActions } = filterAuthorizedActions(agentDef, parsed.actions);
       const agentRecord = await agentStateManager.getAgent(projectId, shortName);
       await this.executeSideEffects(authorizedActions, projectId, userId, agentRecord?.id);
+      if (authorizedActions.length > 0) invalidateProjectCache(projectId);
 
       // Persist agent response
       const savedMessage = await this.saveAgentMessage(
