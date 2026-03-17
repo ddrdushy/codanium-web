@@ -42,6 +42,14 @@ const ARTIFACT_REGEX = /\[\s*ARTIFACT\s*:\s*([^\]]+?)\s*\]([\s\S]*?)\[\s*\/\s*AR
 // Tolerates optional spaces: [ DELEGATE:SA ] or [DELEGATE:SA]
 const DELEGATE_REGEX = /\[\s*DELEGATE\s*:\s*(\w+)\s*\]([\s\S]*?)\[\s*\/\s*DELEGATE\s*(?:\s*:\s*\w+\s*)?\]/gi;
 
+// LLM text-based tool calls — when the model outputs tool calls as text instead of
+// using native tool_use. Matches patterns like:
+//   [UPDATE_DOCUMENT]{ "type": "BRD", ... }
+//   [CREATE_CARD]{ "title": "..." }
+//   [REMEMBER]{ "key": "..." }
+// Captures the tool name and the JSON body (may be multi-line)
+const TEXT_TOOL_CALL_REGEX = /\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*\]\s*\{[\s\S]*?\}\s*/gi;
+
 // ─── File Extension to Type Mapping ──────────────────────────────────────────
 
 const EXTENSION_TYPE_MAP: Record<string, string> = {
@@ -369,7 +377,8 @@ export function parseAgentResponse(rawContent: string): ParsedResponse {
   let message = rawContent
     .replace(ACTION_REGEX, '')
     .replace(ARTIFACT_REGEX, '')
-    .replace(DELEGATE_REGEX, '');
+    .replace(DELEGATE_REGEX, '')
+    .replace(TEXT_TOOL_CALL_REGEX, '');
 
   // Also strip unclosed [DELEGATE:XX]...rest of content (if delegation was extracted above)
   if (delegateTo) {

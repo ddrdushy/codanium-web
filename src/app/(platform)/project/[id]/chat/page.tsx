@@ -75,6 +75,8 @@ function stripAgentMarkers(content: string): string {
     .replace(/^\s*\*{0,2}\[\s*\/\s*ACTION\s*\]\*{0,2}/gm, '')
     .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\]\s*$/gm, '')
     .replace(/^\s*\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gm, '')
+    // Strip text-based tool calls: [UPDATE_DOCUMENT]{ ... }, [CREATE_CARD]{ ... }, etc.
+    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*\]\s*\{[\s\S]*?\}\s*/gi, '')
     // Strip agent name prefixes like "[BA]", "[SA]", "[DEC]", "[ORC]" at start of lines
     .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*/gm, '')
     // Clean up whitespace
@@ -98,7 +100,7 @@ function extractOptions(content: string): {
   // Flexible regex handles multiple format variations:
   // "- **A)** text", "* **A)** text", "• **A)** text", "- **A) text**"
   // Also handles plain format without bold: "- A) text", "• A) text"
-  const optionRegex = /^[-*•]\s+\*{0,2}([A-F])\)\*{0,2}\s+(.+)$/gm;
+  const optionRegex = /^[-*•]?\s*\*{0,2}([A-F])\)\*{0,2}\s+(.+)$/gm;
   const options: { label: string; text: string; recommended: boolean }[] = [];
   let match;
   while ((match = optionRegex.exec(stripped)) !== null) {
@@ -118,7 +120,7 @@ function extractOptions(content: string): {
   if (options.length === 0) return { cleanContent: stripped.replace(/\n{3,}/g, '\n\n').trim(), options: [], multiSelect: false };
   const multiSelect = /\(select all that apply\)/i.test(stripped);
   // Remove option lines from content (same flexible pattern)
-  const cleanContent = stripped.replace(/^[-*•]\s+\*{0,2}[A-F]\)\*{0,2}\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  const cleanContent = stripped.replace(/^[-*•]?\s*\*{0,2}[A-F]\)\*{0,2}\s+.+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
   return { cleanContent, options, multiSelect };
 }
 
