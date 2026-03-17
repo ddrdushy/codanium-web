@@ -131,9 +131,9 @@ export async function POST(request: NextRequest) {
 
       // Parse structured fields from description (wizard packs them as "Idea: ...\n\nTarget audience: ...\n\nPriorities: ...")
       const descriptionText = data.description ?? '';
-      const ideaMatch = descriptionText.match(/^Idea:\s*(.+?)(?:\n\n|$)/s);
-      const audienceMatch = descriptionText.match(/Target audience:\s*(.+?)(?:\n\n|$)/s);
-      const prioritiesMatch = descriptionText.match(/Priorities:\s*(.+?)(?:\n\n|$)/s);
+      const ideaMatch = descriptionText.match(/^Idea:\s*([\s\S]+?)(?:\n\n|$)/);
+      const audienceMatch = descriptionText.match(/Target audience:\s*([\s\S]+?)(?:\n\n|$)/);
+      const prioritiesMatch = descriptionText.match(/Priorities:\s*([\s\S]+?)(?:\n\n|$)/);
 
       if (ideaMatch?.[1]?.trim()) {
         memories.push({
