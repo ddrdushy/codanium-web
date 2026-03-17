@@ -251,6 +251,51 @@ export default function ChatPage() {
       .catch(() => setLoaded(true));
   }, [projectId]);
 
+  // Poll for BA auto-kickoff response when only system message exists.
+  // On new projects, BA generates its first message in the background (~5s).
+  // The page may load before BA finishes, showing only the system message.
+  // Poll every 2s until an AGENT message appears, then stop.
+  useEffect(() => {
+    if (!loaded) return;
+    // Only poll if we have messages but none from an agent
+    const hasAgentMsg = messages.some(m => m.role === 'agent');
+    if (hasAgentMsg || messages.length === 0) return;
+
+    const interval = setInterval(() => {
+      fetch(`/api/projects/${projectId}/chat`)
+        .then(r => r.json())
+        .then((data: any[]) => {
+          if (Array.isArray(data) && data.some((m: any) => m.role === 'AGENT')) {
+            // Deduplicate
+            const seen = new Set<string>();
+            const unique = data.filter((m: any) => {
+              if (seen.has(m.id)) return false;
+              seen.add(m.id);
+              return true;
+            });
+            setMessages(unique.map((m: any) => ({
+              id: m.id,
+              role: m.role.toLowerCase() as 'user' | 'agent' | 'system',
+              agent: m.agent ? {
+                id: m.agent.id, name: m.agent.name, shortName: m.agent.shortName,
+                avatar: m.agent.avatar, status: m.agent.status?.toLowerCase() ?? 'idle',
+                group: 'core' as any, currentTask: null,
+              } : undefined,
+              content: stripAgentMarkers(m.content),
+              thinking: m.thinking ?? undefined,
+              timestamp: formatTime(m.createdAt),
+            })));
+            clearInterval(interval);
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+
+    // Stop polling after 30s max
+    const timeout = setTimeout(() => clearInterval(interval), 30000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [loaded, messages, projectId]);
+
   useEffect(() => {
     fetch(`/api/projects/${projectId}/artifacts`)
       .then(r => r.json())
