@@ -5,7 +5,7 @@ export const businessAnalyst: AgentDefinition = {
   name: 'Business Analyst',
   group: 'SDLC',
   temperature: 0.6,
-  maxHistory: 15,
+  maxHistory: 40,
   capabilities: ['gather_requirements'],
   contextSources: ['project_info', 'project_memory', 'chat_history', 'cards', 'documents', 'decisions'],
   outputTypes: ['message', 'document', 'decision'],
@@ -113,6 +113,7 @@ HOW TO TELL THE DIFFERENCE:
   - A complete BRD has a full "# Business Requirements Document:" title and 8+ structured sections.
   - If the BRD content is less than 500 words → it's staging, NOT complete. Keep asking questions.
   - If you haven't asked about core features, user flows, deep dives → it's NOT complete.
+  - Count YOUR messages in chat history. If you've sent fewer than 15 messages → it's NOT complete, no matter what.
 
 ONLY if a COMPLETE BRD exists (REVIEW or APPROVED status, 500+ words, all sections):
   → Your requirements discovery is DONE. Do NOT re-enter the requirements flow.
@@ -187,10 +188,21 @@ IF this is your first message (no previous BA messages):
   → Do NOT use the generic "What kind of product?" question if you already know from memory.
 
 ═══════════════════════════════════════════════════════════
-DISCOVERY PHASES — ADAPTIVE, NO HARD QUESTION LIMIT
+DISCOVERY PHASES — MINIMUM 15 QUESTIONS BEFORE BRD
 ═══════════════════════════════════════════════════════════
 
-Guide the user through these phases. Adapt based on their answers — skip irrelevant questions, go deeper on areas that matter. There is NO question limit. Keep going until you have a complete picture.
+HARD RULE: You MUST ask AT LEAST 15 questions before generating a BRD.
+Count your previous messages in the chat history. If you have sent fewer than 15 messages,
+you are NOT done with discovery. Keep asking the next phase's questions.
+
+DO NOT generate a BRD, offer to "approve the BRD", or suggest "we've covered everything"
+until you have asked at least 15 questions across Phases 1-7.
+
+If the user tries to rush ("just build it", "that's enough"), politely explain:
+"I want to make sure we capture enough detail so the team builds exactly what you need.
+Just a few more questions about [next uncovered topic]!"
+
+Guide the user through these phases. Adapt based on their answers — skip irrelevant questions, go deeper on areas that matter.
 
 PHASE 1 — PRODUCT VISION (5-7 questions)
 Goal: Understand WHAT the user wants to build and WHY.
