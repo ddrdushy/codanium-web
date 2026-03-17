@@ -169,12 +169,6 @@ async function handleCreateCard(
   projectId: string,
   agentId?: string,
 ) {
-  // Find the appropriate stage
-  const stage = await prisma.sDLCStage.findFirst({
-    where: { projectId, status: 'ACTIVE' },
-    orderBy: { order: 'desc' },
-  });
-
   const card = await prisma.card.create({
     data: {
       projectId,
@@ -183,8 +177,7 @@ async function handleCreateCard(
       type: args.type || 'TASK',
       priority: args.priority || 'MEDIUM',
       state: 'PLANNED',
-      stageId: stage?.id,
-      createdById: agentId,
+      ownerAgentId: agentId,
       module: args.module,
       parentId: args.parentId,
     },
@@ -218,8 +211,9 @@ async function handleCreateDocument(
       title: args.title,
       content: args.content,
       status: 'DRAFT',
-      version: 1,
-      createdById: agentId,
+      owner: agentId || 'system',
+      wordCount: args.content.split(/\s+/).length,
+      sections: (args.content.match(/^#{1,3}\s/gm) || []).length,
     },
   });
   return { documentId: doc.id, type: doc.type, title: doc.title, status: doc.status };
@@ -241,7 +235,11 @@ async function handleUpdateDocument(args: Record<string, any>, projectId: string
 
   const doc = await prisma.document.update({
     where: { id: existing.id },
-    data: { content: newContent, version: existing.version + 1 },
+    data: {
+      content: newContent,
+      wordCount: newContent.split(/\s+/).length,
+      sections: (newContent.match(/^#{1,3}\s/gm) || []).length,
+    },
   });
   return { documentId: doc.id, type: doc.type, updated: true };
 }
@@ -268,32 +266,35 @@ async function handleCreateDecision(
   projectId: string,
   agentId?: string,
 ) {
+  // Decision model: trigger (title), context (description), ownerId, status=DRAFTED
+  // Need a valid user ID for ownerId — use first project member or system user
+  const member = await prisma.projectMember.findFirst({
+    where: { projectId },
+    select: { userId: true },
+  });
+  const ownerId = member?.userId || 'usr-001'; // fallback to default user
+
   const decision = await prisma.decision.create({
     data: {
       projectId,
-      title: args.title,
-      description: args.description || '',
-      status: 'OPEN',
-      options: args.options || [],
-      recommendation: args.recommendation,
-      createdById: agentId,
+      trigger: args.title,
+      context: args.description || '',
+      status: 'DRAFTED',
+      recommendation: args.recommendation || '',
+      ownerId,
     },
   });
-  return { decisionId: decision.id, title: decision.title };
+  return { decisionId: decision.id, trigger: decision.trigger };
 }
 
 async function handleRemember(args: Record<string, any>, projectId: string) {
-  await prisma.projectMemory.upsert({
-    where: {
-      projectId_key: { projectId, key: args.key },
-    },
-    create: {
+  // ProjectMemory uses category + content + source
+  await prisma.projectMemory.create({
+    data: {
       projectId,
-      key: args.key,
-      value: args.value,
-    },
-    update: {
-      value: args.value,
+      category: args.key,
+      content: args.value,
+      source: 'agent',
     },
   });
   return { key: args.key, stored: true };
