@@ -171,14 +171,14 @@ export async function pipelineRouterNode(
 
   // Emit pipeline progress SSE
   if (writer) {
-    writer.push({
+    writer({
       type: 'delegation',
       data: {
         fromAgent: currentAgent,
         toAgent: matchedRule.next,
       },
     });
-    writer.push({
+    writer({
       type: 'pipeline_progress',
       data: {
         fromAgent: currentAgent,

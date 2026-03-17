@@ -107,7 +107,7 @@ export async function contextNode(
     // Budget exceeded — emit SSE event
     const writer = (config as any).writer;
     if (writer) {
-      writer.push({
+      writer({
         type: 'error',
         data: {
           message: `Token budget exceeded. Used ${used.toLocaleString()} of ${budget.toLocaleString()} tokens this month.`,

@@ -46,7 +46,7 @@ export async function executeToolsNode(
   // Emit tool_call SSE events
   for (const tc of toolCalls) {
     if (writer) {
-      writer.push({
+      writer({
         type: 'tool_call',
         data: { name: tc.name, arguments: tc.arguments },
       });
@@ -63,7 +63,7 @@ export async function executeToolsNode(
   // Emit tool_result SSE events
   for (const result of results) {
     if (writer) {
-      writer.push({
+      writer({
         type: 'tool_result',
         data: {
           name: result.name,

@@ -40,7 +40,7 @@ export async function llmNode(
 
   // ── Signal agent start (only on first call, not tool loops) ─────────
   if (toolLoopCount === 0 && writer) {
-    writer.push({
+    writer({
       type: 'agent_start',
       data: { agentShortName: state.routedAgent, agentName: agentDef.name },
     });
@@ -111,14 +111,14 @@ export async function llmNode(
     if (chunk.thinking) {
       fullThinking += chunk.thinking;
       if (writer) {
-        writer.push({ type: 'thinking', data: { content: chunk.thinking } });
+        writer({ type: 'thinking', data: { content: chunk.thinking } });
       }
     }
 
     if (chunk.content) {
       fullContent += chunk.content;
       if (writer) {
-        writer.push({ type: 'chunk', data: { content: chunk.content } });
+        writer({ type: 'chunk', data: { content: chunk.content } });
       }
     }
 
@@ -126,7 +126,7 @@ export async function llmNode(
       if (chunk.tokensUsed) {
         tokensUsed = chunk.tokensUsed;
         if (writer) {
-          writer.push({ type: 'usage', data: { tokensUsed: chunk.tokensUsed } });
+          writer({ type: 'usage', data: { tokensUsed: chunk.tokensUsed } });
         }
       }
       // Collect tool calls from final chunk

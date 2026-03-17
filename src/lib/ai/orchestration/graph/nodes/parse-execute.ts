@@ -56,7 +56,7 @@ export async function parseAndExecuteNode(
   // ── 3. Emit artifact events ───────────────────────────────────────────
   for (const artifact of parsed.artifacts) {
     if (writer) {
-      writer.push({
+      writer({
         type: 'artifact',
         data: { name: artifact.name, type: artifact.type },
       });
@@ -87,7 +87,7 @@ export async function parseAndExecuteNode(
 
   // ── 6. Emit done event ────────────────────────────────────────────────
   if (writer) {
-    writer.push({
+    writer({
       type: 'done',
       data: {
         messageId: savedMessage.id,

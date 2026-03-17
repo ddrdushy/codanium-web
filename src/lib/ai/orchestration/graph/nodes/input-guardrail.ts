@@ -34,7 +34,7 @@ export async function inputGuardrailNode(
   if (result.blocked) {
     const writer = (config as any).writer;
     if (writer) {
-      writer.push({
+      writer({
         type: 'error',
         data: {
           message: result.reason ?? 'Message blocked by safety guardrails.',
