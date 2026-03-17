@@ -255,18 +255,26 @@ export default function ChatPage() {
   // On new projects, BA generates its first message in the background (~5s).
   // The page may load before BA finishes, showing only the system message.
   // Poll every 2s until an AGENT message appears, then stop.
+  // IMPORTANT: Do NOT depend on `messages` — it changes during streaming
+  // and would cause re-render storms / browser crashes.
+  const [needsKickoffPoll, setNeedsKickoffPoll] = useState(false);
   useEffect(() => {
     if (!loaded) return;
-    // Only poll if we have messages but none from an agent
     const hasAgentMsg = messages.some(m => m.role === 'agent');
-    if (hasAgentMsg || messages.length === 0) return;
+    if (!hasAgentMsg && messages.length > 0) {
+      setNeedsKickoffPoll(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]); // Only check once on initial load
+
+  useEffect(() => {
+    if (!needsKickoffPoll) return;
 
     const interval = setInterval(() => {
       fetch(`/api/projects/${projectId}/chat`)
         .then(r => r.json())
         .then((data: any[]) => {
           if (Array.isArray(data) && data.some((m: any) => m.role === 'AGENT')) {
-            // Deduplicate
             const seen = new Set<string>();
             const unique = data.filter((m: any) => {
               if (seen.has(m.id)) return false;
@@ -285,16 +293,16 @@ export default function ChatPage() {
               thinking: m.thinking ?? undefined,
               timestamp: formatTime(m.createdAt),
             })));
+            setNeedsKickoffPoll(false);
             clearInterval(interval);
           }
         })
         .catch(() => {});
     }, 2000);
 
-    // Stop polling after 30s max
-    const timeout = setTimeout(() => clearInterval(interval), 30000);
+    const timeout = setTimeout(() => { clearInterval(interval); setNeedsKickoffPoll(false); }, 30000);
     return () => { clearInterval(interval); clearTimeout(timeout); };
-  }, [loaded, messages, projectId]);
+  }, [needsKickoffPoll, projectId]);
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/artifacts`)
