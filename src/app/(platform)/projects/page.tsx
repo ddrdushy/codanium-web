@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { fetchProjects } from '@/lib/api';
+import { fetchProjects, deleteProject } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { mockProjects } from '@/lib/mock-data';
+
 import { Project, ProjectStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,8 @@ import {
   Plus, Search, Zap, Bot, Kanban, Clock, CheckCircle2,
   Pause, Archive, TrendingUp, ArrowRight, BarChart3,
   FolderOpen, LayoutGrid, List, Filter, Settings,
-  User, CreditCard, Key, Shield, LogOut, ChevronDown
+  User, CreditCard, Key, Shield, LogOut, ChevronDown,
+  Trash2, X
 } from 'lucide-react';
 import { CreateProjectModal } from '@/components/modals/create-project-modal';
 import { PlatformSettingsDrawer } from '@/components/modals/platform-settings-drawer';
@@ -40,12 +41,14 @@ export default function ProjectsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchProjects()
       .then(setProjects)
-      .catch(() => { setProjects(mockProjects); })
+      .catch(() => { setProjects([]); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -64,6 +67,19 @@ export default function ProjectsPage() {
   const userEmail = session?.user?.email || '';
   const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const isAdmin = (session?.user as { role?: string })?.role === 'admin';
+
+  const handleDelete = useCallback(async (id: string) => {
+    setDeleting(true);
+    try {
+      await deleteProject(id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+      setDeleteConfirm(null);
+    } catch {
+      // Could show a toast here
+    } finally {
+      setDeleting(false);
+    }
+  }, []);
 
   const filteredProjects = projects.filter(p => {
     if (filterMode !== 'all' && p.status !== filterMode) return false;
@@ -288,7 +304,7 @@ export default function ProjectsPage() {
         {viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredProjects.map((project, i) => (
-              <ProjectCard key={project.id} project={project} index={i} />
+              <ProjectCard key={project.id} project={project} index={i} onDelete={(id) => setDeleteConfirm(id)} />
             ))}
             {/* New Project card */}
             <motion.div
@@ -310,7 +326,7 @@ export default function ProjectsPage() {
         ) : (
           <div className="space-y-2">
             {filteredProjects.map((project, i) => (
-              <ProjectRow key={project.id} project={project} index={i} />
+              <ProjectRow key={project.id} project={project} index={i} onDelete={(id) => setDeleteConfirm(id)} />
             ))}
           </div>
         )}
@@ -318,11 +334,65 @@ export default function ProjectsPage() {
 
       <CreateProjectModal open={showCreateModal} onOpenChange={setShowCreateModal} />
       <PlatformSettingsDrawer open={showSettings} onOpenChange={setShowSettings} />
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => !deleting && setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl border border-border bg-[var(--surface)] p-6 shadow-2xl shadow-black/30"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Delete Project</h3>
+                  <p className="text-xs text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground mb-6">
+                Are you sure you want to delete <span className="font-semibold text-foreground">{projects.find(p => p.id === deleteConfirm)?.name}</span>? All cards, documents, agents, and generated code will be permanently removed.
+              </p>
+              <div className="flex items-center gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteConfirm(null)}
+                  disabled={deleting}
+                  className="h-9 px-4"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleDelete(deleteConfirm)}
+                  disabled={deleting}
+                  className="h-9 px-4 bg-red-500 hover:bg-red-600 text-white border-0"
+                >
+                  {deleting ? 'Deleting...' : 'Delete Project'}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function ProjectCard({ project, index }: { project: Project; index: number }) {
+function ProjectCard({ project, index, onDelete }: { project: Project; index: number; onDelete: (id: string) => void }) {
   const status = statusConfig[project.status];
   const StatusIcon = status.icon;
 
@@ -331,6 +401,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
+      className="relative group/card"
     >
       <Link
         href={`/project/${project.id}`}
@@ -390,11 +461,19 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
           </span>
         </div>
       </Link>
+      {/* Delete button — appears on hover */}
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(project.id); }}
+        className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-[var(--surface)] border border-border opacity-0 group-hover/card:opacity-100 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 text-muted-foreground/40 flex items-center justify-center transition-all z-10"
+        title="Delete project"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
     </motion.div>
   );
 }
 
-function ProjectRow({ project, index }: { project: Project; index: number }) {
+function ProjectRow({ project, index, onDelete }: { project: Project; index: number; onDelete: (id: string) => void }) {
   const status = statusConfig[project.status];
   const StatusIcon = status.icon;
 
@@ -403,6 +482,7 @@ function ProjectRow({ project, index }: { project: Project; index: number }) {
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.04 }}
+      className="group/row"
     >
       <Link
         href={`/project/${project.id}`}
@@ -443,6 +523,14 @@ function ProjectRow({ project, index }: { project: Project; index: number }) {
           <span className="flex items-center gap-1"><Bot className="w-3 h-3" />{project.active_agents}/{project.total_agents}</span>
           <span className="flex items-center gap-1 w-20"><Clock className="w-3 h-3" />{project.last_activity}</span>
         </div>
+        {/* Delete button */}
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(project.id); }}
+          className="w-7 h-7 rounded-lg opacity-0 group-hover/row:opacity-100 hover:bg-red-500/10 hover:text-red-400 text-muted-foreground/30 flex items-center justify-center transition-all shrink-0"
+          title="Delete project"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
         <ArrowRight className="w-4 h-4 text-muted-foreground/20 group-hover:text-amber transition-colors shrink-0" />
       </Link>
     </motion.div>

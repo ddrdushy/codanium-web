@@ -26,7 +26,7 @@ export interface GateResult {
 }
 
 interface GatePrerequisite {
-  type: 'document_approved' | 'wireframes_approved' | 'cards_exist';
+  type: 'document_approved' | 'wireframes_approved' | 'cards_exist' | 'scaffold_exists';
   /** For document_approved: which document type (BRD, SDD, etc.) */
   docType?: string;
   /** Human-readable description of what's needed. */
@@ -113,6 +113,25 @@ const DELEGATION_GATES: Record<string, GatePrerequisite[]> = {
       message: 'Wireframes must be approved before delegating to the Product Manager.',
     },
   ],
+  'UX→DO': [
+    {
+      type: 'wireframes_approved',
+      message: 'Wireframes must be approved before scaffolding the project.',
+    },
+  ],
+  'DO→TL': [
+    {
+      type: 'cards_exist',
+      message: 'Project scaffold must be created before task breakdown.',
+    },
+  ],
+  'TL→QA': [
+    {
+      type: 'document_approved',
+      docType: 'SDD',
+      message: 'SDD must be approved before QA testing.',
+    },
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -149,6 +168,16 @@ async function checkWireframesApproved(projectId: string): Promise<boolean> {
   });
   // Allow gate to pass if at least one is approved (some projects may not have wireframes yet)
   return !!approved;
+}
+
+async function checkScaffoldExists(projectId: string): Promise<boolean> {
+  const scaffoldArtifact = await prisma.artifact.findFirst({
+    where: {
+      projectId,
+      name: 'package.json',
+    },
+  });
+  return !!scaffoldArtifact;
 }
 
 async function checkCardsExist(projectId: string): Promise<boolean> {
@@ -188,6 +217,14 @@ async function evaluatePrerequisite(
         passed,
         reason: passed ? undefined : prereq.message,
         blockedBy: passed ? undefined : 'Task cards',
+      };
+    }
+    case 'scaffold_exists': {
+      const passed = await checkScaffoldExists(projectId);
+      return {
+        passed,
+        reason: passed ? undefined : prereq.message,
+        blockedBy: passed ? undefined : 'Project scaffold (package.json)',
       };
     }
     default:

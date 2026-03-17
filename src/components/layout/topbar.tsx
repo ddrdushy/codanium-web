@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { mockSDLCProgress, mockAgents } from '@/lib/mock-data';
+
 import { useProjectStore } from '@/lib/project-store';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -41,9 +41,9 @@ export function Topbar() {
     }
   }, [currentProjectId, fetchProjectContext]);
 
-  // Use store data if available, fall back to mocks
-  const sdlcProgress = storeStages.length > 0 ? storeStages : mockSDLCProgress;
-  const agents = storeAgents.length > 0 ? storeAgents : mockAgents;
+  // Use store data only (no mock fallback)
+  const sdlcProgress = storeStages;
+  const agents = storeAgents;
   const activeAgents = agents.filter(a => a.status === 'working');
 
   useEffect(() => setMounted(true), []);

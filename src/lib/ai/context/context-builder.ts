@@ -88,7 +88,7 @@ const SOURCE_PRIORITY: Record<ContextSource, number> = {
   project_memory:  7, // accumulated knowledge
   sdlc_stages:     5, // phase awareness
   decisions:       4, // important but often empty
-  artifacts:       3, // code context
+  artifacts:       8, // critical for devs to see existing files
   chat_history:    6, // handled separately as recentHistory
   agents_status:   2, // least critical
   wireframes:      2, // least critical
@@ -644,14 +644,20 @@ function formatArtifacts(data: unknown): string {
   }>;
   if (artifacts.length === 0) return '';
 
-  const lines = artifacts.map((a) => {
-    const preview = a.content
-      ? `\n    ${a.content.slice(0, 500)}${a.content.length > 500 ? '...' : ''}`
-      : '';
-    return `  ${a.name} (${a.type}) v${a.version} by ${a.ownerAgent}${preview}`;
-  });
+  const lines = ['EXISTING PROJECT FILES:'];
+  lines.push('These files already exist in the project. Reference them, import from them, and build upon them.');
+  lines.push('');
 
-  return [`MODULE ARTIFACTS (${artifacts.length}):`, ...lines].join('\n');
+  for (const a of artifacts) {
+    lines.push(`\u{1F4C4} ${a.name} (${a.type}, v${a.version}, by ${a.ownerAgent})`);
+    if (a.content) {
+      // Show first 300 chars of content so agents can see imports/exports
+      const preview = a.content.slice(0, 300);
+      lines.push(`    ${preview}${a.content.length > 300 ? '...' : ''}`);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 function formatProjectMemory(data: unknown): string {

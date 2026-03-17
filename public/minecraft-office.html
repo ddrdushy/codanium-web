@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Office - Minecraft Style</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    overflow: hidden;
+    font-family: 'Press Start 2P', monospace;
+    cursor: crosshair;
+  }
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #ui-overlay {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    color: #fff; font-size: 10px; text-align: center; z-index: 10;
+    text-shadow: 2px 2px 0 #000; pointer-events: none;
+  }
+  #ui-overlay h1 { font-size: 14px; color: #5dfc5d; margin-bottom: 4px; letter-spacing: 2px; }
+  #ui-overlay .sub { font-size: 8px; color: #aaa; }
+  #status-bar {
+    position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.75); border: 2px solid #555; border-radius: 4px;
+    padding: 8px 16px; color: #5dfc5d; font-size: 8px;
+    font-family: 'Press Start 2P', monospace; z-index: 10; pointer-events: none;
+    white-space: nowrap;
+  }
+  #agent-panel {
+    position: fixed; right: 12px; top: 50%; transform: translateY(-50%);
+    background: rgba(0,0,0,0.85); border: 2px solid #444; border-radius: 6px;
+    padding: 10px; z-index: 10; max-height: 80vh; overflow-y: auto; width: 175px;
+    transition: width 0.3s ease, padding 0.3s ease;
+  }
+  #agent-panel.collapsed { width: 40px; padding: 10px 6px; overflow: hidden; }
+  #agent-panel.collapsed #roster { display: none; }
+  #agent-panel.collapsed h3 span { display: none; }
+  #roster-header {
+    display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+    margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 6px;
+  }
+  #roster-header h3 {
+    color: #5dfc5d; font-size: 8px; font-family: 'Press Start 2P', monospace;
+    margin: 0; white-space: nowrap;
+  }
+  #roster-toggle {
+    color: #888; font-size: 12px; background: none; border: none;
+    cursor: pointer; font-family: 'Press Start 2P', monospace; padding: 0 2px;
+  }
+  #roster-toggle:hover { color: #5dfc5d; }
+  .ac { display: flex; align-items: center; gap: 8px; padding: 5px 4px;
+    border-bottom: 1px solid #222; cursor: pointer; border-radius: 3px; }
+  .ac:hover { background: rgba(93,252,93,0.1); }
+  .ad { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; animation: pd 2s infinite; }
+  @keyframes pd { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .an { color: #fff; font-size: 7px; display: block; font-family: 'Press Start 2P', monospace; }
+  .ar { color: #888; font-size: 6px; display: block; margin-top: 2px; font-family: 'Press Start 2P', monospace; }
+
+  /* ========== CHAT PANEL ========== */
+  #chat-panel {
+    position: fixed; left: 16px; bottom: 52px;
+    width: 340px; height: 380px;
+    background: rgba(10,10,20,0.92);
+    border: 2px solid #444; border-radius: 8px;
+    display: flex; flex-direction: column;
+    z-index: 20; backdrop-filter: blur(8px);
+    transition: height 0.3s ease, opacity 0.3s ease;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  #chat-panel.minimized { height: 38px; overflow: hidden; }
+  #chat-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-bottom: 1px solid #333;
+    cursor: pointer; flex-shrink: 0;
+  }
+  #chat-header .title {
+    color: #5dfc5d; font-size: 8px; font-family: 'Press Start 2P', monospace;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #chat-header .title .dot { width: 6px; height: 6px; border-radius: 50%; background: #5dfc5d; animation: pd 1.5s infinite; }
+  #chat-header .toggle {
+    color: #888; font-size: 14px; background: none; border: none;
+    cursor: pointer; font-family: 'Press Start 2P', monospace; padding: 0 4px;
+  }
+  #chat-header .toggle:hover { color: #5dfc5d; }
+  #chat-messages {
+    flex: 1; overflow-y: auto; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+    scrollbar-width: thin; scrollbar-color: #333 transparent;
+  }
+  .chat-msg {
+    max-width: 85%; padding: 8px 10px; border-radius: 6px;
+    font-size: 10px; line-height: 1.5; word-wrap: break-word;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .chat-msg.user {
+    align-self: flex-end; background: #2a5a3c; color: #c8ffc8;
+    border-bottom-right-radius: 2px;
+  }
+  .chat-msg.agent {
+    align-self: flex-start; background: #2a2a3e; color: #ddd;
+    border-bottom-left-radius: 2px;
+  }
+  .chat-msg .agent-label {
+    font-size: 7px; color: #5dfc5d; font-family: 'Press Start 2P', monospace;
+    margin-bottom: 4px; display: block;
+  }
+  .chat-msg.system {
+    align-self: center; background: rgba(93,252,93,0.1); color: #5dfc5d;
+    font-size: 8px; font-family: 'Press Start 2P', monospace;
+    text-align: center; max-width: 100%; border: 1px solid rgba(93,252,93,0.2);
+  }
+  /* Markdown styles inside chat */
+  .chat-msg strong, .chat-msg b { color: #fff; font-weight: 700; }
+  .chat-msg em, .chat-msg i { font-style: italic; color: #bbb; }
+  .chat-msg code {
+    background: rgba(0,0,0,0.4); color: #5dfc5d; padding: 1px 4px;
+    border-radius: 3px; font-family: 'Courier New', monospace; font-size: 10px;
+  }
+  .chat-msg pre {
+    background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 4px;
+    padding: 6px 8px; margin: 4px 0; overflow-x: auto; font-size: 9px;
+  }
+  .chat-msg pre code { background: none; padding: 0; color: #c8ffc8; }
+  .chat-msg ul, .chat-msg ol { margin: 4px 0; padding-left: 16px; }
+  .chat-msg li { margin: 2px 0; }
+  .chat-msg h1,.chat-msg h2,.chat-msg h3,.chat-msg h4 {
+    color: #fff; margin: 6px 0 3px; font-weight: 700;
+  }
+  .chat-msg h1 { font-size: 13px; } .chat-msg h2 { font-size: 12px; }
+  .chat-msg h3 { font-size: 11px; } .chat-msg h4 { font-size: 10px; }
+  .chat-msg blockquote {
+    border-left: 3px solid #5dfc5d; padding-left: 8px; margin: 4px 0;
+    color: #aaa; font-style: italic;
+  }
+  .chat-msg hr { border: none; border-top: 1px solid #444; margin: 6px 0; }
+  #chat-input-area {
+    display: flex; gap: 6px; padding: 8px 10px;
+    border-top: 1px solid #333; flex-shrink: 0;
+  }
+  #chat-input {
+    flex: 1; background: #1a1a2e; border: 1px solid #444; border-radius: 6px;
+    color: #fff; padding: 8px 10px; font-size: 11px; outline: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    transition: border-color 0.2s;
+  }
+  #chat-input:focus { border-color: #5dfc5d; }
+  #chat-input::placeholder { color: #555; }
+  #chat-send {
+    background: #2a5a3c; border: 1px solid #3a7a4c; border-radius: 6px;
+    color: #5dfc5d; padding: 8px 14px; cursor: pointer;
+    font-family: 'Press Start 2P', monospace; font-size: 8px;
+    transition: all 0.2s;
+  }
+  #chat-send:hover { background: #3a7a4c; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui-overlay">
+  <h1>AGENT HEADQUARTERS</h1>
+  <div class="sub">[ AI Team Workspace - Live View ]</div>
+</div>
+<div id="status-bar"><span id="st">SYSTEMS ONLINE - ALL AGENTS ACTIVE</span></div>
+<div id="agent-panel">
+  <div id="roster-header" onclick="toggleRoster()">
+    <h3><span>TEAM ROSTER</span></h3>
+    <button id="roster-toggle">&lt;</button>
+  </div>
+  <div id="roster"></div>
+</div>
+
+<!-- Chat Panel -->
+<div id="chat-panel">
+  <div id="chat-header" onclick="toggleChat()">
+    <div class="title"><span class="dot"></span> COMMAND CENTER</div>
+    <button class="toggle" id="chat-toggle">_</button>
+  </div>
+  <div id="chat-messages"></div>
+  <div id="chat-input-area">
+    <input id="chat-input" type="text" placeholder="Tell your team what to build..." autocomplete="off" />
+    <button id="chat-send" onclick="sendMessage()">SEND</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ==================== CONFIG ====================
+const TILE = 24;
+const COLS = 30, ROWS = 19;
+let OX = 40, OY = 60; // office origin - will be centered
+
+const C = {
+  grass:['#4a8c2a','#3d7a22','#5a9c3a','#2d6a12'],
+  floor:'#b0a090', floorAlt:'#a89888',
+  wall:'#c8beb0', wallDk:'#9e9488', wallTop:'#d8cec0',
+  desk:'#8B6914', deskTop:'#a07828',
+  mon:'#222', monScr:'#1a3a5c',
+  plant:'#2d8c2a', pot:'#8B4513',
+  srv:'#333', srvLed:'#5dfc5d',
+  carpet:'#6a5a78', couch:'#6B4226', cushion:'#8B5A2B',
+};
+
+// ==================== PROJECT ID FROM URL ====================
+const urlParams = new URLSearchParams(window.location.search);
+const PROJECT_ID = urlParams.get('projectId') || 'prj-001';
+
+// ==================== AGENTS (mapped to real orchestration agent shortNames) ====================
+const agents = [
+  {id:'pm',shortName:'PM',name:'Alice',role:'PM',title:'Product Manager',color:'#e74c3c',shirt:'#2980b9',hair:'#8B4513',skin:'#f0c8a0',
+   msgs:['Prioritizing backlog','Defining milestones','Roadmap planning','Sprint scoping','Milestone review','Feature ranking']},
+  {id:'orc',shortName:'ORC',name:'Bob',role:'ORC',title:'Orchestrator',color:'#e67e22',shirt:'#27ae60',hair:'#333',skin:'#d4a574',
+   msgs:['Routing tasks...','Coordinating team','Multi-step plan','Status check','Agent delegation','Workflow sync']},
+  {id:'sd',shortName:'SD',name:'Carol',role:'SD',title:'Senior Developer',color:'#e67e22',shirt:'#8e44ad',hair:'#c0392b',skin:'#f5deb3',
+   msgs:['Complex feature','State management','Security impl','Performance fix','DB design','Code standards']},
+  {id:'sa',shortName:'SA',name:'Dave',role:'SA',title:'Solutions Architect',color:'#3498db',shirt:'#2c3e50',hair:'#1a1a1a',skin:'#c68642',
+   msgs:['System design','Tech stack decision','Cloud architecture','DB schema review','Integration plan','Scaling strategy']},
+  {id:'ba',shortName:'BA',name:'Eve',role:'BA',title:'Business Analyst',color:'#9b59b6',shirt:'#d35400',hair:'#f1c40f',skin:'#fce4c0',
+   msgs:['Gathering reqs','User story mapping','BRD document','Discovery phase','Feature analysis','Acceptance criteria']},
+  {id:'jd1',shortName:'JD',name:'Frank',role:'JD',title:'Junior Developer',color:'#1abc9c',shirt:'#c0392b',hair:'#2c3e50',skin:'#deb887',
+   msgs:['Implementing feature','Writing code','Building component','API endpoint','Form validation','Unit tests']},
+  {id:'ux',shortName:'UX',name:'Grace',role:'UX',title:'UI/UX Designer',color:'#1abc9c',shirt:'#16a085',hair:'#6c3483',skin:'#f0c8a0',
+   msgs:['Wireframe design','User flow','Component design','Accessibility check','Design system','Layout planning']},
+  {id:'qa',shortName:'QA',name:'Hank',role:'QA',title:'QA Engineer',color:'#1abc9c',shirt:'#2c3e50',hair:'#873600',skin:'#c68642',
+   msgs:['Test planning','Bug report','Test cases','E2E testing','Regression check','Quality audit']},
+  {id:'at',shortName:'AT',name:'Ivy',role:'AT',title:'Automation Test',color:'#f39c12',shirt:'#3498db',hair:'#1a1a1a',skin:'#d4a574',
+   msgs:['Writing tests','Jest specs','Cypress E2E','Test pyramid','Coverage check','CI test suite']},
+  {id:'sec',shortName:'SEC',name:'Jake',role:'SEC',title:'Security & Compliance',color:'#f39c12',shirt:'#e74c3c',hair:'#f5deb3',skin:'#fce4c0',
+   msgs:['Security scan','OWASP check','Auth review','Data protection','Vulnerability fix','Compliance audit']},
+  {id:'do',shortName:'DO',name:'Karl',role:'DO',title:'DevOps Engineer',color:'#95a5a6',shirt:'#34495e',hair:'#333',skin:'#deb887',
+   msgs:['CI/CD pipeline','Docker build','K8s deploy','Blue-green deploy','Build config','Container setup']},
+  {id:'pe',shortName:'PE',name:'Luna',role:'PE',title:'Platform Engineer',color:'#95a5a6',shirt:'#7f8c8d',hair:'#c0392b',skin:'#f0c8a0',
+   msgs:['Cloud infra','VPC setup','Load balancer','Terraform plan','Right-sizing','Env management']},
+];
+
+// Map real agent shortNames to office character IDs for visual feedback
+const shortNameToId = {};
+agents.forEach(a => { shortNameToId[a.shortName] = a.id; });
+
+agents.forEach(a => {
+  a.x = 0; a.y = 0;
+  a.homeX = 0; a.homeY = 0; // home desk position
+  a.targetX = null; a.targetY = null; // walk target
+  a.walking = false; a.walkBack = false;
+  a.walkSpeed = 0.6 + Math.random() * 0.3;
+  a.legAnim = 0; // leg swing while walking
+  a.phase = Math.random()*Math.PI*2;
+  a.tspd = 0.8+Math.random()*0.4;
+  a.bTimer = 9999; // no auto-bubble until real status loads
+  a.bMsg = '';
+  a.bOp = 0; a.bTgt = 0;
+  a.msgIdx = Math.floor(Math.random()*a.msgs.length);
+  a.lookT = Math.random()*200;
+  a.realStatus = 'IDLE'; // real status from API
+  a.realTask = '';        // real current task from API
+  a.inSocialRoom = false; // whether agent has been moved to social area
+  a.onStage = false;      // whether agent is on center stage responding
+});
+
+// ==================== REAL AGENT STATUS POLLING ====================
+// Social room positions (tile coords) for idle agents
+const socialSpots = [
+  // Cafeteria spots
+  {tx:9,ty:14.5},{tx:11,ty:14.5},{tx:10,ty:15.5},{tx:12,ty:15.5},
+  // Nap Room spots
+  {tx:16,ty:14.5},{tx:18,ty:14.5},{tx:17,ty:15.5},
+  // Terrace spots
+  {tx:26,ty:14.5},{tx:27,ty:14.5},{tx:26,ty:15.5},{tx:28,ty:14.5},
+  // Meeting Room
+  {tx:22,ty:14.5},{tx:23,ty:14.5},
+];
+let socialAssignments = {}; // agentId -> socialSpot index
+
+function pollAgentStatus() {
+  const apiBase = window.location.origin;
+  fetch(`${apiBase}/api/projects/${PROJECT_ID}/agents`)
+    .then(r => r.ok ? r.json() : Promise.reject('API error'))
+    .then(data => {
+      const apiAgents = data.agents || data || [];
+      apiAgents.forEach(apiAgent => {
+        const shortName = apiAgent.shortName;
+        const officeAgent = agents.find(a => a.shortName === shortName);
+        if (!officeAgent) return;
+
+        const newStatus = (apiAgent.status || 'IDLE').toUpperCase();
+        const newTask = apiAgent.currentTask || '';
+        const wasWorking = officeAgent.realStatus === 'WORKING';
+        const isWorking = newStatus === 'WORKING' || newStatus === 'WAITING';
+
+        officeAgent.realStatus = newStatus;
+        officeAgent.realTask = newTask;
+
+        if (isWorking && !wasWorking) {
+          // Agent started working → move back to desk, show task bubble
+          officeAgent.inSocialRoom = false;
+          delete socialAssignments[officeAgent.id];
+          // Reset home to original desk
+          positionAgents();
+          if (officeAgent.walking) {
+            // Cancel walk, snap to home
+            officeAgent.walking = false;
+            officeAgent.walkBack = false;
+            officeAgent.x = officeAgent.homeX;
+            officeAgent.y = officeAgent.homeY;
+          }
+          officeAgent.bMsg = newTask.slice(0, 28) || 'Working...';
+          officeAgent.bTgt = 1; officeAgent.bOp = 0; officeAgent.bTimer = 400;
+        } else if (isWorking && wasWorking && newTask) {
+          // Still working, update task
+          officeAgent.bMsg = newTask.slice(0, 28);
+          officeAgent.bTgt = 1; officeAgent.bTimer = 300;
+        } else if (!isWorking && !officeAgent.inSocialRoom && !officeAgent.walking) {
+          // Agent is idle → move to a social room
+          moveToSocialRoom(officeAgent);
+        }
+      });
+      // Update roster panel status dots
+      updateRosterStatus();
+    })
+    .catch(() => {
+      // API offline — use fallback idle animations (gentle)
+    });
+}
+
+function moveToSocialRoom(agent) {
+  // Find an unoccupied social spot
+  for (let i = 0; i < socialSpots.length; i++) {
+    const taken = Object.values(socialAssignments).includes(i);
+    if (!taken) {
+      socialAssignments[agent.id] = i;
+      agent.inSocialRoom = true;
+      const spot = socialSpots[i];
+      const tx = OX + spot.tx * TILE;
+      const ty = OY + spot.ty * TILE;
+      walkAgentTo(agent.id, tx, ty);
+      // Show chill bubble
+      const chillMsgs = ['Coffee break','Relaxing...','On break','Chilling','Snack time','Stretching'];
+      agent.bMsg = chillMsgs[Math.floor(Math.random()*chillMsgs.length)];
+      agent.bTgt = 1; agent.bOp = 0; agent.bTimer = 600;
+      return;
+    }
+  }
+}
+
+function updateRosterStatus() {
+  agents.forEach(a => {
+    const dot = document.getElementById('dot-' + a.id);
+    if (!dot) return;
+    if (a.realStatus === 'WORKING') {
+      dot.style.background = '#2ecc71'; // green
+    } else if (a.realStatus === 'WAITING') {
+      dot.style.background = '#f39c12'; // amber
+    } else if (a.realStatus === 'BLOCKED') {
+      dot.style.background = '#e74c3c'; // red
+    } else {
+      dot.style.background = '#666'; // gray = idle
+    }
+  });
+}
+
+// Poll every 5 seconds
+setInterval(pollAgentStatus, 5000);
+// Initial poll after 2s (let page load first)
+setTimeout(pollAgentStatus, 2000);
+
+// Room defs in tile coords - Full connected office
+const rooms = [
+  // Top row
+  {x:0,y:0,w:5,h:5,label:'PM Office',type:'office'},
+  {x:5,y:0,w:2,h:5,label:'',type:'hall'},          // hallway connector
+  {x:7,y:0,w:7,h:5,label:'Leads & Ops',type:'office'},
+  {x:14,y:0,w:1,h:5,label:'',type:'hall'},          // hallway connector
+  {x:15,y:0,w:5,h:5,label:'Architect',type:'office'},
+  {x:20,y:0,w:1,h:7,label:'',type:'hall'},          // hallway connector
+  {x:21,y:0,w:8,h:7,label:'Server Room',type:'server'},
+  // Main corridor
+  {x:0,y:5,w:29,h:1,label:'',type:'hall'},          // main corridor
+  // Middle row
+  {x:0,y:6,w:5,h:5,label:'BA Office',type:'office'},
+  {x:5,y:6,w:2,h:5,label:'',type:'hall'},           // hallway connector
+  {x:7,y:6,w:13,h:5,label:'Development Floor',type:'office'},
+  {x:20,y:7,w:1,h:4,label:'',type:'hall'},          // hallway connector
+  {x:21,y:7,w:4,h:4,label:'Archives',type:'archives'},
+  {x:25,y:7,w:4,h:4,label:'',type:'hall'},
+  // Bottom corridor
+  {x:0,y:11,w:29,h:1,label:'',type:'hall'},         // bottom corridor
+  // Bottom row
+  {x:0,y:12,w:7,h:6,label:'QA & Security',type:'office'},
+  {x:7,y:12,w:1,h:6,label:'',type:'hall'},          // connector
+  {x:8,y:12,w:6,h:6,label:'Cafeteria',type:'cafe'},
+  {x:14,y:12,w:1,h:6,label:'',type:'hall'},         // connector
+  {x:15,y:12,w:5,h:6,label:'Nap Room',type:'nap'},
+  {x:20,y:12,w:1,h:6,label:'',type:'hall'},         // connector
+  {x:21,y:12,w:4,h:6,label:'Meeting Room',type:'office'},
+  {x:25,y:12,w:4,h:6,label:'Terrace',type:'terrace'},
+];
+
+function positionAgents() {
+  const t = TILE;
+  const set = (id,tx,ty) => {
+    const a=agents.find(a=>a.id===id);
+    const px=OX+tx*t, py=OY+ty*t;
+    a.homeX=px; a.homeY=py;
+    if(!a.walking){ a.x=px; a.y=py; }
+  };
+  set('pm',  2, 2.5);    // PM Office
+  set('orc', 9, 2.5);    // Tech Leads area - Orchestrator
+  set('sd',  12, 2.5);   // Tech Leads area - Senior Developer
+  set('sa',  17, 2.5);   // Architect room
+  set('ba',  2, 8.5);    // BA Office
+  set('jd1', 9, 8.5);    // Dev Floor - Junior Developer
+  set('ux',  12, 8.5);   // Dev Floor - UI/UX Designer
+  set('qa',  15, 8.5);   // Dev Floor - QA Engineer
+  set('at',  2, 14.5);   // Jr Workspace - Automation Tester
+  set('sec', 5, 14.5);   // Jr Workspace - Security
+  set('do',  23, 5.5);   // Server Room - DevOps
+  set('pe',  26, 5.5);   // Server Room - Platform Engineer
+}
+
+function centerOffice() {
+  // Account for chat panel (400px left) and roster panel (200px right)
+  const availW = canvas.width;
+  const officeW = COLS * TILE;
+  OX = Math.max(20, (availW - officeW) / 2);
+  OY = Math.max(50, (canvas.height - ROWS*TILE) / 2);
+  positionAgents();
+}
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  centerOffice();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Start all agents in social rooms — TELEPORT (not walk) to avoid desk flash
+// Real status polling will walk working ones back to desks
+setTimeout(() => {
+  let spotIdx = 0;
+  agents.forEach(a => {
+    if (a.realStatus !== 'WORKING' && a.realStatus !== 'WAITING') {
+      // Teleport directly instead of walking
+      for (let i = spotIdx; i < socialSpots.length; i++) {
+        const taken = Object.values(socialAssignments).includes(i);
+        if (!taken) {
+          socialAssignments[a.id] = i;
+          a.inSocialRoom = true;
+          const spot = socialSpots[i];
+          a.x = OX + spot.tx * TILE;
+          a.y = OY + spot.ty * TILE;
+          a.walking = false;
+          const chillMsgs = ['Coffee break','Relaxing...','On break','Chilling','Snack time','Stretching'];
+          a.bMsg = chillMsgs[Math.floor(Math.random()*chillMsgs.length)];
+          a.bTgt = 1; a.bOp = 0; a.bTimer = 600;
+          spotIdx = i + 1;
+          break;
+        }
+      }
+    }
+  });
+}, 100);
+
+// ==================== DRAW HELPERS ====================
+function px(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(x|0,y|0,w|0,h|0); }
+function shade(c,n) {
+  let r=parseInt(c.slice(1,3),16)+n, g=parseInt(c.slice(3,5),16)+n, b=parseInt(c.slice(5,7),16)+n;
+  return `rgb(${Math.max(0,Math.min(255,r))},${Math.max(0,Math.min(255,g))},${Math.max(0,Math.min(255,b))})`;
+}
+function rr(x,y,w,h,r) {
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r); ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+// ==================== ENVIRONMENT ====================
+function drawGrass() {
+  ctx.fillStyle='#1a1a2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  const gx=OX-36, gy=OY-36, gw=COLS*TILE+72, gh=ROWS*TILE+72;
+  for(let y=0;y<gh;y+=TILE) for(let x=0;x<gw;x+=TILE) {
+    ctx.fillStyle=C.grass[((x/TILE|0)+(y/TILE|0))%4];
+    ctx.fillRect(gx+x,gy+y,TILE,TILE);
+  }
+}
+
+function drawFloor() {
+  rooms.forEach(r => {
+    for(let y=0;y<r.h;y++) for(let x=0;x<r.w;x++) {
+      let fc;
+      const alt = (x+y)%2;
+      switch(r.type) {
+        case 'hall': fc = alt ? '#8a8070' : '#7a7060'; break;
+        case 'cafe': fc = alt ? '#c49a6c' : '#b48a5c'; break;
+        case 'nap': fc = alt ? '#5a4a68' : '#4a3a58'; break;
+        case 'terrace': fc = alt ? '#6a9a5a' : '#5a8a4a'; break;
+        case 'server': fc = alt ? '#3a3a4a' : '#2a2a3a'; break;
+        case 'archives': fc = alt ? '#8a7a60' : '#7a6a50'; break;
+        default: fc = alt ? C.floorAlt : C.floor;
+      }
+      px(OX+(r.x+x)*TILE, OY+(r.y+y)*TILE, TILE, TILE, fc);
+    }
+  });
+}
+
+function drawWalls() {
+  const wh=6;
+  // Draw outer building border
+  const bx=OX, by=OY, bw=29*TILE, bh=18*TILE;
+  // Top wall
+  px(bx-4,by-wh-2,bw+8,wh+2,C.wallTop); px(bx-4,by-wh-2,bw+8,2,C.wallDk);
+  // Left wall
+  px(bx-6,by-wh-2,6,bh+wh+6,C.wall); px(bx-6,by-wh-2,2,bh+wh+6,C.wallDk);
+  // Bottom wall
+  px(bx-4,by+bh,bw+8,4,C.wallDk);
+  // Right wall
+  px(bx+bw,by-wh-2,6,bh+wh+6,C.wallDk);
+
+  // Interior walls for labeled rooms only
+  rooms.forEach(r => {
+    if(r.type==='hall') return; // skip hallways
+    const rx=OX+r.x*TILE, ry=OY+r.y*TILE, rw=r.w*TILE, rh=r.h*TILE;
+    // Thin interior walls
+    ctx.fillStyle='rgba(180,170,160,0.4)';
+    ctx.fillRect(rx,ry,1,rh); // left
+    ctx.fillRect(rx+rw-1,ry,1,rh); // right
+    ctx.fillRect(rx,ry,rw,1); // top
+    ctx.fillRect(rx,ry+rh-1,rw,1); // bottom
+
+    if(r.label) {
+      ctx.font='7px "Press Start 2P"';
+      const tw=ctx.measureText(r.label).width, lx=rx+rw/2-tw/2, ly=ry+11;
+      ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(lx-3,ly-8,tw+6,12);
+      ctx.fillStyle=r.type==='nap'?'#b39ddb':r.type==='cafe'?'#ffb74d':r.type==='terrace'?'#81c784':r.type==='archives'?'#90caf9':'#ccc';
+      ctx.fillText(r.label,lx,ly);
+    }
+  });
+}
+
+// ==================== FURNITURE ====================
+function drawDesk(x,y,dual) {
+  px(x,y,34,18,C.desk); px(x+2,y+2,30,14,C.deskTop);
+  px(x+2,y+16,4,5,C.desk); px(x+28,y+16,4,5,C.desk);
+  if(dual) {
+    // Dual monitors
+    px(x+2,y-11,14,13,C.mon); px(x+4,y-9,10,8,C.monScr);
+    px(x+18,y-11,14,13,C.mon); px(x+20,y-9,10,8,C.monScr);
+    px(x+8,y+1,4,2,'#555'); px(x+22,y+1,4,2,'#555');
+  } else {
+    px(x+9,y-11,16,13,C.mon); px(x+11,y-9,12,8,C.monScr);
+    px(x+15,y+1,4,3,'#555');
+  }
+  // Keyboard
+  px(x+10,y+5,14,6,'#2a2a2a'); px(x+11,y+6,12,4,'#333');
+  // Mouse
+  px(x+26,y+7,4,5,'#2a2a2a');
+  // Coffee mug
+  px(x+3,y+4,4,5,'#8B4513'); px(x+3,y+3,4,2,'#a06030');
+}
+function drawChair(x,y) { px(x,y,12,12,'#444'); px(x+2,y+2,8,8,'#555'); }
+function drawPlant(x,y) { px(x+3,y+7,8,9,C.pot); px(x+1,y-1,12,9,C.plant); px(x+5,y-4,4,5,'#3aac3a'); }
+function drawRack(x,y,t) {
+  px(x,y,18,38,C.srv);
+  for(let i=0;i<4;i++) {
+    px(x+2,y+2+i*9,14,7,'#222');
+    px(x+12,y+3+i*9,3,3,Math.sin(t*0.003+i*1.5)>0?C.srvLed:'#1a3a1a');
+    px(x+8,y+3+i*9,3,3,Math.sin(t*0.005+i*2.1)>0.3?'#fc5d5d':'#3a1a1a');
+  }
+}
+function drawTable(x,y,w,h) { px(x,y,w,h,'#7a5a28'); px(x+2,y+2,w-4,h-4,'#9a7a48'); }
+function drawCouch(x,y) { px(x,y-5,46,7,C.couch); px(x,y,46,20,C.couch); px(x+3,y+3,40,14,C.cushion); }
+function drawCoffee(x,y,t) {
+  px(x,y,14,18,'#666'); px(x+2,y+2,10,8,'#444'); px(x+3,y+12,8,4,'#888');
+  const s=Math.sin(t*0.01)*2;
+  ctx.fillStyle='rgba(200,200,200,0.3)';
+  ctx.fillRect(x+5+s,y-4,3,4); ctx.fillRect(x+7,y-7-Math.abs(s),2,3);
+}
+
+function drawWhiteboard(x,y,t) {
+  px(x,y,30,22,'#eee'); px(x+1,y+1,28,20,'#f8f8f8');
+  // Scribbles
+  ctx.strokeStyle='#4a90d9'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x+4,y+5); ctx.lineTo(x+18,y+5); ctx.stroke();
+  ctx.strokeStyle='#e74c3c';
+  ctx.beginPath(); ctx.moveTo(x+4,y+10); ctx.lineTo(x+24,y+10); ctx.stroke();
+  ctx.strokeStyle='#2ecc71';
+  ctx.beginPath(); ctx.moveTo(x+4,y+15); ctx.lineTo(x+14,y+15); ctx.stroke();
+}
+
+function drawNotebook(x,y) {
+  px(x,y,10,12,'#3498db'); px(x+2,y+1,7,10,'#ecf0f1');
+  px(x+3,y+3,5,1,'#bdc3c7'); px(x+3,y+5,4,1,'#bdc3c7'); px(x+3,y+7,5,1,'#bdc3c7');
+}
+
+function drawTablet(x,y,t) {
+  px(x,y,12,16,'#222'); px(x+1,y+1,10,13,'#1a3a5c');
+  // Screen content flicker
+  const fl = Math.sin(t*0.004)*0.3+0.7;
+  ctx.fillStyle=`rgba(93,180,252,${fl*0.5})`; ctx.fillRect(x+2,y+2,8,4);
+  ctx.fillStyle=`rgba(252,93,93,${fl*0.3})`; ctx.fillRect(x+2,y+7,8,3);
+}
+
+function drawFurniture(t) {
+  const o=OX, y=OY, T=TILE;
+  // PM - single monitor + notebook
+  drawDesk(o+1.5*T,y+1.5*T); drawChair(o+2*T,y+3*T); drawPlant(o+4*T,y+1*T);
+  drawNotebook(o+1.6*T+3,y+1.5*T+4);
+  // TL - dual monitors
+  drawDesk(o+8.5*T,y+1.5*T,true); drawChair(o+9*T,y+3*T);
+  drawDesk(o+11.5*T,y+1.5*T,true); drawChair(o+12*T,y+3*T); drawPlant(o+13.5*T,y+1*T);
+  // SA - monitor + whiteboard
+  drawDesk(o+16.5*T,y+1.5*T); drawChair(o+17*T,y+3*T);
+  drawWhiteboard(o+15.2*T,y+0.3*T,t);
+  drawTable(o+16*T,y+3.8*T,50,22);
+  // BA - monitor + tablet
+  drawDesk(o+1.5*T,y+7.5*T); drawChair(o+2*T,y+9*T); drawPlant(o+4*T,y+7*T);
+  drawTablet(o+4.2*T,y+8*T,t);
+  // Sr Dev - dual monitors (coding setups)
+  drawDesk(o+8.5*T,y+7.5*T,true); drawChair(o+9*T,y+9*T);
+  drawDesk(o+11.5*T,y+7.5*T,true); drawChair(o+12*T,y+9*T);
+  drawDesk(o+14.5*T,y+7.5*T,true); drawChair(o+15*T,y+9*T);
+  drawPlant(o+17.5*T,y+7*T);
+  // Jr Dev - single monitors
+  drawDesk(o+1.5*T,y+13.5*T); drawChair(o+2*T,y+15*T);
+  drawDesk(o+4.5*T,y+13.5*T); drawChair(o+5*T,y+15*T);
+  drawNotebook(o+6.2*T,y+14*T);
+  drawPlant(o+6.5*T,y+13*T);
+  // Cafeteria - tables, vending machine, coffee
+  drawTable(o+9*T,y+13.5*T,40,18);
+  drawChair(o+9*T,y+12.8*T); drawChair(o+10.5*T,y+12.8*T); drawChair(o+12*T,y+12.8*T);
+  drawChair(o+9*T,y+15*T); drawChair(o+10.5*T,y+15*T); drawChair(o+12*T,y+15*T);
+  drawCoffee(o+13*T,y+13*T,t);
+  // Vending machine
+  px(o+13*T,y+15*T,14,22,'#4a4a5a'); px(o+13*T+2,y+15*T+2,10,8,'#2a5a3c');
+  px(o+13*T+2,y+15*T+12,10,4,'#555');
+  drawPlant(o+8.5*T,y+16.5*T);
+
+  // Nap Room - beds/couches
+  drawCouch(o+16*T,y+13.5*T);
+  drawCouch(o+16*T,y+16*T);
+  // Dim lamp
+  px(o+19*T,y+13*T,3,4,'#aa8833'); px(o+19*T+1,y+12.5*T,2,2,'#ffdd88');
+  drawPlant(o+19.5*T,y+16*T);
+  // Zzz indicator (drawn in render with animation)
+
+  // Meeting Room
+  drawWhiteboard(o+22*T,y+12.5*T,t);
+  drawTable(o+21.5*T,y+14.5*T,45,20);
+  drawChair(o+21.5*T,y+13.5*T); drawChair(o+23*T,y+13.5*T);
+  drawChair(o+21.5*T,y+16*T); drawChair(o+23*T,y+16*T);
+
+  // Terrace - outdoor area with bench and ashtray
+  drawPlant(o+25.5*T,y+12.5*T); drawPlant(o+28*T,y+12.5*T);
+  // Bench
+  px(o+26*T,y+14.5*T,40,10,'#7a5a28'); px(o+26*T+2,y+14.5*T-4,36,5,'#7a5a28');
+  // Small table
+  px(o+27*T,y+16*T,12,10,'#666'); px(o+27*T+2,y+16*T+2,8,6,'#888');
+  drawPlant(o+25.5*T,y+17*T); drawPlant(o+28*T,y+17*T);
+  // Archives / Document Room
+  // Filing cabinets
+  px(o+21.5*T,y+7.5*T,14,28,'#5a6a7a'); px(o+21.5*T+2,y+7.5*T+2,10,6,'#4a5a6a');
+  px(o+21.5*T+2,y+7.5*T+10,10,6,'#4a5a6a'); px(o+21.5*T+2,y+7.5*T+18,10,6,'#4a5a6a');
+  // Drawer handles
+  px(o+21.5*T+5,y+7.5*T+4,4,2,'#888'); px(o+21.5*T+5,y+7.5*T+12,4,2,'#888');
+  px(o+21.5*T+5,y+7.5*T+20,4,2,'#888');
+  // Second cabinet
+  px(o+23.2*T,y+7.5*T,14,28,'#5a6a7a'); px(o+23.2*T+2,y+7.5*T+2,10,6,'#4a5a6a');
+  px(o+23.2*T+2,y+7.5*T+10,10,6,'#4a5a6a'); px(o+23.2*T+2,y+7.5*T+18,10,6,'#4a5a6a');
+  px(o+23.2*T+5,y+7.5*T+4,4,2,'#888'); px(o+23.2*T+5,y+7.5*T+12,4,2,'#888');
+  // Document shelf
+  px(o+21.5*T,y+9.5*T,40,6,'#7a5a28'); // shelf
+  // Documents on shelf (colored folders)
+  px(o+21.8*T,y+9.2*T,5,6,'#e74c3c'); // red folder
+  px(o+22.3*T,y+9.2*T,5,6,'#3498db'); // blue folder
+  px(o+22.8*T,y+9.2*T,5,6,'#2ecc71'); // green folder
+  px(o+23.3*T,y+9.2*T,5,6,'#f39c12'); // yellow folder
+  px(o+23.8*T,y+9.2*T,5,6,'#9b59b6'); // purple folder
+
+  // Server Room - dual monitors for IT
+  drawRack(o+22*T,y+1*T,t); drawRack(o+24*T,y+1*T,t); drawRack(o+26*T,y+1*T,t);
+  drawDesk(o+22.5*T,y+4*T,true); drawDesk(o+25.5*T,y+4*T,true);
+  drawChair(o+23*T,y+5.5*T); drawChair(o+26*T,y+5.5*T);
+}
+
+// ==================== SCREEN GLOW ====================
+function drawScreens(t) {
+  const mpos = [
+    [1.5,1.5],[8.5,1.5],[11.5,1.5],[16.5,1.5], // top row (PM, TL1, TL2, SA)
+    [1.5,7.5],[8.5,7.5],[11.5,7.5],[14.5,7.5], // mid row (BA, Sr1, Sr2, Sr3)
+    [1.5,13.5],[4.5,13.5], // jr
+    [22.5,4],[25.5,4], // IT
+  ];
+  mpos.forEach((m,i) => {
+    const sx=OX+m[0]*TILE+11, sy=OY+m[1]*TILE-9, sw=12, sh=8;
+    const fl=0.7+Math.sin(t*0.005+i)*0.15;
+    ctx.fillStyle=`rgba(42,90,60,${fl})`; ctx.fillRect(sx,sy,sw,sh);
+    for(let l=0;l<3;l++) {
+      const lw=3+Math.sin(t*0.003+i*2+l*1.5)*3;
+      ctx.fillStyle=`rgba(93,252,93,${0.4+Math.sin(t*0.01+l)*0.2})`;
+      ctx.fillRect(sx+1,sy+1+l*2.5,Math.max(2,lw),1.5);
+    }
+    if(Math.sin(t*0.006+i)>0) {
+      ctx.fillStyle='#5dfc5d';
+      ctx.fillRect(sx+2+(t*0.02+i*7)%(sw-4), sy+1+((t*0.01+i)%3|0)*2.5, 1.5, 2);
+    }
+  });
+}
+
+// ==================== AGENT MOVEMENT ====================
+function updateAgentMovement() {
+  agents.forEach(a => {
+    if(!a.walking || a.targetX===null) return;
+    const dx = a.targetX - a.x, dy = a.targetY - a.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist < 3) {
+      a.x = a.targetX; a.y = a.targetY;
+      if(a.walkBack) {
+        // Arrived back home
+        a.walking = false; a.walkBack = false;
+        a.targetX = null; a.targetY = null;
+      } else if(a.inSocialRoom) {
+        // Idle agent arrived at social room — stay there
+        a.walking = false;
+        a.targetX = null; a.targetY = null;
+      } else if(a.onStage) {
+        // Agent arrived at center stage for responding — stay until done
+        a.walking = false;
+        a.targetX = null; a.targetY = null;
+      } else {
+        // Arrived at meeting target (delegation), wait then walk back
+        setTimeout(() => {
+          a.targetX = a.homeX; a.targetY = a.homeY;
+          a.walkBack = true;
+        }, 1500 + Math.random()*2000);
+        a.targetX = null; // pause movement
+      }
+    } else {
+      a.x += (dx/dist) * a.walkSpeed;
+      a.y += (dy/dist) * a.walkSpeed;
+      a.legAnim += 0.15;
+    }
+  });
+}
+
+function walkAgentTo(agentId, tx, ty) {
+  const a = agents.find(x => x.id === agentId);
+  if(!a || a.walking) return;
+  a.walking = true; a.walkBack = false;
+  a.targetX = tx; a.targetY = ty;
+  a.legAnim = 0;
+}
+
+// ==================== CHARACTER ====================
+function drawChar(a, t) {
+  const x=a.x;
+  const bob = a.walking ? 0 : Math.sin(t*0.004*a.tspd+a.phase)*1.5;
+  const typ = a.walking ? 0 : Math.sin(t*0.012*a.tspd+a.phase);
+  const s=2, cy=a.y+bob;
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.beginPath(); ctx.ellipse(x+6*s,a.y+16*s+2,7*s,2*s,0,0,Math.PI*2); ctx.fill();
+  // Legs - swing faster when walking
+  const lm = a.walking ? Math.sin(a.legAnim)*3 : Math.sin(t*0.003+a.phase);
+  px(x+2*s,cy+13*s,3*s,3*s+lm,'#2c3e50'); px(x+6*s,cy+13*s,3*s,3*s-lm,'#2c3e50');
+  // Body
+  px(x+1*s,cy+7*s,9*s,6*s,a.shirt); px(x+4*s,cy+8*s,3*s,s,shade(a.shirt,-20));
+  // Arms - swing when walking, type when sitting
+  const armSwing = a.walking ? Math.sin(a.legAnim)*2 : 0;
+  const aL = a.walking ? armSwing : (typ>0?-1:0);
+  const aR = a.walking ? -armSwing : (typ>0?0:-1);
+  px(x-s,cy+7*s+aL,2*s,5*s,a.skin); px(x+10*s,cy+7*s+aR,2*s,5*s,a.skin);
+  // Head
+  px(x+s,cy,9*s,7*s,a.skin);
+  // Hair
+  px(x,cy-s,11*s,3*s,a.hair); px(x,cy,2*s,3*s,a.hair); px(x+9*s,cy,2*s,3*s,a.hair);
+  // Eyes
+  const ex=Math.floor(Math.sin(t*0.001+a.lookT)*0.5);
+  px(x+3*s+ex,cy+3*s,2*s,2*s,'#fff'); px(x+7*s+ex,cy+3*s,2*s,2*s,'#fff');
+  if(Math.sin(t*0.002+a.phase*3)<0.95) {
+    px(x+3.5*s+ex,cy+3.5*s,s,s,'#111'); px(x+7.5*s+ex,cy+3.5*s,s,s,'#111');
+  }
+  // Mouth
+  px(x+4*s,cy+5.5*s,3*s,1,shade(a.skin,-40));
+  // Name tag
+  ctx.font='7px "Press Start 2P"';
+  const tag=a.role, tw=ctx.measureText(tag).width, tx=x+5.5*s-tw/2, ty=cy-8;
+  ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(tx-3,ty-8,tw+6,12);
+  ctx.fillStyle=a.color; ctx.fillText(tag,tx,ty);
+  // Monitor glow on face
+  if(typ>0.3){ctx.fillStyle='rgba(42,90,60,0.15)';ctx.fillRect(x+2*s,cy+2*s,7*s,5*s);}
+}
+
+// ==================== SPEECH BUBBLES ====================
+function updateBubbles() {
+  agents.forEach(a => {
+    a.bTimer--;
+    if(a.bTimer<=0) {
+      if(a.bOp>0.1) {
+        // Fade out bubble
+        a.bTgt=0; a.bTimer=30;
+      } else if(a.realStatus === 'WORKING') {
+        // Only cycle work messages for WORKING agents
+        a.bMsg = a.realTask ? a.realTask.slice(0,28) : a.msgs[a.msgIdx];
+        a.msgIdx=(a.msgIdx+1)%a.msgs.length;
+        a.bTgt=1; a.bTimer=300+Math.random()*200;
+      } else {
+        // Idle agents: occasional chill bubble
+        a.bTimer = 400 + Math.random()*600; // long delay
+      }
+    }
+    a.bOp+=(a.bTgt-a.bOp)*0.08;
+  });
+}
+
+function drawBubble(a) {
+  if(a.bOp<0.05) return;
+  const msg=a.bMsg;
+  ctx.save(); ctx.globalAlpha=a.bOp;
+  ctx.font='7px "Press Start 2P"';
+  const tw=ctx.measureText(msg).width, bw=tw+16, bh=18;
+  const bx=a.x+10-bw/2, by=a.y-38;
+  ctx.fillStyle='#fff'; rr(bx,by,bw,bh,4); ctx.fill();
+  ctx.strokeStyle='#333'; ctx.lineWidth=1.5; rr(bx,by,bw,bh,4); ctx.stroke();
+  // Tail
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.moveTo(a.x+4,by+bh); ctx.lineTo(a.x+10,by+bh+7); ctx.lineTo(a.x+14,by+bh); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(a.x+4,by+bh-0.5); ctx.lineTo(a.x+10,by+bh+7); ctx.lineTo(a.x+14,by+bh-0.5);
+  ctx.strokeStyle='#333'; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.fillRect(a.x+5,by+bh-2,8,3);
+  // Text
+  ctx.fillStyle='#222'; ctx.fillText(msg,bx+8,by+12);
+  // Typing dots
+  const dots='...'.slice(0,1+(Date.now()/400|0)%3);
+  ctx.fillStyle='#888'; ctx.fillText(dots,bx+tw+10,by+12);
+  ctx.restore();
+}
+
+// ==================== PARTICLES ====================
+const parts=[];
+function drawParticles(t) {
+  if(Math.random()<0.03) parts.push({
+    x:OX+Math.random()*COLS*TILE, y:OY+Math.random()*ROWS*TILE,
+    vx:(Math.random()-0.5)*0.3, vy:-0.3-Math.random()*0.5,
+    life:60+Math.random()*60, ml:60+Math.random()*60,
+    sz:1+Math.random()*2, tp:Math.random()>0.5
+  });
+  for(let i=parts.length-1;i>=0;i--) {
+    const p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--;
+    if(p.life<=0){parts.splice(i,1);continue;}
+    const al=p.life/p.ml;
+    ctx.fillStyle=p.tp?`rgba(93,252,93,${al*0.4})`:`rgba(93,180,252,${al*0.4})`;
+    ctx.fillRect(p.x,p.y,p.sz,p.sz);
+  }
+}
+
+// ==================== STATUS ====================
+const smsgs=['ALL 23 AGENTS ACTIVE - ORCHESTRATION ONLINE','BUILD #1284 PASSED - ALL TESTS GREEN',
+  'DEPLOYING TO STAGING - DevOps ACTIVE','SD CODE REVIEW COMPLETE - PR #42 MERGED',
+  'PM STARTED SPRINT PLANNING','SYSTEM HEALTH: OPTIMAL - 99.9% UPTIME',
+  'JD PUSHED 3 COMMITS TO MAIN','UX WIREFRAME APPROVED',
+  'BA GATHERING REQUIREMENTS','MONITORING: ALL SERVICES HEALTHY',
+  'QA TEST SUITE PASSED - 97% COVERAGE','SA ARCHITECTURE DOC UPDATED'];
+let si=0, lsc=0;
+function updateStatus(t) {
+  if(t-lsc>5000){si=(si+1)%smsgs.length;document.getElementById('st').textContent=smsgs[si];lsc=t;}
+}
+
+// ==================== ROSTER ====================
+(function(){
+  const r=document.getElementById('roster');
+  agents.forEach(a=>{
+    const d=document.createElement('div'); d.className='ac';
+    d.innerHTML=`<div class="ad" id="dot-${a.id}" style="background:#666"></div><div><span class="an">${a.name}</span><span class="ar">${a.title}</span></div>`;
+    r.appendChild(d);
+  });
+})();
+
+// ==================== RENDER ====================
+function render(t) {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawGrass(); drawFloor(); drawWalls();
+  drawFurniture(t); drawScreens(t);
+  updateBubbles();
+  updateAgentMovement();
+  drawCommLines(t);
+  [...agents].sort((a,b)=>a.y-b.y).forEach(a=>{ drawChar(a,t); drawBubble(a); });
+  drawParticles(t); updateStatus(t);
+  // Nap room Zzz
+  const zx=OX+17*TILE, zy=OY+14*TILE;
+  ctx.font='8px "Press Start 2P"'; ctx.fillStyle=`rgba(180,160,255,${0.4+Math.sin(t*0.002)*0.3})`;
+  ctx.fillText('z',zx+Math.sin(t*0.003)*3,zy-Math.sin(t*0.002)*5);
+  ctx.font='6px "Press Start 2P"';
+  ctx.fillText('z',zx+8+Math.sin(t*0.004)*2,zy-6-Math.sin(t*0.003)*4);
+  ctx.font='5px "Press Start 2P"';
+  ctx.fillText('z',zx+14+Math.sin(t*0.005)*2,zy-12-Math.sin(t*0.004)*3);
+  // Vignette
+  const g=ctx.createRadialGradient(canvas.width/2,canvas.height/2,canvas.width*0.3,canvas.width/2,canvas.height/2,canvas.width*0.7);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,0.4)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+
+// ==================== CHAT SYSTEM ====================
+const chatMsgs = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+let chatMinimized = false;
+
+let rosterCollapsed = true;
+document.getElementById('agent-panel').classList.add('collapsed');
+document.getElementById('roster-toggle').textContent = '>';
+function toggleRoster() {
+  rosterCollapsed = !rosterCollapsed;
+  document.getElementById('agent-panel').classList.toggle('collapsed', rosterCollapsed);
+  document.getElementById('roster-toggle').textContent = rosterCollapsed ? '>' : '<';
+}
+
+function toggleChat() {
+  chatMinimized = !chatMinimized;
+  document.getElementById('chat-panel').classList.toggle('minimized', chatMinimized);
+  document.getElementById('chat-toggle').textContent = chatMinimized ? '+' : '_';
+}
+
+// Simple markdown to HTML converter
+function md(text) {
+  if (!text) return '';
+  let h = text
+    // Escape HTML first
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    // Code blocks (``` ... ```)
+    .replace(/```(\w*)\n?([\s\S]*?)```/g, (m,lang,code) => `<pre><code>${code.trim()}</code></pre>`)
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // Headers
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // Bold + italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Blockquote
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    // Horizontal rule
+    .replace(/^---$/gm, '<hr>')
+    // Unordered lists
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    // Ordered lists
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    // Wrap consecutive <li> in <ul>
+    .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+    // Line breaks (but not inside pre/code)
+    .replace(/\n/g, '<br>');
+  // Clean up excessive <br> around block elements
+  h = h.replace(/<br><(h[1-4]|pre|ul|ol|blockquote|hr)/g, '<$1');
+  h = h.replace(/<\/(h[1-4]|pre|ul|ol|blockquote)><br>/g, '</$1>');
+  return h;
+}
+
+function addChatMsg(text, type='agent', agentName='') {
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + type;
+  if (type === 'agent' && agentName) {
+    div.innerHTML = `<span class="agent-label">${agentName}</span>${md(text)}`;
+  } else if (type === 'agent') {
+    div.innerHTML = md(text);
+  } else if (type === 'user') {
+    div.textContent = text;
+  } else {
+    div.textContent = text;
+  }
+  chatMsgs.appendChild(div);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+// ==================== REAL SSE STREAMING ====================
+let currentAbortController = null;
+let isStreaming = false;
+
+// Agent name lookup for display
+const agentNames = {
+  PM:'Product Manager', ORC:'Orchestrator', BA:'Business Analyst',
+  SA:'Solutions Architect', SD:'Senior Developer', JD:'Junior Developer',
+  UX:'UI/UX Designer', QA:'QA Engineer', AT:'Automation Tester',
+  SEC:'Security & Compliance', DO:'DevOps Engineer', PE:'Platform Engineer',
+  PF:'Performance Engineer', IE:'Integration Engineer', SM:'Secrets Manager',
+  SR:'SRE', LLM:'LLM Gateway', PRE:'Prompt Engineer', CA:'Cost Analyst',
+  STC:'State Controller', DEC:'Decision Controller', AUD:'Audit Gatekeeper',
+};
+
+function getAgentDisplayName(shortName) {
+  const agent = agents.find(a => a.shortName === shortName);
+  const fullName = agentNames[shortName] || shortName;
+  if (agent) return `${agent.name} (${fullName})`;
+  return fullName;
+}
+
+// Trigger visual feedback on canvas agent when they respond
+// Move the responding agent to center stage of visible workspace
+function activateOfficeAgent(shortName, snippet) {
+  const agentId = shortNameToId[shortName];
+  if (!agentId) return;
+  const a = agents.find(x => x.id === agentId);
+  if (!a) return;
+  a.bMsg = snippet.slice(0, 25) + (snippet.length > 25 ? '...' : '');
+  a.bTgt = 1; a.bOp = 0; a.bTimer = 400;
+
+  // Walk agent to center stage (middle of the main corridor area)
+  // Calculate visible center accounting for chat panel
+  const chatPanelW = 430; // chat panel width
+  const visibleCenterX = chatPanelW + (canvas.width - chatPanelW) / 2;
+  const visibleCenterY = canvas.height * 0.45;
+
+  // If agent is in social room, cancel that
+  if (a.inSocialRoom) {
+    a.inSocialRoom = false;
+    delete socialAssignments[a.id];
+  }
+
+  // Walk to center stage
+  a.onStage = true;
+  if (!a.walking) {
+    a.walking = true; a.walkBack = false;
+    a.targetX = visibleCenterX - 12;
+    a.targetY = visibleCenterY - 14;
+    a.legAnim = 0;
+  }
+}
+
+// Return active agent back to desk when done responding
+function deactivateOfficeAgent(shortName) {
+  const agentId = shortNameToId[shortName];
+  if (!agentId) return;
+  const a = agents.find(x => x.id === agentId);
+  if (!a) return;
+  a.onStage = false;
+  // Walk back after a short pause
+  setTimeout(() => {
+    if (a.realStatus === 'IDLE') {
+      moveToSocialRoom(a);
+    } else {
+      a.targetX = a.homeX; a.targetY = a.homeY;
+      a.walking = true; a.walkBack = true;
+      a.legAnim = 0;
+    }
+  }, 2000);
+}
+
+async function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text || isStreaming) return;
+  addChatMsg(text, 'user');
+  chatInput.value = '';
+  isStreaming = true;
+  document.getElementById('chat-send').textContent = '...';
+
+  // Abort any previous stream
+  if (currentAbortController) currentAbortController.abort();
+  currentAbortController = new AbortController();
+
+  addChatMsg('Routing to your AI team...', 'system');
+
+  // Create a streaming message container
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'chat-msg agent';
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'agent-label';
+  labelSpan.textContent = 'AI Team';
+  msgDiv.appendChild(labelSpan);
+  const contentSpan = document.createElement('span');
+  msgDiv.appendChild(contentSpan);
+  chatMsgs.appendChild(msgDiv);
+
+  let accumulated = '';
+  let currentAgent = '';
+
+  try {
+    const apiBase = window.location.origin;
+    const response = await fetch(`${apiBase}/api/projects/${PROJECT_ID}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text }),
+      signal: currentAbortController.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // SSE parser: backend sends "event: type\ndata: {...}\n\n"
+    let currentEventType = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEventType = line.slice(7).trim();
+          continue;
+        }
+        if (!line.startsWith('data: ')) continue;
+        const dataStr = line.slice(6).trim();
+        if (!dataStr || dataStr === '[DONE]') continue;
+
+        try {
+          const evt = JSON.parse(dataStr);
+          const eventType = currentEventType || evt.type || '';
+          currentEventType = ''; // reset for next event
+
+          switch (eventType) {
+            case 'agent_start':
+              currentAgent = evt.agentShortName || '';
+              labelSpan.textContent = getAgentDisplayName(currentAgent);
+              activateOfficeAgent(currentAgent, 'Working on it...');
+              break;
+
+            case 'chunk':
+              accumulated += evt.content || '';
+              contentSpan.innerHTML = md(accumulated);
+              chatMsgs.scrollTop = chatMsgs.scrollHeight;
+              break;
+
+            case 'delegation': {
+              // Show delegation visually
+              const fromId = shortNameToId[evt.fromAgent];
+              const toId = shortNameToId[evt.toAgent];
+              if (fromId && toId) {
+                const a1 = agents.find(a=>a.id===fromId);
+                const a2 = agents.find(a=>a.id===toId);
+                if(a1 && a2 && !a1.walking && !a2.walking) {
+                  const mx = (a1.homeX + a2.homeX) / 2;
+                  const my = (a1.homeY + a2.homeY) / 2;
+                  walkAgentTo(fromId, mx - 15, my);
+                  walkAgentTo(toId, mx + 15, my);
+                  commLines.push({
+                    from: a1, to: a2, label: 'Delegation',
+                    progress: 0, life: 200, maxLife: 200,
+                    color: '#f5a623',
+                  });
+                }
+              }
+              addChatMsg(`Delegating to ${getAgentDisplayName(evt.toAgent)}...`, 'system');
+              // Start a new message for the next agent
+              accumulated = '';
+              const newMsg = document.createElement('div');
+              newMsg.className = 'chat-msg agent';
+              const newLabel = document.createElement('span');
+              newLabel.className = 'agent-label';
+              newLabel.textContent = getAgentDisplayName(evt.toAgent);
+              newMsg.appendChild(newLabel);
+              const newContent = document.createElement('span');
+              newMsg.appendChild(newContent);
+              chatMsgs.appendChild(newMsg);
+              contentSpan.remove();
+              msgDiv.appendChild(document.createElement('span'));
+              currentAgent = evt.toAgent;
+              break;
+            }
+
+            case 'artifact':
+              addChatMsg(`📄 Artifact: ${evt.name || evt.type || 'file'}`, 'system');
+              break;
+
+            case 'done':
+              if (currentAgent && accumulated) {
+                activateOfficeAgent(currentAgent, accumulated.slice(0, 40));
+                // Walk agent back after they finish responding
+                deactivateOfficeAgent(currentAgent);
+              }
+              break;
+
+            case 'error':
+              addChatMsg(`Error: ${evt.message || 'Unknown error'}`, 'system');
+              break;
+
+            case 'info':
+              addChatMsg(evt.message || '', 'system');
+              break;
+
+            case 'thinking':
+              // Show thinking indicator on canvas agent
+              if (currentAgent) activateOfficeAgent(currentAgent, 'Thinking...');
+              break;
+
+            case 'usage':
+              // Optional: could show token usage
+              break;
+          }
+        } catch (parseErr) {
+          // Skip malformed JSON lines
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      addChatMsg('Stream cancelled.', 'system');
+    } else {
+      // Fallback: if API is unavailable, use simulated response
+      console.warn('SSE streaming failed, using fallback:', err.message);
+      contentSpan.textContent = '';
+      labelSpan.textContent = '';
+      msgDiv.remove();
+      // Remove the "Routing..." system message too
+      const lastSystem = chatMsgs.querySelector('.chat-msg.system:last-of-type');
+      if (lastSystem) lastSystem.textContent = 'API offline - using local simulation';
+      simulatedResponse(text);
+    }
+  } finally {
+    isStreaming = false;
+    document.getElementById('chat-send').textContent = 'SEND';
+    currentAbortController = null;
+  }
+}
+
+// Fallback simulation when API is unavailable
+function simulatedResponse(text) {
+  const fallbackAgents = [
+    { label: 'Eve (Business Analyst)', msgs: [
+      "Let me clarify the requirements. Can you tell me more about the target users?",
+      "I'll document the acceptance criteria for this feature.",
+      "I'll map out the user journey for this workflow.",
+    ]},
+    { label: 'Alice (Product Manager)', msgs: [
+      "I'll break this down into actionable milestones.",
+      "Let me prioritize this against the current backlog.",
+      "Great idea! I'll coordinate the team to get started.",
+    ]},
+    { label: 'Dave (Solutions Architect)', msgs: [
+      "I'll design the system architecture for this.",
+      "Let me evaluate the best tech stack for this requirement.",
+      "I'll draft the technical specification.",
+    ]},
+  ];
+  const r = fallbackAgents[Math.floor(Math.random() * fallbackAgents.length)];
+  const msg = r.msgs[Math.floor(Math.random() * r.msgs.length)];
+  setTimeout(() => addChatMsg(msg, 'agent', r.label), 800);
+}
+
+chatInput.addEventListener('keydown', e => { if(e.key==='Enter') sendMessage(); });
+
+// Load real chat history from API, fallback to welcome message
+(async function loadChatHistory() {
+  try {
+    const apiBase = window.location.origin;
+    const res = await fetch(`${apiBase}/api/projects/${PROJECT_ID}/chat`);
+    if (!res.ok) throw new Error('API error');
+    const messages = await res.json();
+
+    if (messages && messages.length > 0) {
+      // Show last 30 messages max to keep it manageable
+      const recent = messages.slice(-30);
+      recent.forEach(msg => {
+        const role = (msg.role || '').toUpperCase();
+        if (role === 'USER') {
+          addChatMsg(msg.content, 'user');
+        } else if (role === 'AGENT') {
+          const agentLabel = msg.agent
+            ? `${msg.agent.name} (${agentNames[msg.agent.shortName] || msg.agent.shortName})`
+            : 'AI Team';
+          addChatMsg(msg.content, 'agent', agentLabel);
+        } else {
+          addChatMsg(msg.content, 'system');
+        }
+      });
+      addChatMsg('Chat history loaded. Continue the conversation!', 'system');
+    } else {
+      // No history — show welcome
+      addChatMsg('Your AI team (23 agents) is online. Tell them what to build!', 'system');
+      addChatMsg("Hi! I'm your Business Analyst. Describe your idea and I'll help clarify what you need, then the team will build it.", 'agent', 'Eve (Business Analyst)');
+    }
+  } catch (e) {
+    // API offline — show welcome
+    addChatMsg('Your AI team (23 agents) is online. Tell them what to build!', 'system');
+    addChatMsg("Hi! I'm your Business Analyst. Describe your idea and I'll help clarify what you need, then the team will build it.", 'agent', 'Eve (Business Analyst)');
+  }
+})();
+
+// ==================== AGENT COMMUNICATION LINES ====================
+// Track active communications between agents
+let commLines = [];
+
+function spawnCommLine() {
+  const pairs = [
+    ['pm','orc','Sprint scope'],['pm','ba','Requirements review'],
+    ['orc','jd1','Task delegation'],['orc','sa','Architecture decision'],
+    ['sd','qa','Code review'],['sd','jd1','Mentoring session'],
+    ['sa','orc','System design'],['sa','sd','API contract'],
+    ['jd1','ux','UI/API sync'],['ux','qa','Design handoff'],
+    ['jd1','do','Deploy request'],['at','sec','Security tests'],
+    ['do','pe','Server maintenance'],['ba','pm','Acceptance criteria'],
+    ['qa','at','Test planning'],['orc','sd','Sprint planning'],
+  ];
+  const pair = pairs[Math.floor(Math.random()*pairs.length)];
+  const a1 = agents.find(a=>a.id===pair[0]);
+  const a2 = agents.find(a=>a.id===pair[1]);
+  if(a1 && a2 && !a1.walking && !a2.walking) {
+    // Walk a1 toward a2 (meet halfway)
+    const mx = (a1.homeX + a2.homeX) / 2;
+    const my = (a1.homeY + a2.homeY) / 2;
+    walkAgentTo(pair[0], mx - 15, my);
+    walkAgentTo(pair[1], mx + 15, my);
+
+    commLines.push({
+      from: a1, to: a2, label: pair[2],
+      progress: 0, life: 200 + Math.random()*100,
+      maxLife: 200 + Math.random()*100,
+      color: `hsl(${Math.random()*60+100}, 70%, 55%)`,
+    });
+    // Show speaking bubbles
+    a1.bMsg = pair[2]; a1.bTgt=1; a1.bOp=0; a1.bTimer=180;
+    a2.bMsg = 'Got it!'; a2.bTgt=1; a2.bOp=0; a2.bTimer=180;
+  }
+}
+
+function drawCommLines(t) {
+  // Communication lines only spawn from real SSE delegation events (no random)
+
+  for(let i=commLines.length-1;i>=0;i--) {
+    const cl = commLines[i];
+    cl.progress += 0.015;
+    cl.life--;
+    if(cl.life<=0){ commLines.splice(i,1); continue; }
+
+    const x1=cl.from.x+12, y1=cl.from.y+14;
+    const x2=cl.to.x+12, y2=cl.to.y+14;
+    const alpha = Math.min(1, cl.life / 30) * 0.6;
+
+    // Dashed line between agents
+    ctx.save();
+    ctx.strokeStyle = cl.color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.lineDashOffset = -t * 0.05;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Traveling dot (data packet)
+    const p = (Math.sin(cl.progress * Math.PI * 2) + 1) / 2;
+    const dx = x1 + (x2-x1)*p;
+    const dy = y1 + (y2-y1)*p;
+    ctx.fillStyle = cl.color;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.arc(dx, dy, 3, 0, Math.PI*2); ctx.fill();
+    // Glow
+    ctx.fillStyle = cl.color;
+    ctx.globalAlpha = alpha * 0.3;
+    ctx.beginPath(); ctx.arc(dx, dy, 6, 0, Math.PI*2); ctx.fill();
+
+    // Label at midpoint
+    if(cl.life > 40) {
+      const mx = (x1+x2)/2, my = (y1+y2)/2 - 10;
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.font = '6px "Press Start 2P"';
+      const tw = ctx.measureText(cl.label).width;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(mx-tw/2-3, my-7, tw+6, 11);
+      ctx.fillStyle = cl.color;
+      ctx.fillText(cl.label, mx-tw/2, my);
+    }
+
+    ctx.restore();
+  }
+}
+</script>
+</body>
+</html>

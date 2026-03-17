@@ -330,6 +330,153 @@ export class OrchestrationEngine {
         }
       }
 
+      // ── Step 10.5: Recursive auto-chain pipeline ──────────────────────
+      // If an agent completed work but didn't explicitly delegate,
+      // check if the pipeline should auto-continue to the next agent.
+      // This loop allows the full SDLC pipeline to execute autonomously:
+      // BA → SA → UX → PM → DO → TL → JD/SD → QA → SEC → PM
+      if (!parsed.delegateTo) {
+        const MAX_CHAIN_DEPTH = 12;
+        let chainAgent = targetShortName;
+        let chainParsed = parsed;
+        let chainDepth = 0;
+
+        while (chainDepth < MAX_CHAIN_DEPTH) {
+          const nextAgent = this.getAutoChainTarget(chainAgent, chainParsed);
+          if (!nextAgent) break;
+          chainDepth++;
+
+          console.log(
+            `[Engine] 🔗 Auto-chain step ${chainDepth}: ${chainAgent} → ${nextAgent.agent}`,
+          );
+
+          // Emit pipeline progress
+          yield {
+            type: 'pipeline_progress',
+            data: {
+              currentAgent: nextAgent.agent,
+              fromAgent: chainAgent,
+              step: chainDepth,
+              totalSteps: MAX_CHAIN_DEPTH,
+              phase: this.getAgentName(nextAgent.agent),
+            },
+          };
+
+          yield {
+            type: 'delegation',
+            data: {
+              fromAgent: chainAgent,
+              toAgent: nextAgent.agent,
+            },
+          };
+
+          // Execute the next agent directly (not via delegation handler)
+          const chainContext = nextAgent.context(chainParsed);
+
+          yield {
+            type: 'agent_start',
+            data: {
+              agentShortName: nextAgent.agent,
+              agentName: this.getAgentName(nextAgent.agent),
+            },
+          };
+
+          try {
+            const result = await this.executeAgentPipeline(
+              nextAgent.agent,
+              chainContext,
+              projectId,
+              userId,
+              scope,
+            );
+
+            // Parse the chained agent's response for further chaining
+            const newParsed = parseAgentResponse(result.message);
+
+            yield {
+              type: 'chunk',
+              data: { content: result.message },
+            };
+
+            // Yield artifacts from chained agent
+            for (const artifact of newParsed.artifacts) {
+              yield {
+                type: 'artifact',
+                data: { name: artifact.name, type: artifact.type },
+              };
+            }
+
+            yield {
+              type: 'done',
+              data: {
+                agentShortName: nextAgent.agent,
+              },
+            };
+
+            // If the chained agent explicitly delegated, let delegation handler
+            // take over (don't continue the auto-chain loop)
+            if (newParsed.delegateTo) {
+              console.log(
+                `[Engine] 🔗 Chain agent ${nextAgent.agent} delegated to ${newParsed.delegateTo} — delegation handler takes over`,
+              );
+              const delegateContext = newParsed.delegateContext ?? newParsed.message;
+              const chain = await delegationHandler.handleDelegation(
+                newParsed.delegateTo,
+                delegateContext,
+                projectId,
+                (shortName, message, pid) =>
+                  this.executeAgentPipeline(shortName, message, pid, userId, scope),
+                nextAgent.agent,
+              );
+              for (const entry of chain) {
+                yield {
+                  type: 'agent_start',
+                  data: {
+                    agentShortName: entry.result.agentShortName,
+                    agentName: this.getAgentName(entry.result.agentShortName),
+                  },
+                };
+                yield {
+                  type: 'chunk',
+                  data: { content: entry.result.message },
+                };
+                yield {
+                  type: 'done',
+                  data: {
+                    agentShortName: entry.result.agentShortName,
+                  },
+                };
+              }
+              break; // Exit auto-chain loop
+            }
+
+            // Continue chain with the new agent's output
+            chainAgent = nextAgent.agent;
+            chainParsed = newParsed;
+          } catch (chainErr) {
+            console.error(
+              `[Engine] 🔗 Auto-chain error at step ${chainDepth} (${nextAgent.agent}):`,
+              chainErr,
+            );
+            yield {
+              type: 'error',
+              data: {
+                message: `Pipeline step ${chainDepth} (${this.getAgentName(nextAgent.agent)}) failed: ${chainErr instanceof Error ? chainErr.message : String(chainErr)}`,
+              },
+            };
+            break; // Stop the chain on error
+          }
+        }
+
+        if (chainDepth >= MAX_CHAIN_DEPTH) {
+          console.warn('[Engine] 🔗 Auto-chain reached max depth limit');
+          yield {
+            type: 'info',
+            data: { message: 'Pipeline auto-chain reached maximum depth. Stopping.' },
+          };
+        }
+      }
+
       // ── Step 11: Emit done ────────────────────────────────────────────
       yield {
         type: 'done',
@@ -1408,6 +1555,137 @@ export class OrchestrationEngine {
    * Get the display name for an agent by shortName.
    * Falls back to the shortName itself if the definition isn't found.
    */
+  /**
+   * Determine if the pipeline should auto-continue after an agent completes.
+   * Returns the next agent to invoke, or null if the chain should stop.
+   */
+  private getAutoChainTarget(
+    completedAgent: string,
+    parsed: ParsedResponse,
+  ): { agent: string; context: (p: ParsedResponse) => string } | null {
+    const actions = parsed.actions ?? [];
+    const artifacts = parsed.artifacts ?? [];
+
+    const hasCodeArtifacts = artifacts.some(
+      (a) => a.type === 'CODE' || a.type === 'code' ||
+             a.name.endsWith('.ts') || a.name.endsWith('.tsx') ||
+             a.name.endsWith('.js') || a.name.endsWith('.jsx')
+    );
+    const hasTestArtifacts = artifacts.some(
+      (a) => a.type === 'TEST' || a.type === 'test' || a.name.includes('.test.') || a.name.includes('.spec.')
+    );
+
+    // ── Upstream auto-chain rules (full SDLC pipeline) ──
+
+    // BA approved BRD → SA designs architecture
+    if (completedAgent === 'BA') {
+      const hasBrdApproval = actions.some(
+        (a) => a.type === 'approve_document' && (a.data?.type === 'BRD' || a.data?.type === 'brd')
+      );
+      if (hasBrdApproval) {
+        return {
+          agent: 'SA',
+          context: (p) => `[PIPELINE] The Business Requirements Document (BRD) has been approved by the stakeholder. Please design the system architecture based on the requirements. Read the BRD from your context documents and produce a System Design Document (SDD) covering tech stack, database schema, API design, and component architecture.\n\nBA summary:\n${p.message}`,
+        };
+      }
+    }
+
+    // SA produced SDD → UX creates wireframes
+    if (completedAgent === 'SA') {
+      const hasSddOutput = actions.some(
+        (a) => (a.type === 'create_document' || a.type === 'update_document') &&
+               (a.data?.type === 'SDD' || a.data?.type === 'sdd')
+      );
+      if (hasSddOutput) {
+        return {
+          agent: 'UX',
+          context: (p) => `[PIPELINE] The System Design Document (SDD) is ready. Please create wireframes and a design system for the application. Read the BRD and SDD from your context to understand the features and architecture. Produce wireframes for all key screens.\n\nSA summary:\n${p.message}`,
+        };
+      }
+    }
+
+    // UX produced wireframes → PM creates task cards
+    if (completedAgent === 'UX') {
+      const hasWireframes = artifacts.some(
+        (a) => a.name.includes('wireframe') || a.name.includes('design') || a.name.includes('mockup')
+      );
+      if (hasWireframes || artifacts.length > 0) {
+        return {
+          agent: 'PM',
+          context: (p) => `[PIPELINE] Wireframes and design system are complete. Please break down the project into task cards on the work board. Read the BRD, SDD, and wireframes from your context. Create TASK cards for each feature module using [ACTION:create_card] — include clear titles, descriptions, and priority levels.\n\nUX summary:\n${p.message}`,
+        };
+      }
+    }
+
+    // PM created cards → DO scaffolds the project
+    if (completedAgent === 'PM') {
+      const hasCardCreation = actions.some((a) => a.type === 'create_card');
+      if (hasCardCreation) {
+        return {
+          agent: 'DO',
+          context: (p) => `[PIPELINE] Task cards have been created on the work board. Please scaffold the project structure. Read the SDD from your context to understand the tech stack. Generate the project boilerplate: package.json, tsconfig.json, framework configuration, directory structure, Dockerfile, .gitignore, and entry point files using [ARTIFACT] markers.\n\nPM summary:\n${p.message}`,
+        };
+      }
+    }
+
+    // DO scaffolded → TL assigns tasks and starts dev
+    if (completedAgent === 'DO') {
+      const hasScaffold = artifacts.some(
+        (a) => a.name === 'package.json' || a.name.includes('tsconfig') ||
+               a.name.includes('Dockerfile') || a.name.includes('.gitignore')
+      );
+      if (hasScaffold) {
+        return {
+          agent: 'TL',
+          context: (p) => `[PIPELINE] Project scaffold is ready (${artifacts.length} files generated). Please review the task cards on the board and coordinate development. Assign tasks to Junior Developer (JD) and Senior Developer (SD) based on complexity. Then start the first task by delegating to the appropriate developer.\n\nDO summary:\n${p.message}`,
+        };
+      }
+    }
+
+    // TL assigned tasks → JD starts first task
+    if (completedAgent === 'TL') {
+      // TL either explicitly delegates (handled by delegation handler) or
+      // creates/updates cards with assignments. If no delegation, trigger JD.
+      const hasAssignment = actions.some(
+        (a) => a.type === 'update_card' || a.type === 'create_card'
+      );
+      if (hasAssignment && !parsed.delegateTo) {
+        return {
+          agent: 'JD',
+          context: (p) => `[PIPELINE] The Tech Lead has assigned tasks. Please start working on your first assigned task from the board. Read the task cards, BRD, SDD, and existing code artifacts from your context. Write the implementation code using [ARTIFACT] markers for each file.\n\nTL summary:\n${p.message}`,
+        };
+      }
+    }
+
+    // ── Downstream auto-chain rules (existing) ──
+
+    // After Junior/Senior Dev completes code → QA writes tests
+    if ((completedAgent === 'JD' || completedAgent === 'SD') && hasCodeArtifacts) {
+      return {
+        agent: 'QA',
+        context: (p) => `[PIPELINE] The developer has completed their task and delivered ${p.artifacts?.length ?? 0} code file(s). Please review the code quality and write tests for the implemented features.\n\nDeveloper's summary:\n${p.message}`,
+      };
+    }
+
+    // After QA completes tests → Security audit
+    if (completedAgent === 'QA' && hasTestArtifacts) {
+      return {
+        agent: 'SEC',
+        context: (p) => `[PIPELINE] QA has completed testing. Please perform a security review of the implemented code.\n\nQA summary:\n${p.message}`,
+      };
+    }
+
+    // After Security completes → PM summary
+    if (completedAgent === 'SEC') {
+      return {
+        agent: 'PM',
+        context: (p) => `[PIPELINE] The security review is complete. Please provide the stakeholder with a progress summary.\n\nSecurity review:\n${p.message}`,
+      };
+    }
+
+    return null;
+  }
+
   private getAgentName(shortName: string): string {
     try {
       return getAgentDefinition(shortName).name;

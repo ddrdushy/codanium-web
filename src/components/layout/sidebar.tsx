@@ -9,13 +9,13 @@ import {
   Users, FileText, PenTool, BarChart3, Settings,
   ChevronLeft, ChevronRight, Workflow, Scale,
   ChevronDown, ChevronUp, Zap, Bot, FolderOpen,
-  Check, Plus, Code2, Play
+  Check, Plus, Code2, Play, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { useProjectStore } from '@/lib/project-store';
-import { mockProjects } from '@/lib/mock-data';
+
 import { ProjectSelectorSkeleton } from '@/components/ui/skeleton';
 import { CreateProjectModal } from '@/components/modals/create-project-modal';
 import { usePreviewStore } from '@/hooks/use-preview';
@@ -26,6 +26,7 @@ const getNavItems = (projectId: string) => [
   { label: 'Work Board', icon: Kanban, href: `/project/${projectId}/board`, section: 'main' },
   { label: 'My Decisions', icon: Scale, href: `/project/${projectId}/decisions`, section: 'main' },
   { label: 'AI Team', icon: Bot, href: `/project/${projectId}/agents`, section: 'main' },
+  { label: 'Team Office', icon: Building2, href: `/project/${projectId}/office`, section: 'main' },
   { label: 'Live Preview', icon: Play, href: `__preview__`, section: 'deliverables' },
   { label: 'Generated Code', icon: Code2, href: `/project/${projectId}/code`, section: 'deliverables' },
   { label: 'Documents', icon: FileText, href: `/project/${projectId}/docs`, section: 'deliverables' },
@@ -60,13 +61,13 @@ export function Sidebar() {
     fetchProjects();
   }, [fetchProjects]);
 
-  // Use store projects if available, fall back to mock
-  const projects = storeProjects.length > 0 ? storeProjects : mockProjects;
+  // Use store projects only (no mock fallback)
+  const projects = storeProjects;
 
   // Extract current project ID from URL
   const pathParts = pathname?.split('/') || [];
   const projectIdx = pathParts.indexOf('project');
-  const currentProjectId = projectIdx !== -1 && pathParts[projectIdx + 1] ? pathParts[projectIdx + 1] : projects[0]?.id ?? 'prj-001';
+  const currentProjectId = projectIdx !== -1 && pathParts[projectIdx + 1] ? pathParts[projectIdx + 1] : projects[0]?.id ?? '';
 
   // Find current project
   const currentProject = projects.find(p => p.id === currentProjectId) || projects[0];
@@ -105,13 +106,13 @@ export function Sidebar() {
           <div
             className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 text-xs font-bold"
             style={{
-              backgroundColor: currentProject.color + '15',
-              borderColor: currentProject.color + '30',
+              backgroundColor: (currentProject?.color || '#888') + '15',
+              borderColor: (currentProject?.color || '#888') + '30',
               borderWidth: 1,
-              color: currentProject.color,
+              color: currentProject?.color || '#888',
             }}
           >
-            {currentProject.name.charAt(0)}
+            {currentProject?.name?.charAt(0) || '?'}
           </div>
           <AnimatePresence>
             {!collapsed && (
@@ -128,10 +129,10 @@ export function Sidebar() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-foreground group-hover:text-amber transition-colors truncate">
-                      {currentProject.name}
+                      {currentProject?.name || 'No Project'}
                     </div>
                     <div className="text-[10px] text-muted-foreground/60 truncate -mt-0.5">
-                      {currentProject.description}
+                      {currentProject?.description || 'Create a new project to get started'}
                     </div>
                   </div>
                   <ChevronDown className={cn(
@@ -343,18 +344,18 @@ export function Sidebar() {
       </nav>
 
       {/* Agent Status Summary */}
-      {!collapsed && currentProject && (
+      {!collapsed && (
         <div className="px-3 py-3 border-t border-border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className={cn(
                 'w-1.5 h-1.5 rounded-full',
-                currentProject.active_agents > 0 ? 'bg-emerald-400 pulse-dot' : 'bg-zinc-500'
+                (currentProject?.active_agents || 0) > 0 ? 'bg-emerald-400 pulse-dot' : 'bg-zinc-500'
               )} />
-              {currentProject.active_agents} team members working
+              {currentProject?.active_agents || 0} team members working
             </span>
             <span className="text-border">·</span>
-            <span>{currentProject.card_count} tasks</span>
+            <span>{currentProject?.card_count || 0} tasks</span>
           </div>
         </div>
       )}

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAgents, fetchCards } from '@/lib/api';
-import { mockAgents, mockCards } from '@/lib/mock-data';
+
 import { Agent, Card, AgentGroup, AgentStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -154,8 +154,8 @@ export default function AgentsPage() {
 
   useEffect(() => {
     Promise.all([
-      fetchAgents(projectId).then(setAgents).catch(() => setAgents(mockAgents)),
-      fetchCards(projectId).then(setCards).catch(() => setCards(mockCards)),
+      fetchAgents(projectId).then(setAgents).catch(() => setAgents([])),
+      fetchCards(projectId).then(setCards).catch(() => setCards([])),
     ])
       .catch(() => {/* keep whatever was set */})
       .finally(() => setLoading(false));

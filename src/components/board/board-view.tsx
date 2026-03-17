@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { fetchCards } from '@/lib/api';
-import { mockCards } from '@/lib/mock-data';
+
 import { Card, CardState, CardType } from '@/types';
 import { BoardColumn } from './board-column';
 import { Badge } from '@/components/ui/badge';
@@ -269,7 +269,7 @@ export function BoardView() {
     if (projectId) {
       fetchCards(projectId)
         .then(setCards)
-        .catch(() => setCards(mockCards))
+        .catch(() => setCards([]))
         .finally(() => setLoading(false));
     } else {
       setLoading(false);

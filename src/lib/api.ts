@@ -106,6 +106,12 @@ export async function fetchProjects(): Promise<Project[]> {
   }));
 }
 
+export async function deleteProject(id: string): Promise<void> {
+  await fetch(`/api/projects/${id}`, { method: 'DELETE' }).then((res) => {
+    if (!res.ok) throw new Error('Failed to delete project');
+  });
+}
+
 export async function fetchProject(id: string): Promise<Project | null> {
   try {
     const p = await apiFetch<any>(`/api/projects/${id}`);

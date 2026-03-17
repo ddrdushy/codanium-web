@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchDecisions } from '@/lib/api';
-import { mockDecisions } from '@/lib/mock-data';
+
 import { Decision, RiskRating } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -57,8 +57,7 @@ export default function DecisionsPage() {
         if (data.length > 0) setSelectedDecision(data[0]);
       })
       .catch(() => {
-        setDecisions(mockDecisions);
-        if (mockDecisions.length > 0) setSelectedDecision(mockDecisions[0]);
+        setDecisions([]);
       })
       .finally(() => setLoading(false));
   }, [projectId]);

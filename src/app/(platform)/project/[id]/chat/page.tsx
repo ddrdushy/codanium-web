@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from '
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAgents } from '@/lib/api';
-import { mockAgents } from '@/lib/mock-data';
+
 import { useAgentStream } from '@/lib/hooks/use-agent-stream';
 import { Agent } from '@/types';
 import { cn } from '@/lib/utils';
@@ -246,7 +246,7 @@ export default function ChatPage() {
 
     fetchAgents(projectId)
       .then(setAgents)
-      .catch(() => { setAgents(mockAgents); });
+      .catch(() => { setAgents([]); });
 
     fetch(`/api/projects/${projectId}/chat`)
       .then(r => r.json())

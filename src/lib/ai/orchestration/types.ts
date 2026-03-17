@@ -65,7 +65,8 @@ export interface SSEEvent {
     | 'error'         // Recoverable error
     | 'delegation'    // Agent delegating to another agent
     | 'info'          // Informational message (authority blocks, etc.)
-    | 'execution';    // Code execution queued/started/completed
+    | 'execution'     // Code execution queued/started/completed
+    | 'pipeline_progress'; // Auto-chain pipeline step progress
   data: Record<string, unknown>;
 }
 

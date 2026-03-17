@@ -10,7 +10,7 @@ export const juniorDev: AgentDefinition = {
   contextSources: ['project_info', 'documents', 'cards', 'chat_history', 'artifacts', 'project_memory'],
   outputTypes: ['message', 'code_artifact', 'card'],
   authority: {
-    canWrite: ['code_artifacts', 'cards'],
+    canWrite: ['code_artifacts', 'cards', 'card_state'],
     canRead: ['project_info', 'all_documents', 'all_cards', 'chat_history'],
     canNever: ['infrastructure', 'secrets', 'decisions', 'sdlc_stage'],
   },
@@ -125,7 +125,7 @@ export const seniorDev: AgentDefinition = {
   contextSources: ['project_info', 'documents', 'cards', 'chat_history', 'agents_status', 'artifacts', 'project_memory'],
   outputTypes: ['message', 'code_artifact', 'card'],
   authority: {
-    canWrite: ['code_artifacts', 'cards'],
+    canWrite: ['code_artifacts', 'cards', 'card_state'],
     canRead: ['project_info', 'all_documents', 'all_cards', 'chat_history', 'agents_status', 'code_artifacts'],
     canNever: ['infrastructure', 'secrets', 'sdlc_stage'],
   },

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { mockSDLCProgress } from '@/lib/mock-data';
+
 import { SDLCProgress } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -168,7 +168,7 @@ export default function PipelinePage() {
             gate_passed: s.gatePassed,
           })));
         })
-        .catch(() => { setStages(mockSDLCProgress); })
+        .catch(() => { setStages([]); })
         .finally(() => setSdlcLoading(false));
     } else {
       setSdlcLoading(false);

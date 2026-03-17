@@ -243,33 +243,6 @@ describe('OrchestrationService', () => {
 });`,
 };
 
-const mockArtifacts: Artifact[] = [
-  {
-    id: 'art-001',
-    name: 'service.ts',
-    type: 'CODE',
-    ownerAgent: 'SD',
-    version: 1,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'art-002',
-    name: 'Dockerfile',
-    type: 'CONFIG',
-    ownerAgent: 'DO',
-    version: 2,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'art-003',
-    name: 'auth.test.ts',
-    type: 'TEST',
-    ownerAgent: 'QA',
-    version: 1,
-    createdAt: new Date().toISOString(),
-  },
-];
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -359,7 +332,7 @@ export default function CodePage() {
           setArtifacts(mapped);
         }
       })
-      .catch(() => { setArtifacts(mockArtifacts); });
+      .catch(() => { setArtifacts([]); });
 
     // Fetch git config for push modal
     fetch(`/api/projects/${projectId}/git/config`)

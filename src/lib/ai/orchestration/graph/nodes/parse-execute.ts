@@ -116,11 +116,39 @@ export async function parseAndExecuteNode(
 
   // ── 7. Check for delegation ───────────────────────────────────────────
   const currentDepth = state.delegationDepth ?? 0;
-  const shouldDelegate = !!parsed.delegateTo && currentDepth < MAX_DELEGATION_DEPTH;
+  let delegateTo = parsed.delegateTo;
+  let delegateContext = parsed.delegateContext;
+
+  // Auto-chain: if agent didn't explicitly delegate but completed a card,
+  // auto-route to the next pipeline agent based on current agent role
+  if (!delegateTo && currentDepth < MAX_DELEGATION_DEPTH) {
+    const completedCard = authorizedActions.find(
+      (a: any) => a.type === 'update_card' && (a.state === 'DONE' || a.state === 'REVIEW'),
+    );
+    if (completedCard) {
+      const PIPELINE_NEXT: Record<string, { agent: string; context: string }> = {
+        JD:  { agent: 'QA', context: 'Review and test the implementation that was just completed. Verify it meets acceptance criteria.' },
+        SD:  { agent: 'QA', context: 'Review the senior developer implementation. Run quality checks and verify standards.' },
+        QA:  { agent: 'SEC', context: 'Security review the tested implementation. Check for vulnerabilities.' },
+        SEC: { agent: 'DO', context: 'Deploy the reviewed and tested implementation to staging.' },
+        UX:  { agent: 'JD', context: 'Implement the UI/UX design that was just created.' },
+        BA:  { agent: 'SA', context: 'Design the technical architecture based on the requirements just documented.' },
+        SA:  { agent: 'TL', context: 'Plan and coordinate development based on the architecture just designed.' },
+      };
+      const next = PIPELINE_NEXT[state.routedAgent];
+      if (next) {
+        delegateTo = next.agent;
+        delegateContext = next.context + ` Original task: ${parsed.message.slice(0, 200)}`;
+        console.log(`[ParseAndExecute] Auto-chain: ${state.routedAgent} completed card → routing to ${next.agent}`);
+      }
+    }
+  }
+
+  const shouldDelegate = !!delegateTo && currentDepth < MAX_DELEGATION_DEPTH;
 
   // Resolve the delegation target to a known short name (e.g. "SOLUTION_ARCHITECT" → "SA")
-  const resolvedDelegateTo = parsed.delegateTo
-    ? resolveAgentShortName(parsed.delegateTo)
+  const resolvedDelegateTo = delegateTo
+    ? resolveAgentShortName(delegateTo)
     : undefined;
 
   console.log(
@@ -179,7 +207,7 @@ export async function parseAndExecuteNode(
     ...(shouldDelegate && resolvedDelegateTo
       ? {
           routedAgent: resolvedDelegateTo,
-          userMessage: parsed.delegateContext ?? parsed.message,
+          userMessage: delegateContext ?? parsed.message,
           delegationDepth: currentDepth + 1,
         }
       : {}),

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { fetchProject, fetchCards, fetchAgents, fetchDecisions } from '@/lib/api';
-import { mockProject, mockCards, mockAgents, mockDecisions } from '@/lib/mock-data';
+
 import type { Project, Card, Agent, Decision } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { MetricSkeleton } from '@/components/ui/skeleton';
@@ -94,12 +94,7 @@ export default function ProjectDashboard() {
         }))))
         .catch(() => {}),
     ])
-      .catch(() => {
-        setProject(mockProject);
-        setCards(mockCards);
-        setAgents(mockAgents);
-        setDecisions(mockDecisions);
-      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [projectId]);
 
