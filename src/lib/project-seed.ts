@@ -115,16 +115,37 @@ export async function autoKickoffBA(
     priority: 10,
   });
 
-  // 3. Trigger background processing (fire-and-forget)
-  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
-  fetch(`${baseUrl}/api/internal/process-tasks`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-internal-secret': process.env.INTERNAL_TASK_SECRET ?? 'dev-task-secret',
-    },
-    body: JSON.stringify({ maxTasks: 5 }),
-  }).catch((err) => console.error('[autoKickoffBA] trigger error:', err));
+  // 3. Trigger background processing as fallback (only if BullMQ is unavailable)
+  //    BullMQ worker handles this automatically. The fetch is a safety net for
+  //    environments without Redis. Using setTimeout to give BullMQ time to claim first.
+  setTimeout(async () => {
+    try {
+      const { isRedisAvailable } = await import('@/lib/redis');
+      const redisUp = await isRedisAvailable();
+      if (redisUp) return; // BullMQ worker will handle it
+
+      const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+      fetch(`${baseUrl}/api/internal/process-tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': process.env.INTERNAL_TASK_SECRET ?? 'dev-task-secret',
+        },
+        body: JSON.stringify({ maxTasks: 5 }),
+      }).catch((err) => console.error('[autoKickoffBA] trigger error:', err));
+    } catch {
+      // Fallback: try process-tasks anyway
+      const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+      fetch(`${baseUrl}/api/internal/process-tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': process.env.INTERNAL_TASK_SECRET ?? 'dev-task-secret',
+        },
+        body: JSON.stringify({ maxTasks: 5 }),
+      }).catch(() => {});
+    }
+  }, 2000);
 
   return runId;
 }

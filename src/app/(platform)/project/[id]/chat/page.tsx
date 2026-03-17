@@ -447,11 +447,15 @@ export default function ChatPage() {
               </AnimatePresence>
 
               {(() => {
+                // Show option buttons on the LAST agent message only (not old ones that already got answered)
                 const isLastAgentMsg = i === visible.length - 1 ||
                   visible.slice(i + 1).every(m => m.role !== 'agent');
-                const { cleanContent, options, multiSelect } = isLastAgentMsg && !isStreaming
-                  ? extractOptions(msg.content)
-                  : { cleanContent: msg.content, options: [] as { label: string; text: string; recommended: boolean }[], multiSelect: false };
+                // Always extract to clean option lines from content display,
+                // but only show clickable buttons on the last agent message
+                const extracted = extractOptions(msg.content);
+                const { cleanContent } = extracted;
+                const options = isLastAgentMsg && !isStreaming ? extracted.options : [] as { label: string; text: string; recommended: boolean }[];
+                const multiSelect = isLastAgentMsg && !isStreaming ? extracted.multiSelect : false;
                 return (
                   <>
                     <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">

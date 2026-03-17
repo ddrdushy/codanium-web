@@ -67,11 +67,14 @@ async function processOrchestrationJob(
   );
 
   // 5. Execute orchestration
+  //    skipMessageSave: true — the auto-kickoff already saved a SYSTEM message;
+  //    do NOT save userMessage again as a USER message (causes duplicates).
   await orchestrationEngine.process({
     projectId: run.projectId,
     userMessage: run.userMessage,
     targetAgentShortName: run.routedTo,
     userId: run.userId,
+    skipMessageSave: true,
   });
 
   // 6. Mark COMPLETED in Postgres
