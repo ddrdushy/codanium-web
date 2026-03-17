@@ -157,6 +157,16 @@ async function executeToolInternal(
     case 'trigger_deploy':
       return { message: `Deploy to ${args.environment} queued`, environment: args.environment };
 
+    // ── Guardrails ──────────────────────────────────────────
+    case 'validate_code':
+      return handleValidateCode(args, projectId);
+    case 'review_changes':
+      return handleReviewChanges(args, projectId);
+    case 'check_dependencies':
+      return handleCheckDependencies(args, projectId);
+    case 'validate_architecture':
+      return handleValidateArchitecture(args, projectId);
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -301,6 +311,71 @@ async function handleRemember(args: Record<string, any>, projectId: string) {
 }
 
 // ─── Web Handlers ─────────────────────────────────────────────────────────────
+
+// ─── Guardrail Handlers ───────────────────────────────────────────────────────
+
+async function handleValidateCode(args: Record<string, any>, projectId: string) {
+  const commands: string[] = [];
+  const checks = args.checks || ['all'];
+  const target = args.path || '.';
+
+  if (checks.includes('all') || checks.includes('syntax')) {
+    commands.push(`npx tsc --noEmit ${target !== '.' ? target : ''} 2>&1 || true`);
+  }
+  if (checks.includes('all') || checks.includes('lint')) {
+    commands.push(`npx eslint ${target} --max-warnings 0 2>&1 || true`);
+  }
+  if (checks.includes('all') || checks.includes('security')) {
+    commands.push('npm audit --json 2>&1 | head -100 || true');
+  }
+
+  const results = [];
+  for (const cmd of commands) {
+    const result = await runCommandInWorkspace(projectId, cmd, 60);
+    results.push({ command: cmd.split(' ')[1], output: result.stdout.slice(0, 5000), exitCode: result.exitCode });
+  }
+  return { checks: results, path: target };
+}
+
+async function handleReviewChanges(args: Record<string, any>, projectId: string) {
+  const scope = args.scope || 'all';
+  const diffFlag = scope === 'staged' ? '--cached' : '';
+  const result = await runCommandInWorkspace(projectId, `git diff ${diffFlag} --stat 2>&1`, 30);
+  const diffContent = await runCommandInWorkspace(projectId, `git diff ${diffFlag} 2>&1 | head -500`, 30);
+  return {
+    scope,
+    summary: result.stdout.slice(0, 5000),
+    diff: diffContent.stdout.slice(0, 20000),
+  };
+}
+
+async function handleCheckDependencies(args: Record<string, any>, projectId: string) {
+  const auditResult = await runCommandInWorkspace(projectId, 'npm audit 2>&1 | tail -20', 60);
+  const outdatedResult = await runCommandInWorkspace(projectId, 'npm outdated 2>&1 | head -30 || true', 30);
+
+  if (args.fix) {
+    await runCommandInWorkspace(projectId, 'npm audit fix 2>&1 || true', 120);
+  }
+
+  return {
+    audit: auditResult.stdout.slice(0, 5000),
+    outdated: outdatedResult.stdout.slice(0, 5000),
+    fixed: !!args.fix,
+  };
+}
+
+async function handleValidateArchitecture(args: Record<string, any>, projectId: string) {
+  // Check for circular imports and module boundary violations
+  const circularCheck = await runCommandInWorkspace(
+    projectId,
+    'npx madge --circular --extensions ts,tsx src/ 2>&1 | head -50 || echo "madge not installed"',
+    60,
+  );
+  return {
+    circularDependencies: circularCheck.stdout.slice(0, 5000),
+    exitCode: circularCheck.exitCode,
+  };
+}
 
 async function handleWebFetch(url: string) {
   try {

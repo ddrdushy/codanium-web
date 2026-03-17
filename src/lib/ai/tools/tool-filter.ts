@@ -63,6 +63,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'run_command', 'run_tests',
     'git_diff',
     'update_card', 'create_card', 'task_progress',
+    'validate_code', 'review_changes', 'check_dependencies',
   ],
   AT: [ // Automation Tester
     'read_file', 'write_file',
@@ -114,6 +115,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'git_diff',
     'update_card', 'create_card',
     'create_document', 'task_progress',
+    'validate_code', 'review_changes', 'check_dependencies', 'validate_architecture',
   ],
   ORC: [ // Orchestrator
     'create_card', 'update_card',

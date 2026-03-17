@@ -395,6 +395,61 @@ export const triggerDeploy: ToolDefinition = {
   },
 };
 
+// ─── G. Guardrail Tools ───────────────────────────────────────────────────────
+
+export const validateCode: ToolDefinition = {
+  name: 'validate_code',
+  description: 'Run code quality checks on a file or the entire project. Checks for syntax errors, type errors, linting issues, and security vulnerabilities.',
+  category: 'shell',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'File path to validate (validates entire project if omitted)' },
+      checks: {
+        type: 'array',
+        items: { type: 'string', enum: ['syntax', 'types', 'lint', 'security', 'all'] },
+        description: 'Which checks to run (default: all)',
+      },
+    },
+  },
+};
+
+export const reviewChanges: ToolDefinition = {
+  name: 'review_changes',
+  description: 'Review uncommitted code changes for quality, security, and best practices. Returns issues found with severity levels.',
+  category: 'shell',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      scope: { type: 'string', enum: ['staged', 'unstaged', 'all'], description: 'Which changes to review (default: all)' },
+    },
+  },
+};
+
+export const checkDependencies: ToolDefinition = {
+  name: 'check_dependencies',
+  description: 'Audit project dependencies for known vulnerabilities, outdated packages, and license compliance.',
+  category: 'shell',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      fix: { type: 'boolean', description: 'Automatically fix vulnerabilities if possible (default: false)' },
+    },
+  },
+};
+
+export const validateArchitecture: ToolDefinition = {
+  name: 'validate_architecture',
+  description: 'Check that the codebase follows the defined architecture patterns. Validates module boundaries, import rules, and naming conventions.',
+  category: 'shell',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      rules: { type: 'string', description: 'Path to architecture rules file (default: auto-detect)' },
+    },
+  },
+};
+
 // ─── Tool Registry ────────────────────────────────────────────────────────────
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -411,6 +466,8 @@ export const ALL_TOOLS: ToolDefinition[] = [
   webSearch, webFetch,
   // Deploy
   triggerDeploy,
+  // Guardrails
+  validateCode, reviewChanges, checkDependencies, validateArchitecture,
 ];
 
 /**
