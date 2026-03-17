@@ -180,26 +180,7 @@ interface ChatMessage {
   codeBlock?: { language: string; code: string };
 }
 
-function getDemoMessages(agents: Agent[]): ChatMessage[] {
-  const sa = agents.find(a => a.shortName === 'SA') ?? agents[0];
-  return [
-    {
-      id: 'sys-1', role: 'system',
-      content: 'Session started — connected to project AI Team Studio',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-    {
-      id: 'agent-1', role: 'agent', agent: sa,
-      content: 'I\'ve analyzed the current LLM Gateway architecture. Here are my findings:\n\n**Current State:**\nThe gateway uses a single-provider pattern with OpenAI hardcoded. This limits flexibility and creates vendor lock-in.\n\n**Recommended Improvements:**\n1. **Abstract Provider Interface** — Create a base `LLMProvider` class with `complete()`, `stream()`, and `embed()` methods\n2. **Model Router** — Add configuration-driven routing that maps model aliases to specific providers\n3. **Fallback Chain** — Implement automatic fallback when a provider is unavailable\n4. **Token Budget Enforcement** — Add per-agent and per-session token limits',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      thinking: 'Analyzing the current gateway implementation... The single-provider pattern violates the BYOM principle. Need to design an abstraction layer that supports OpenAI, Anthropic, Ollama, and custom endpoints while maintaining a unified API surface.',
-      artifacts: [
-        { name: 'gateway-refactor.md', type: 'document' },
-        { name: 'provider-interface.py', type: 'code' },
-      ],
-    },
-  ];
-}
+// No demo messages — real chat only. If no messages exist, show empty state.
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -279,11 +260,7 @@ export default function ChatPage() {
       .catch(() => {});
   }, [projectId]);
 
-  useEffect(() => {
-    if (loaded && messages.length === 0 && agents.length > 0) {
-      setMessages(getDemoMessages(agents));
-    }
-  }, [agents, messages.length, loaded]);
+  // Empty state handled in JSX — no demo messages injected
 
   // Scroll to bottom on new messages and stream state changes.
   // IMPORTANT: Do NOT depend on streamContent/streamThinking — those change
@@ -300,13 +277,22 @@ export default function ChatPage() {
   // When the stream completes, refetch ALL messages from DB.
   // This correctly handles delegation chains (BA → SA → PE etc.)
   // where multiple agent messages are saved during a single stream.
+  const lastRefetchedIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (completedMessageId && !isStreaming && projectId) {
+    if (completedMessageId && !isStreaming && projectId && completedMessageId !== lastRefetchedIdRef.current) {
+      lastRefetchedIdRef.current = completedMessageId;
       fetch(`/api/projects/${projectId}/chat`)
         .then(r => r.json())
         .then((data: any[]) => {
           if (Array.isArray(data) && data.length > 0) {
-            setMessages(data.map((m: any) => ({
+            // Deduplicate by message ID
+            const seen = new Set<string>();
+            const unique = data.filter((m: any) => {
+              if (seen.has(m.id)) return false;
+              seen.add(m.id);
+              return true;
+            });
+            setMessages(unique.map((m: any) => ({
               id: m.id,
               role: m.role.toLowerCase() as 'user' | 'agent' | 'system',
               agent: m.agent ? {
@@ -323,7 +309,7 @@ export default function ChatPage() {
         .catch(() => {});
       setSelectedOptions([]);
     }
-  }, [completedMessageId, isStreaming]);
+  }, [completedMessageId, isStreaming, projectId]);
 
   const activeAgents = agents.filter(a => a.status === 'working' || a.status === 'waiting');
 
