@@ -17,6 +17,7 @@ export class TaskProcessor {
         userMessage: task.userMessage,
         targetAgentShortName: task.routedTo,
         userId: task.userId,
+        skipMessageSave: true, // Auto-kickoff already saved SYSTEM message; don't save again as USER
       });
 
       await taskQueue.complete(task.id, {

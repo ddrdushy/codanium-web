@@ -81,11 +81,25 @@ export async function autoKickoffBA(
   projectDescription: string,
   userId: string,
 ): Promise<string> {
-  // 1. Create system message as the initial trigger
+  // 1. Fetch structured project memories to build a rich brief
+  const projectMemories = await prisma.projectMemory.findMany({
+    where: { projectId },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  let briefParts: string[] = [];
+  for (const mem of projectMemories) {
+    briefParts.push(`- ${mem.content}`);
+  }
+  const structuredBrief = briefParts.length > 0
+    ? `Here is what the stakeholder provided during project setup:\n${briefParts.join('\n')}`
+    : `Project description: ${projectDescription}`;
+
+  // Create system message as the initial trigger
   await prisma.chatMessage.create({
     data: {
       role: 'SYSTEM',
-      content: `New project created. Here is the project brief:\n\n${projectDescription}\n\nPlease begin the requirements gathering process. Analyze the brief and start building the Business Requirements Document (BRD).`,
+      content: `New project created.\n\n${structuredBrief}\n\nIMPORTANT: The stakeholder already provided the above information. Do NOT re-ask questions they already answered. Start your discovery from where they left off — acknowledge what you know and ask the NEXT relevant question.`,
       projectId,
     },
   });

@@ -84,8 +84,8 @@ export async function POST(
       try {
         if (USE_LANGGRAPH) {
           // ── LangGraph Path ─────────────────────────────────────────────
-          // Save user message first (graph nodes don't handle this)
-          await saveUserMessage(projectId, body.content.trim(), cardId);
+          // NOTE: User message is already saved by the chat page (POST /api/projects/[id]/chat)
+          // Do NOT save again here — it causes duplicate messages.
 
           const graph = buildOrchestrationGraph();
 

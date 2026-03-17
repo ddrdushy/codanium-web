@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       console.error('Project seed failed (non-fatal):', seedError);
     }
 
-    // Auto-seed project memories from wizard data
+    // Auto-seed project memories from wizard data (structured for BA context)
     try {
       const memories: Array<{ projectId: string; category: string; content: string; source: string }> = [];
 
@@ -128,11 +128,44 @@ export async function POST(request: NextRequest) {
           source: 'system',
         });
       }
-      if (data.description) {
+
+      // Parse structured fields from description (wizard packs them as "Idea: ...\n\nTarget audience: ...\n\nPriorities: ...")
+      const descriptionText = data.description ?? '';
+      const ideaMatch = descriptionText.match(/^Idea:\s*(.+?)(?:\n\n|$)/s);
+      const audienceMatch = descriptionText.match(/Target audience:\s*(.+?)(?:\n\n|$)/s);
+      const prioritiesMatch = descriptionText.match(/Priorities:\s*(.+?)(?:\n\n|$)/s);
+
+      if (ideaMatch?.[1]?.trim()) {
         memories.push({
           projectId: project.id,
           category: 'idea',
-          content: `Description: ${data.description}`,
+          content: `Product idea: ${ideaMatch[1].trim()}`,
+          source: 'system',
+        });
+      }
+      if (audienceMatch?.[1]?.trim()) {
+        memories.push({
+          projectId: project.id,
+          category: 'audience',
+          content: `Target audience: ${audienceMatch[1].trim()}`,
+          source: 'system',
+        });
+      }
+      if (prioritiesMatch?.[1]?.trim()) {
+        memories.push({
+          projectId: project.id,
+          category: 'priorities',
+          content: `Project priorities: ${prioritiesMatch[1].trim()}`,
+          source: 'system',
+        });
+      }
+
+      // Fallback: if no structured fields parsed, store raw description
+      if (!ideaMatch && !audienceMatch && !prioritiesMatch && descriptionText.trim()) {
+        memories.push({
+          projectId: project.id,
+          category: 'idea',
+          content: `Description: ${descriptionText.trim()}`,
           source: 'system',
         });
       }

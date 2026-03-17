@@ -62,8 +62,10 @@ export class OrchestrationEngine {
     };
 
     try {
-      // ── Step 1: Persist user message ──────────────────────────────────
-      await this.saveUserMessage(projectId, userMessage);
+      // ── Step 1: Persist user message (skip if caller already saved it) ─
+      if (!request.skipMessageSave) {
+        await this.saveUserMessage(projectId, userMessage);
+      }
 
       // ── Step 2: Determine target agent ────────────────────────────────
       const targetShortName = request.targetAgentShortName
