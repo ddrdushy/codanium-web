@@ -9,16 +9,47 @@ export class TaskProcessor {
     const startTime = Date.now();
 
     try {
-      // Dynamic import to avoid circular dependency with engine
-      const { orchestrationEngine } = await import('./engine');
+      // Dynamic import to avoid circular dependency
+      const { buildOrchestrationGraph } = await import('./graph/build-graph');
 
-      await orchestrationEngine.process({
+      const graph = buildOrchestrationGraph();
+
+      const initialState = {
         projectId: task.projectId,
+        userId: task.userId,
         userMessage: task.userMessage,
         targetAgentShortName: task.routedTo,
-        userId: task.userId,
-        skipMessageSave: true, // Auto-kickoff already saved SYSTEM message; don't save again as USER
+        inputGuardrailResult: null,
+        routedAgent: '',
+        routedIntent: '',
+        systemMessage: '',
+        recentHistory: [],
+        llmMessages: [],
+        tokenBudgetRemaining: null,
+        rawContent: '',
+        rawThinking: '',
+        tokensUsed: null,
+        parsedResponse: null,
+        savedMessageId: '',
+        outputGuardrailResult: null,
+        shouldDelegate: false,
+        delegationDepth: 0,
+        toolCalls: [],
+        toolResults: [],
+        toolLoopCount: 0,
+        completedToolSignals: [],
+      };
+
+      // Run the graph without streaming (background mode)
+      // Consume all events silently — no SSE writer in background mode
+      const graphStream = await graph.stream(initialState, {
+        streamMode: 'custom',
       });
+
+      // Drain the stream to ensure all processing completes
+      for await (const _event of graphStream) {
+        // Events are discarded in background mode
+      }
 
       await taskQueue.complete(task.id, {
         latencyMs: Date.now() - startTime,

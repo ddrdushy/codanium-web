@@ -74,7 +74,7 @@ const FORMATTER_MAP: Record<ContextSource, ContextFormatter> = {
 // ─── Token Budget ────────────────────────────────────────────────────────────
 
 /** Soft token budget for the system message (excluding chat history messages). */
-const SYSTEM_TOKEN_BUDGET = 6000;
+const SYSTEM_TOKEN_BUDGET = 24000;
 
 /**
  * Priority ranking for context sources.
@@ -557,24 +557,39 @@ function formatDocuments(data: unknown): string {
     PUBLISHED: '📢 PUBLISHED',
   };
   const lines: string[] = [];
-  const stagingDocs: string[] = [];
+  const docContents: string[] = [];
+
+  // Key document types that downstream agents need to read in full
+  const KEY_DOC_TYPES = new Set(['BRD', 'SDD', 'DESIGN_SYSTEM']);
 
   for (const d of docs) {
     lines.push(`  ${d.title} (${d.type}) — ${statusIcon[d.status] ?? d.status}`);
 
-    // Include staging BRD content so BA can compile it into final BRD
-    if (d.title.startsWith('Staging:') && d.status === 'DRAFT' && d.content && d.content.length > 0) {
-      // Truncate to ~3000 chars to keep context manageable
+    if (!d.content || d.content.length === 0) continue;
+
+    // Include content for key documents (BRD, SDD, DESIGN_SYSTEM) regardless of status.
+    // SA needs BRD to design architecture, UX needs BRD+SDD to create wireframes,
+    // PM needs BRD+SDD to create cards, TL needs everything to plan development.
+    if (KEY_DOC_TYPES.has(d.type) && !d.title.startsWith('Staging:')) {
+      // Allow up to 15000 chars for key docs — BRD/SDD are critical context
+      // that downstream agents (SA, UX, PM, TL) need to read in full
+      const truncated = d.content.length > 15000
+        ? d.content.substring(0, 15000) + '\n... (truncated — see full document in project)'
+        : d.content;
+      docContents.push(`\n--- ${d.type} CONTENT: ${d.title} ---\n${truncated}\n--- END ${d.type} ---`);
+    }
+    // Include staging docs for BA to compile into final BRD
+    else if (d.title.startsWith('Staging:') && d.status === 'DRAFT') {
       const truncated = d.content.length > 3000
         ? d.content.substring(0, 3000) + '\n... (truncated)'
         : d.content;
-      stagingDocs.push(`\n--- STAGING ${d.type} CONTENT ---\n${truncated}\n--- END STAGING ---`);
+      docContents.push(`\n--- STAGING ${d.type} CONTENT ---\n${truncated}\n--- END STAGING ---`);
     }
   }
 
   const result = [`DOCUMENTS (${docs.length}):`, ...lines];
-  if (stagingDocs.length > 0) {
-    result.push(...stagingDocs);
+  if (docContents.length > 0) {
+    result.push(...docContents);
   }
   return result.join('\n');
 }

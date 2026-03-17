@@ -116,21 +116,31 @@ const ROUTING_TABLE: Record<UserIntent, string> = {
 
 /**
  * Regex that detects if a message contains clickable option markers.
- * Matches: "- **A)** text", "- A) text", "• **B)** text", etc.
+ * Matches multiple formats agents might use:
+ *   "- **A)** text"    (BA format — dash + bold)
+ *   "- A) text"        (plain dash)
+ *   "• **B)** text"    (bullet + bold)
+ *   "**A)** text"      (bold only, no dash — SA sometimes uses this)
+ *   "A) text"          (plain option at start of line)
  */
-const HAS_OPTIONS_REGEX = /^[-*•]\s+\*{0,2}[A-F]\)\*{0,2}\s+/m;
+const HAS_OPTIONS_REGEX = /^[-*•]?\s*\*{0,2}[A-F]\)\*{0,2}\s+/m;
 
 /**
- * Regex that detects if a message ends with a question (contains "?" near the end).
+ * Regex that detects if a message contains a question mark on any line.
+ * Uses multiline mode so "?" at end of any line matches, not just the last line.
  */
 const HAS_QUESTION_REGEX = /\?\s*$/m;
 
 /**
- * Check if a message looks like it's asking the user a question
- * (contains options or ends with a question mark).
+ * Check if a message looks like it's asking the user a question.
+ * Detects: option markers (A/B/C), question marks, or common question patterns.
  */
 function messageAsksQuestion(content: string): boolean {
-  return HAS_OPTIONS_REGEX.test(content) || HAS_QUESTION_REGEX.test(content);
+  if (HAS_OPTIONS_REGEX.test(content)) return true;
+  if (HAS_QUESTION_REGEX.test(content)) return true;
+  // Catch messages that ask "select all that apply", "choose one", "which do you prefer" etc.
+  if (/\b(select|choose|pick|which|prefer)\b/i.test(content) && /\b(option|apply|one|following)\b/i.test(content)) return true;
+  return false;
 }
 
 /**
@@ -278,7 +288,33 @@ export class MessageRouter {
 
     // ── Priority 3: Keyword intent classification ─────────────────────
     const intent = this.classifyIntent(message);
-    const agent = this.resolveAgent(intent);
+    let agent = this.resolveAgent(intent);
+
+    // ── Priority 4: Smarter fallback for 'general' intent ────────────
+    // After BRD exists, short/generic messages should NOT default to BA.
+    // Route to the last active agent or ORC instead.
+    if (intent === 'general') {
+      const lastAgent = lastContext?.agentShortName;
+      if (lastAgent && lastAgent !== 'BA') {
+        // Continue with whatever agent was last active, even if it didn't
+        // explicitly ask a question (e.g., SA's message ended without '?')
+        console.log(
+          `[MessageRouter] General intent → continuing with last active agent ${lastAgent}` +
+          ` (message: "${message.substring(0, 60)}...")`,
+        );
+        return lastAgent;
+      }
+      // If last agent was BA, check if we should redirect away
+      if (lastAgent === 'BA') {
+        const shouldRedirect = await this.shouldRedirectFromBA(projectId);
+        if (shouldRedirect) {
+          console.log(
+            `[MessageRouter] General intent → BA no longer active, redirecting to ORC`,
+          );
+          return 'ORC';
+        }
+      }
+    }
 
     console.log(
       `[MessageRouter] Keyword routing → intent: ${intent} → agent: ${agent}` +

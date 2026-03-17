@@ -66,7 +66,9 @@ export interface SSEEvent {
     | 'delegation'    // Agent delegating to another agent
     | 'info'          // Informational message (authority blocks, etc.)
     | 'execution'     // Code execution queued/started/completed
-    | 'pipeline_progress'; // Auto-chain pipeline step progress
+    | 'pipeline_progress' // Auto-chain pipeline step progress
+    | 'tool_call'     // LLM requesting a tool call (name + arguments)
+    | 'tool_result';  // Result of an executed tool call
   data: Record<string, unknown>;
 }
 

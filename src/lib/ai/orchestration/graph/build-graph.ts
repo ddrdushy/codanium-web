@@ -3,9 +3,9 @@
 // =============================================================================
 // Constructs the LangGraph StateGraph that implements the full AI orchestration
 // pipeline with guardrails, routing, context building, LLM streaming,
-// response parsing, side effect execution, and agent delegation.
+// tool calling loop, response parsing, and deterministic pipeline routing.
 //
-// Graph topology:
+// New graph topology (Phase 3 rebuild):
 //
 //   START
 //     │
@@ -19,18 +19,29 @@
 //   [context] ──budget exceeded──► END (budget SSE)
 //     │
 //     ▼
-//   [llm] ──► streams tokens via StreamWriter → SSE
+//   [llm] ──► streams tokens via StreamWriter, collects tool calls
 //     │
 //     ▼
-//   [parseAndExecute] ──► parse, guardrails, side effects, persist
+//   ┌──(has tool calls && depth < 10)──► [executeTools] ──► back to [llm]
+//   │
+//   └──(no tool calls)
 //     │
-//     ├──(delegateTo && depth ≤ 5)──► back to [context]
+//     ▼
+//   [parseAndExecute] ──► parse, guardrails, persist
+//     │
+//     ▼
+//   [pipelineRouter] ──► deterministic SDLC routing
+//     │
+//     ├──(next agent && depth ≤ 15)──► back to [context]
 //     │
 //     ▼
 //   END
 //
-// Delegation loops back to the context node with routedAgent updated
-// to the delegation target and delegationDepth incremented.
+// Key differences from previous topology:
+// 1. NEW: Tool calling loop (llm → executeTools → llm) for structured actions
+// 2. NEW: pipelineRouter node for deterministic SDLC routing
+// 3. REMOVED: Agent-driven delegation via [DELEGATE:X] markers
+// 4. SIMPLIFIED: parseAndExecute no longer handles routing/delegation
 // =============================================================================
 
 import { StateGraph } from '@langchain/langgraph';
@@ -39,7 +50,9 @@ import { inputGuardrailNode } from './nodes/input-guardrail';
 import { routeNode } from './nodes/route';
 import { contextNode } from './nodes/context';
 import { llmNode } from './nodes/llm';
+import { executeToolsNode, MAX_TOOL_LOOPS } from './nodes/execute-tools';
 import { parseAndExecuteNode } from './nodes/parse-execute';
+import { pipelineRouterNode } from './nodes/pipeline-router';
 
 /**
  * Build and compile the orchestration StateGraph.
@@ -52,7 +65,9 @@ export function buildOrchestrationGraph() {
     .addNode('route', routeNode)
     .addNode('context', contextNode)
     .addNode('llm', llmNode)
+    .addNode('executeTools', executeToolsNode)
     .addNode('parseAndExecute', parseAndExecuteNode)
+    .addNode('pipelineRouter', pipelineRouterNode)
 
     // ── Edges ───────────────────────────────────────────────────────────
 
@@ -78,15 +93,40 @@ export function buildOrchestrationGraph() {
       return 'llm';
     })
 
-    // llm → parseAndExecute
-    .addEdge('llm', 'parseAndExecute')
+    // llm → tool routing decision
+    // If LLM returned tool calls AND we haven't hit max loops → executeTools
+    // Otherwise → parseAndExecute
+    .addConditionalEdges('llm', (state) => {
+      const hasToolCalls = state.toolCalls && state.toolCalls.length > 0;
+      const withinLoopLimit = (state.toolLoopCount ?? 0) < MAX_TOOL_LOOPS;
 
-    // parseAndExecute → context (if delegating) or END
-    // NOTE: Depth check must match MAX_DELEGATION_DEPTH (5) in parse-execute.ts
-    .addConditionalEdges('parseAndExecute', (state) => {
-      if (state.shouldDelegate && (state.delegationDepth ?? 0) <= 5) {
+      if (hasToolCalls && withinLoopLimit) {
         console.log(
-          `[BuildGraph] Delegation loop → context (depth: ${state.delegationDepth}, agent: ${state.routedAgent})`,
+          `[BuildGraph] Tool loop → executeTools (loop ${(state.toolLoopCount ?? 0) + 1}/${MAX_TOOL_LOOPS}, calls: ${state.toolCalls?.length})`,
+        );
+        return 'executeTools';
+      }
+
+      if (hasToolCalls && !withinLoopLimit) {
+        console.warn(
+          `[BuildGraph] Tool loop limit reached (${MAX_TOOL_LOOPS}), proceeding to parseAndExecute`,
+        );
+      }
+
+      return 'parseAndExecute';
+    })
+
+    // executeTools → back to llm (tool loop)
+    .addEdge('executeTools', 'llm')
+
+    // parseAndExecute → pipelineRouter
+    .addEdge('parseAndExecute', 'pipelineRouter')
+
+    // pipelineRouter → context (if delegating to next agent) or END
+    .addConditionalEdges('pipelineRouter', (state) => {
+      if (state.shouldDelegate && (state.delegationDepth ?? 0) <= 15) {
+        console.log(
+          `[BuildGraph] Pipeline loop → context (depth: ${state.delegationDepth}, next agent: ${state.routedAgent})`,
         );
         return 'context';
       }

@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { orchestrationEngine } from '@/lib/ai';
 import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { prisma } from '@/lib/prisma';
 import { taskQueue } from '@/lib/ai/orchestration/task-queue';
-import { saveUserMessage } from '@/lib/ai/orchestration/engine';
 import { buildOrchestrationGraph } from '@/lib/ai/orchestration/graph/build-graph';
-
-const USE_LANGGRAPH = process.env.USE_LANGGRAPH === 'true';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,58 +78,46 @@ export async function POST(
       }
 
       try {
-        if (USE_LANGGRAPH) {
-          // ── LangGraph Path ─────────────────────────────────────────────
-          // NOTE: User message is already saved by the chat page (POST /api/projects/[id]/chat)
-          // Do NOT save again here — it causes duplicate messages.
+        // ── LangGraph Orchestration ────────────────────────────────────
+        // NOTE: User message is already saved by the chat page (POST /api/projects/[id]/chat)
+        // Do NOT save again here — it causes duplicate messages.
 
-          const graph = buildOrchestrationGraph();
+        const graph = buildOrchestrationGraph();
 
-          const initialState = {
-            projectId,
-            userId,
-            userMessage: body.content.trim(),
-            targetAgentShortName: body.agentShortName ?? undefined,
-            inputGuardrailResult: null,
-            routedAgent: '',
-            routedIntent: '',
-            systemMessage: '',
-            recentHistory: [],
-            llmMessages: [],
-            tokenBudgetRemaining: null,
-            rawContent: '',
-            rawThinking: '',
-            tokensUsed: null,
-            parsedResponse: null,
-            savedMessageId: '',
-            outputGuardrailResult: null,
-            shouldDelegate: false,
-            delegationDepth: 0,
-          };
+        const initialState = {
+          projectId,
+          userId,
+          userMessage: body.content.trim(),
+          targetAgentShortName: body.agentShortName ?? undefined,
+          inputGuardrailResult: null,
+          routedAgent: '',
+          routedIntent: '',
+          systemMessage: '',
+          recentHistory: [],
+          llmMessages: [],
+          tokenBudgetRemaining: null,
+          rawContent: '',
+          rawThinking: '',
+          tokensUsed: null,
+          parsedResponse: null,
+          savedMessageId: '',
+          outputGuardrailResult: null,
+          shouldDelegate: false,
+          delegationDepth: 0,
+          toolCalls: [],
+          toolResults: [],
+          toolLoopCount: 0,
+          completedToolSignals: [],
+        };
 
-          const graphStream = await graph.stream(initialState, {
-            streamMode: 'custom',
-          });
+        const graphStream = await graph.stream(initialState, {
+          streamMode: 'custom',
+        });
 
-          for await (const event of graphStream) {
-            const sseEvent = event as { type: string; data: Record<string, unknown> };
-            if (sseEvent.type && sseEvent.data) {
-              sendEvent(sseEvent.type, sseEvent.data);
-            }
-          }
-        } else {
-          // ── Legacy Engine Path ──────────────────────────────────────────
-          const generator = orchestrationEngine.processStream({
-            projectId,
-            userMessage: body.content.trim(),
-            targetAgentShortName: body.agentShortName ?? undefined,
-            userId,
-            cardId,
-            skipMessageSave: true, // Chat page already saved the user message
-          });
-
-          for await (const event of generator) {
-            sendEvent(event.type, event.data);
+        for await (const event of graphStream) {
+          const sseEvent = event as { type: string; data: Record<string, unknown> };
+          if (sseEvent.type && sseEvent.data) {
+            sendEvent(sseEvent.type, sseEvent.data);
           }
         }
 

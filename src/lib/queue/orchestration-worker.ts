@@ -8,7 +8,7 @@
 //   - Fetches full OrchestrationRun from Postgres (BullMQ payload is minimal)
 //   - Idempotency guard: skips already completed/failed/cancelled runs
 //   - Syncs retry state back to Postgres on failure
-//   - Dynamic import of orchestrationEngine to avoid circular deps
+//   - Dynamic import of buildOrchestrationGraph to avoid circular deps
 //   - Concurrency 5, rate limited to 10 jobs/second
 // =============================================================================
 
@@ -61,21 +61,46 @@ async function processOrchestrationJob(
   const startTime = Date.now();
 
   // 4. Dynamic import to avoid circular dependencies
-  //    (same pattern as task-processor.ts)
-  const { orchestrationEngine } = await import(
-    '@/lib/ai/orchestration/engine'
+  const { buildOrchestrationGraph } = await import(
+    '@/lib/ai/orchestration/graph/build-graph'
   );
 
-  // 5. Execute orchestration
-  //    skipMessageSave: true — the auto-kickoff already saved a SYSTEM message;
-  //    do NOT save userMessage again as a USER message (causes duplicates).
-  await orchestrationEngine.process({
+  // 5. Execute orchestration via LangGraph
+  const graph = buildOrchestrationGraph();
+
+  const initialState = {
     projectId: run.projectId,
+    userId: run.userId,
     userMessage: run.userMessage,
     targetAgentShortName: run.routedTo,
-    userId: run.userId,
-    skipMessageSave: true,
+    inputGuardrailResult: null,
+    routedAgent: '',
+    routedIntent: '',
+    systemMessage: '',
+    recentHistory: [],
+    llmMessages: [],
+    tokenBudgetRemaining: null,
+    rawContent: '',
+    rawThinking: '',
+    tokensUsed: null,
+    parsedResponse: null,
+    savedMessageId: '',
+    outputGuardrailResult: null,
+    shouldDelegate: false,
+    delegationDepth: 0,
+    toolCalls: [],
+    toolResults: [],
+    toolLoopCount: 0,
+    completedToolSignals: [],
+  };
+
+  // Run graph without streaming — drain all events silently
+  const graphStream = await graph.stream(initialState, {
+    streamMode: 'custom',
   });
+  for await (const _event of graphStream) {
+    // Events discarded in background mode
+  }
 
   // 6. Mark COMPLETED in Postgres
   await prisma.orchestrationRun.update({

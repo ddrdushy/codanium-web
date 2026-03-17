@@ -12,6 +12,7 @@ import type {
   LLMResponse,
   LLMStreamChunk,
   LLMMessage,
+  LLMToolCall,
   ProviderConfig,
 } from './types';
 
@@ -56,18 +57,47 @@ function headers(config: ProviderConfig): Record<string, string> {
 /**
  * Anthropic separates the system prompt from conversational messages.
  * Extract system messages into a single `system` string and return the
- * remaining user/assistant messages.
+ * remaining user/assistant/tool messages in Anthropic's content format.
+ *
+ * Anthropic requires:
+ * - assistant messages with tool calls use content blocks: [{type:'text',...}, {type:'tool_use',...}]
+ * - tool results are sent as user messages with content: [{type:'tool_result', tool_use_id, content}]
  */
 function splitMessages(messages: LLMMessage[]): {
   system: string | undefined;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: Array<Record<string, unknown>>;
 } {
   const systemParts: string[] = [];
-  const conversational: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  const conversational: Array<Record<string, unknown>> = [];
 
   for (const msg of messages) {
     if (msg.role === 'system') {
       systemParts.push(msg.content);
+    } else if (msg.role === 'tool') {
+      // Tool results → Anthropic expects them as user messages with tool_result content
+      conversational.push({
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: msg.toolCallId,
+          content: msg.content,
+        }],
+      });
+    } else if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+      // Assistant messages with tool calls → content blocks
+      const content: Array<Record<string, unknown>> = [];
+      if (msg.content) {
+        content.push({ type: 'text', text: msg.content });
+      }
+      for (const tc of msg.toolCalls) {
+        content.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.name,
+          input: tc.arguments,
+        });
+      }
+      conversational.push({ role: 'assistant', content });
     } else {
       conversational.push({ role: msg.role, content: msg.content });
     }
@@ -151,6 +181,22 @@ export class AnthropicAdapter implements LLMProvider {
     if (system) body.system = system;
     if (options.temperature !== undefined) body.temperature = options.temperature;
 
+    // Add tools if provided
+    if (options.tools && options.tools.length > 0) {
+      body.tools = options.tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.inputSchema,
+      }));
+      if (options.toolChoice) {
+        body.tool_choice = options.toolChoice === 'required'
+          ? { type: 'any' }
+          : options.toolChoice === 'none'
+            ? { type: 'none' }
+            : { type: 'auto' };
+      }
+    }
+
     const res = await fetch(`${baseUrl(config)}/v1/messages`, {
       method: 'POST',
       headers: headers(config),
@@ -163,9 +209,10 @@ export class AnthropicAdapter implements LLMProvider {
       throw new Error(`Anthropic API error (${res.status}): ${extractError(data)}`);
     }
 
-    // Extract text and thinking blocks from the content array
+    // Extract text, thinking, and tool_use blocks from the content array
     let content = '';
     let thinking: string | undefined;
+    const toolCalls: LLMToolCall[] = [];
 
     if (Array.isArray(data.content)) {
       for (const block of data.content) {
@@ -173,16 +220,29 @@ export class AnthropicAdapter implements LLMProvider {
           content += block.text;
         } else if (block.type === 'thinking') {
           thinking = (thinking ?? '') + block.thinking;
+        } else if (block.type === 'tool_use') {
+          toolCalls.push({
+            id: block.id,
+            name: block.name,
+            arguments: block.input ?? {},
+          });
         }
       }
     }
 
     const finishReason =
-      data.stop_reason === 'max_tokens' ? 'length' : 'stop';
+      data.stop_reason === 'end_turn' || data.stop_reason === 'stop_sequence'
+        ? 'stop'
+        : data.stop_reason === 'max_tokens'
+          ? 'length'
+          : data.stop_reason === 'tool_use'
+            ? 'tool_calls'
+            : 'stop';
 
     return {
       content,
       thinking,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       tokensUsed: {
         prompt: data.usage?.input_tokens ?? 0,
         completion: data.usage?.output_tokens ?? 0,
@@ -217,6 +277,22 @@ export class AnthropicAdapter implements LLMProvider {
     if (system) body.system = system;
     if (options.temperature !== undefined) body.temperature = options.temperature;
 
+    // Add tools if provided
+    if (options.tools && options.tools.length > 0) {
+      body.tools = options.tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.inputSchema,
+      }));
+      if (options.toolChoice) {
+        body.tool_choice = options.toolChoice === 'required'
+          ? { type: 'any' }
+          : options.toolChoice === 'none'
+            ? { type: 'none' }
+            : { type: 'auto' };
+      }
+    }
+
     const res = await fetch(`${baseUrl(config)}/v1/messages`, {
       method: 'POST',
       headers: headers(config),
@@ -241,8 +317,15 @@ export class AnthropicAdapter implements LLMProvider {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let currentBlockType: 'text' | 'thinking' | null = null;
+    let currentBlockType: 'text' | 'thinking' | 'tool_use' | null = null;
     let usage: { prompt: number; completion: number; total: number } | undefined;
+    let stopReason: string | null = null;
+
+    // Track tool calls being accumulated across content_block_delta events
+    const pendingToolCalls: LLMToolCall[] = [];
+    let currentToolId = '';
+    let currentToolName = '';
+    let currentToolArgsJson = '';
 
     try {
       while (true) {
@@ -290,11 +373,19 @@ export class AnthropicAdapter implements LLMProvider {
               }
 
               case 'content_block_start': {
-                const blockType = (
-                  parsed.content_block as Record<string, unknown> | undefined
-                )?.type as string | undefined;
-                currentBlockType =
-                  blockType === 'thinking' ? 'thinking' : 'text';
+                const block = parsed.content_block as Record<string, unknown> | undefined;
+                const blockType = block?.type as string | undefined;
+
+                if (blockType === 'tool_use') {
+                  currentBlockType = 'tool_use';
+                  currentToolId = (block?.id as string) ?? '';
+                  currentToolName = (block?.name as string) ?? '';
+                  currentToolArgsJson = '';
+                } else if (blockType === 'thinking') {
+                  currentBlockType = 'thinking';
+                } else {
+                  currentBlockType = 'text';
+                }
                 break;
               }
 
@@ -303,28 +394,53 @@ export class AnthropicAdapter implements LLMProvider {
                 if (!delta) break;
 
                 const deltaType = delta.type as string;
-                const text =
-                  deltaType === 'thinking_delta'
-                    ? (delta.thinking as string) ?? ''
-                    : (delta.text as string) ?? '';
 
-                if (text) {
-                  if (currentBlockType === 'thinking') {
+                if (deltaType === 'thinking_delta') {
+                  const text = (delta.thinking as string) ?? '';
+                  if (text) {
                     yield { content: '', thinking: text, done: false };
-                  } else {
+                  }
+                } else if (deltaType === 'text_delta') {
+                  const text = (delta.text as string) ?? '';
+                  if (text) {
                     yield { content: text, done: false };
                   }
+                } else if (deltaType === 'input_json_delta') {
+                  // Accumulate tool call arguments JSON
+                  const partial = (delta.partial_json as string) ?? '';
+                  currentToolArgsJson += partial;
                 }
                 break;
               }
 
               case 'content_block_stop': {
+                // If we just finished a tool_use block, finalize the tool call
+                if (currentBlockType === 'tool_use' && currentToolId) {
+                  let parsedArgs: Record<string, any> = {};
+                  try {
+                    parsedArgs = JSON.parse(currentToolArgsJson || '{}');
+                  } catch {
+                    console.warn(`[Anthropic] Failed to parse tool args for ${currentToolName}`);
+                  }
+                  pendingToolCalls.push({
+                    id: currentToolId,
+                    name: currentToolName,
+                    arguments: parsedArgs,
+                  });
+                  currentToolId = '';
+                  currentToolName = '';
+                  currentToolArgsJson = '';
+                }
                 currentBlockType = null;
                 break;
               }
 
               case 'message_delta': {
                 // Final usage and stop reason
+                const deltaObj = parsed.delta as Record<string, unknown> | undefined;
+                if (deltaObj?.stop_reason) {
+                  stopReason = deltaObj.stop_reason as string;
+                }
                 const deltaUsage = (parsed as Record<string, unknown>)
                   .usage as Record<string, number> | undefined;
                 if (deltaUsage) {
@@ -339,10 +455,18 @@ export class AnthropicAdapter implements LLMProvider {
               }
 
               case 'message_stop': {
+                const finishReason = stopReason === 'tool_use'
+                  ? 'tool_calls' as const
+                  : stopReason === 'max_tokens'
+                    ? 'length' as const
+                    : 'stop' as const;
+
                 yield {
                   content: '',
                   done: true,
                   tokensUsed: usage,
+                  toolCalls: pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
+                  finishReason,
                 };
                 return;
               }
@@ -367,6 +491,7 @@ export class AnthropicAdapter implements LLMProvider {
         content: '',
         done: true,
         tokensUsed: usage,
+        toolCalls: pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
       };
     } finally {
       reader.releaseLock();

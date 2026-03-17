@@ -12,6 +12,7 @@ import type {
   LLMResponse,
   LLMStreamChunk,
   LLMMessage,
+  LLMToolCall,
   ProviderConfig,
 } from './types';
 
@@ -56,11 +57,40 @@ function headers(config: ProviderConfig): Record<string, string> {
   return h;
 }
 
-/** Map our universal messages to OpenAI's format. System messages go first. */
-function formatMessages(messages: LLMMessage[]): LLMMessage[] {
+/**
+ * Map our universal messages to OpenAI's format.
+ * System messages go first. Tool messages include tool_call_id.
+ * Assistant messages with tool calls include the tool_calls array.
+ */
+function formatMessages(messages: LLMMessage[]): Array<Record<string, unknown>> {
   const systemMsgs = messages.filter((m) => m.role === 'system');
   const otherMsgs = messages.filter((m) => m.role !== 'system');
-  return [...systemMsgs, ...otherMsgs];
+  const ordered = [...systemMsgs, ...otherMsgs];
+
+  return ordered.map((msg) => {
+    if (msg.role === 'tool') {
+      return {
+        role: 'tool',
+        content: msg.content,
+        tool_call_id: msg.toolCallId,
+      };
+    }
+    if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+      return {
+        role: 'assistant',
+        content: msg.content || null,
+        tool_calls: msg.toolCalls.map((tc) => ({
+          id: tc.id,
+          type: 'function',
+          function: {
+            name: tc.name,
+            arguments: JSON.stringify(tc.arguments),
+          },
+        })),
+      };
+    }
+    return { role: msg.role, content: msg.content };
+  });
 }
 
 /** Extract an error message from an OpenAI error response body. */
@@ -121,6 +151,25 @@ export class OpenAIAdapter implements LLMProvider {
     if (options.temperature !== undefined) body.temperature = options.temperature;
     if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
 
+    // Add tools if provided
+    if (options.tools && options.tools.length > 0) {
+      body.tools = options.tools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.inputSchema,
+        },
+      }));
+      if (options.toolChoice) {
+        body.tool_choice = options.toolChoice === 'required'
+          ? 'required'
+          : options.toolChoice === 'none'
+            ? 'none'
+            : 'auto';
+      }
+    }
+
     const res = await fetch(`${baseUrl(config)}/chat/completions`, {
       method: 'POST',
       headers: headers(config),
@@ -135,11 +184,35 @@ export class OpenAIAdapter implements LLMProvider {
 
     const choice = data.choices?.[0];
     const content = choice?.message?.content ?? '';
+
+    // Parse tool calls from response
+    const toolCalls: LLMToolCall[] = [];
+    if (choice?.message?.tool_calls) {
+      for (const tc of choice.message.tool_calls) {
+        let parsedArgs: Record<string, any> = {};
+        try {
+          parsedArgs = JSON.parse(tc.function?.arguments ?? '{}');
+        } catch {
+          // ignore parse errors
+        }
+        toolCalls.push({
+          id: tc.id,
+          name: tc.function?.name ?? '',
+          arguments: parsedArgs,
+        });
+      }
+    }
+
     const finishReason =
-      choice?.finish_reason === 'length' ? 'length' : 'stop';
+      choice?.finish_reason === 'tool_calls' || choice?.finish_reason === 'function_call'
+        ? 'tool_calls'
+        : choice?.finish_reason === 'length'
+          ? 'length'
+          : 'stop';
 
     return {
       content,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       tokensUsed: {
         prompt: data.usage?.prompt_tokens ?? 0,
         completion: data.usage?.completion_tokens ?? 0,
@@ -171,6 +244,25 @@ export class OpenAIAdapter implements LLMProvider {
     if (options.temperature !== undefined) body.temperature = options.temperature;
     if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
 
+    // Add tools if provided
+    if (options.tools && options.tools.length > 0) {
+      body.tools = options.tools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.inputSchema,
+        },
+      }));
+      if (options.toolChoice) {
+        body.tool_choice = options.toolChoice === 'required'
+          ? 'required'
+          : options.toolChoice === 'none'
+            ? 'none'
+            : 'auto';
+      }
+    }
+
     const res = await fetch(`${baseUrl(config)}/chat/completions`, {
       method: 'POST',
       headers: headers(config),
@@ -196,6 +288,11 @@ export class OpenAIAdapter implements LLMProvider {
     const decoder = new TextDecoder();
     let buffer = '';
     let usage: { prompt: number; completion: number; total: number } | undefined;
+    let lastFinishReason: string | null = null;
+
+    // Accumulate tool calls across streaming chunks
+    // OpenAI streams tool calls with index-based accumulation
+    const toolCallAccumulators: Map<number, { id: string; name: string; argsJson: string }> = new Map();
 
     try {
       while (true) {
@@ -214,10 +311,34 @@ export class OpenAIAdapter implements LLMProvider {
           const payload = trimmed.slice(6);
 
           if (payload === '[DONE]') {
+            // Finalize any accumulated tool calls
+            const toolCalls: LLMToolCall[] = [];
+            for (const [, acc] of toolCallAccumulators) {
+              let parsedArgs: Record<string, any> = {};
+              try {
+                parsedArgs = JSON.parse(acc.argsJson || '{}');
+              } catch {
+                // ignore parse errors
+              }
+              toolCalls.push({
+                id: acc.id,
+                name: acc.name,
+                arguments: parsedArgs,
+              });
+            }
+
+            const finishReason = lastFinishReason === 'tool_calls' || lastFinishReason === 'function_call'
+              ? 'tool_calls' as const
+              : lastFinishReason === 'length'
+                ? 'length' as const
+                : 'stop' as const;
+
             yield {
               content: '',
               done: true,
               tokensUsed: usage,
+              toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+              finishReason,
             };
             return;
           }
@@ -228,6 +349,10 @@ export class OpenAIAdapter implements LLMProvider {
             const content = delta?.content ?? '';
             const finishReason = parsed.choices?.[0]?.finish_reason;
 
+            if (finishReason) {
+              lastFinishReason = finishReason;
+            }
+
             // Capture usage if present (sent with stream_options)
             if (parsed.usage) {
               usage = {
@@ -237,7 +362,25 @@ export class OpenAIAdapter implements LLMProvider {
               };
             }
 
-            if (content || finishReason) {
+            // Accumulate tool calls from delta
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls as Array<Record<string, any>>) {
+                const idx = tc.index ?? 0;
+                if (!toolCallAccumulators.has(idx)) {
+                  toolCallAccumulators.set(idx, {
+                    id: tc.id ?? '',
+                    name: tc.function?.name ?? '',
+                    argsJson: '',
+                  });
+                }
+                const acc = toolCallAccumulators.get(idx)!;
+                if (tc.id) acc.id = tc.id;
+                if (tc.function?.name) acc.name = tc.function.name;
+                if (tc.function?.arguments) acc.argsJson += tc.function.arguments;
+              }
+            }
+
+            if (content) {
               yield {
                 content,
                 done: false,
@@ -249,11 +392,21 @@ export class OpenAIAdapter implements LLMProvider {
         }
       }
 
-      // If we exited without [DONE], yield a final chunk
+      // If we exited without [DONE], finalize
+      const toolCalls: LLMToolCall[] = [];
+      for (const [, acc] of toolCallAccumulators) {
+        let parsedArgs: Record<string, any> = {};
+        try {
+          parsedArgs = JSON.parse(acc.argsJson || '{}');
+        } catch { /* ignore */ }
+        toolCalls.push({ id: acc.id, name: acc.name, arguments: parsedArgs });
+      }
+
       yield {
         content: '',
         done: true,
         tokensUsed: usage,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       };
     } finally {
       reader.releaseLock();

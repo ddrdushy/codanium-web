@@ -44,6 +44,28 @@ export interface ErrorData {
   message: string;
 }
 
+export interface ToolCallData {
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface ToolResultData {
+  name: string;
+  success: boolean;
+  result: string;
+}
+
+export interface PipelineProgressData {
+  fromAgent: string;
+  toAgent: string;
+  depth: number;
+  maxDepth: number;
+}
+
+export interface InfoData {
+  message: string;
+}
+
 // ─── Stream Callbacks ───────────────────────────────────────────────────────
 
 export interface StreamCallbacks {
@@ -55,6 +77,10 @@ export interface StreamCallbacks {
   onDelegation?: (data: DelegationData) => void;
   onDone?: (data: DoneData) => void;
   onError?: (data: ErrorData) => void;
+  onToolCall?: (data: ToolCallData) => void;
+  onToolResult?: (data: ToolResultData) => void;
+  onPipelineProgress?: (data: PipelineProgressData) => void;
+  onInfo?: (data: InfoData) => void;
 }
 
 // ─── SSE Parser ─────────────────────────────────────────────────────────────
@@ -161,6 +187,18 @@ function dispatchSSEEvent(
       break;
     case 'error':
       callbacks.onError?.(parsed as ErrorData);
+      break;
+    case 'tool_call':
+      callbacks.onToolCall?.(parsed as ToolCallData);
+      break;
+    case 'tool_result':
+      callbacks.onToolResult?.(parsed as ToolResultData);
+      break;
+    case 'pipeline_progress':
+      callbacks.onPipelineProgress?.(parsed as PipelineProgressData);
+      break;
+    case 'info':
+      callbacks.onInfo?.(parsed as InfoData);
       break;
     default:
       // Unknown event types are silently ignored per SSE spec
@@ -284,6 +322,14 @@ export async function streamChat(
 
 // ─── useAgentStream React Hook ──────────────────────────────────────────────
 
+export interface ToolActivity {
+  name: string;
+  arguments?: Record<string, unknown>;
+  result?: string;
+  success?: boolean;
+  status: 'calling' | 'completed' | 'failed';
+}
+
 export interface AgentStreamState {
   /** Send a message and start streaming the response */
   send: (projectId: string, content: string, agentShortName?: string, cardId?: string) => Promise<void>;
@@ -299,12 +345,16 @@ export interface AgentStreamState {
   streamThinking: string;
   /** Artifacts produced during this stream */
   artifacts: Array<{ name: string; type: string }>;
+  /** Tool calls and results during this stream */
+  toolActivities: ToolActivity[];
   /** The message ID returned on completion (null while streaming) */
   completedMessageId: string | null;
   /** Latest usage data from the stream */
   usage: UsageData['tokensUsed'] | null;
   /** Latest error message, if any */
   error: string | null;
+  /** Pipeline progress info */
+  pipelineProgress: PipelineProgressData | null;
 }
 
 /**
@@ -327,9 +377,11 @@ export function useAgentStream(): AgentStreamState {
   const [streamContent, setStreamContent] = useState('');
   const [streamThinking, setStreamThinking] = useState('');
   const [artifacts, setArtifacts] = useState<Array<{ name: string; type: string }>>([]);
+  const [toolActivities, setToolActivities] = useState<ToolActivity[]>([]);
   const [completedMessageId, setCompletedMessageId] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageData['tokensUsed'] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pipelineProgress, setPipelineProgress] = useState<PipelineProgressData | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   // Batching refs — accumulate tokens and flush at ~30fps instead of per-token
@@ -368,9 +420,11 @@ export function useAgentStream(): AgentStreamState {
       setStreamContent('');
       setStreamThinking('');
       setArtifacts([]);
+      setToolActivities([]);
       setCompletedMessageId(null);
       setUsage(null);
       setError(null);
+      setPipelineProgress(null);
 
       try {
         await streamChat(
@@ -428,6 +482,41 @@ export function useAgentStream(): AgentStreamState {
             onError: (data) => {
               setError(data.message);
             },
+            onToolCall: (data) => {
+              setToolActivities((prev) => [
+                ...prev,
+                { name: data.name, arguments: data.arguments, status: 'calling' },
+              ]);
+            },
+            onToolResult: (data) => {
+              setToolActivities((prev) => {
+                // Update the last matching tool call with the result
+                const idx = [...prev].reverse().findIndex(
+                  (t) => t.name === data.name && t.status === 'calling'
+                );
+                if (idx === -1) {
+                  return [
+                    ...prev,
+                    { name: data.name, result: data.result, success: data.success, status: data.success ? 'completed' as const : 'failed' as const },
+                  ];
+                }
+                const realIdx = prev.length - 1 - idx;
+                const updated = [...prev];
+                updated[realIdx] = {
+                  ...updated[realIdx],
+                  result: data.result,
+                  success: data.success,
+                  status: data.success ? 'completed' : 'failed',
+                };
+                return updated;
+              });
+            },
+            onPipelineProgress: (data) => {
+              setPipelineProgress(data);
+            },
+            onInfo: () => {
+              // Info events are logged but not displayed to user
+            },
           },
           controller.signal,
           cardId,
@@ -471,8 +560,10 @@ export function useAgentStream(): AgentStreamState {
     streamContent,
     streamThinking,
     artifacts,
+    toolActivities,
     completedMessageId,
     usage,
     error,
+    pipelineProgress,
   };
 }

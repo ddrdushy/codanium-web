@@ -17,6 +17,7 @@ import type {
   LLMRequestOptions,
   LLMResponse,
   LLMStreamChunk,
+  LLMToolCall,
   ProviderConfig,
 } from './types';
 
@@ -189,15 +190,41 @@ export class OllamaAdapter implements LLMProvider {
     const model = options.model || config.defaultModel || DEFAULT_MODEL;
     const startTime = Date.now();
 
+    // Format messages for Ollama (handles tool results)
+    const formattedMessages = options.messages.map((m) => {
+      if (m.role === 'tool') {
+        return { role: 'tool', content: m.content };
+      }
+      if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: 'assistant',
+          content: m.content || '',
+          tool_calls: m.toolCalls.map((tc) => ({
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        };
+      }
+      return { role: m.role, content: m.content };
+    });
+
     const body: Record<string, unknown> = {
       model,
-      messages: options.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: formattedMessages,
       stream: false,
       keep_alive: '10m',
     };
+
+    // Add tools if provided (Ollama supports tools for llama3.1+, qwen2.5+, etc.)
+    if (options.tools && options.tools.length > 0) {
+      body.tools = options.tools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.inputSchema,
+        },
+      }));
+    }
 
     // Merge Ollama-specific options (num_predict = max output tokens)
     const ollamaOptions: Record<string, unknown> = {
@@ -260,14 +287,29 @@ export class OllamaAdapter implements LLMProvider {
         const data = await res.json();
         const content = data.message?.content ?? '';
 
+        // Parse tool calls from Ollama response
+        const toolCalls: LLMToolCall[] = [];
+        if (data.message?.tool_calls && Array.isArray(data.message.tool_calls)) {
+          for (const tc of data.message.tool_calls) {
+            toolCalls.push({
+              id: `ollama-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              name: tc.function?.name ?? '',
+              arguments: tc.function?.arguments ?? {},
+            });
+          }
+        }
+
         // Ollama may provide token counts in eval_count / prompt_eval_count
         const promptTokens = data.prompt_eval_count ?? estimateTokens(
           options.messages.map((m) => m.content).join(' '),
         );
         const completionTokens = data.eval_count ?? estimateTokens(content);
 
+        const hasToolCalls = toolCalls.length > 0;
+
         return {
           content,
+          toolCalls: hasToolCalls ? toolCalls : undefined,
           tokensUsed: {
             prompt: promptTokens,
             completion: completionTokens,
@@ -276,7 +318,11 @@ export class OllamaAdapter implements LLMProvider {
           model,
           provider: 'ollama',
           latencyMs: Date.now() - startTime,
-          finishReason: data.done_reason === 'length' ? 'length' : 'stop',
+          finishReason: hasToolCalls
+            ? 'tool_calls'
+            : data.done_reason === 'length'
+              ? 'length'
+              : 'stop',
         };
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
@@ -301,15 +347,41 @@ export class OllamaAdapter implements LLMProvider {
   ): AsyncIterable<LLMStreamChunk> {
     const model = options.model || config.defaultModel || DEFAULT_MODEL;
 
+    // Format messages for Ollama (handles tool results)
+    const streamMessages = options.messages.map((m) => {
+      if (m.role === 'tool') {
+        return { role: 'tool', content: m.content };
+      }
+      if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: 'assistant',
+          content: m.content || '',
+          tool_calls: m.toolCalls.map((tc) => ({
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        };
+      }
+      return { role: m.role, content: m.content };
+    });
+
     const body: Record<string, unknown> = {
       model,
-      messages: options.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: streamMessages,
       stream: true,
       keep_alive: '10m',
     };
+
+    // Add tools if provided
+    if (options.tools && options.tools.length > 0) {
+      body.tools = options.tools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.inputSchema,
+        },
+      }));
+    }
 
     // Merge Ollama-specific options (num_predict = max output tokens)
     const ollamaOpts: Record<string, unknown> = {
@@ -405,6 +477,7 @@ export class OllamaAdapter implements LLMProvider {
     let totalContent = '';
     let promptTokens = 0;
     let completionTokens = 0;
+    const accumulatedToolCalls: LLMToolCall[] = [];
 
     try {
       while (true) {
@@ -434,6 +507,17 @@ export class OllamaAdapter implements LLMProvider {
           const content = (message?.content as string) ?? '';
           const isDone = parsed.done === true;
 
+          // Accumulate tool calls from streaming chunks
+          if (message?.tool_calls && Array.isArray(message.tool_calls)) {
+            for (const tc of message.tool_calls as Array<Record<string, any>>) {
+              accumulatedToolCalls.push({
+                id: `ollama-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                name: tc.function?.name ?? '',
+                arguments: tc.function?.arguments ?? {},
+              });
+            }
+          }
+
           if (content) {
             totalContent += content;
           }
@@ -449,6 +533,8 @@ export class OllamaAdapter implements LLMProvider {
               (parsed.eval_count as number) ??
               estimateTokens(totalContent);
 
+            const hasToolCalls = accumulatedToolCalls.length > 0;
+
             yield {
               content: content,
               done: true,
@@ -457,6 +543,8 @@ export class OllamaAdapter implements LLMProvider {
                 completion: completionTokens,
                 total: promptTokens + completionTokens,
               },
+              toolCalls: hasToolCalls ? accumulatedToolCalls : undefined,
+              finishReason: hasToolCalls ? 'tool_calls' : 'stop',
             };
             return;
           }
@@ -476,6 +564,8 @@ export class OllamaAdapter implements LLMProvider {
       );
       completionTokens = estimateTokens(totalContent);
 
+      const hasToolCalls = accumulatedToolCalls.length > 0;
+
       yield {
         content: '',
         done: true,
@@ -484,6 +574,8 @@ export class OllamaAdapter implements LLMProvider {
           completion: completionTokens,
           total: promptTokens + completionTokens,
         },
+        toolCalls: hasToolCalls ? accumulatedToolCalls : undefined,
+        finishReason: hasToolCalls ? 'tool_calls' : 'stop',
       };
     } finally {
       reader.releaseLock();

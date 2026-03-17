@@ -7,9 +7,10 @@
 // =============================================================================
 
 import { Annotation } from '@langchain/langgraph';
-import { LLMMessage } from '@/lib/ai/providers/types';
+import { LLMMessage, LLMToolCall } from '@/lib/ai/providers/types';
 import { AgentAction } from '@/lib/ai/agents/types';
 import { ParsedResponse } from '@/lib/ai/agents/response-parser';
+import { ToolResult } from '@/lib/ai/tools/tool-definitions';
 
 // ---------------------------------------------------------------------------
 // Guardrail Result Types
@@ -86,11 +87,21 @@ export const GraphState = Annotation.Root({
   /** Result from the output guardrail checks. */
   outputGuardrailResult: Annotation<OutputGuardrailResult | null>,
 
-  // ── Delegation ──────────────────────────────────────────────────────────
+  // ── Tool Calling ────────────────────────────────────────────────────────
+  /** Pending tool calls from the LLM (to be executed by executeTools node). */
+  toolCalls: Annotation<LLMToolCall[]>,
+  /** Results of executed tool calls (appended to messages for next LLM call). */
+  toolResults: Annotation<ToolResult[]>,
+  /** Number of tool call → execute → LLM loops in this turn (max 10). */
+  toolLoopCount: Annotation<number>,
+
+  // ── Pipeline & Delegation ─────────────────────────────────────────────
   /** Whether this response triggers a delegation to another agent. */
   shouldDelegate: Annotation<boolean>,
-  /** Current delegation depth (max 5 to prevent infinite loops). */
+  /** Current pipeline depth (max 15 to prevent infinite loops). */
   delegationDepth: Annotation<number>,
+  /** Tool signals completed during this agent's turn (for pipeline routing). */
+  completedToolSignals: Annotation<string[]>,
 });
 
 /** TypeScript type for the graph state. */
