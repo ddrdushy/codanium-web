@@ -352,10 +352,15 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
       isDelegation: input.isPipeline,
     });
 
+    // For pipeline calls, prefix the message so agents know they're in autonomous mode
+    const userContent = input.isPipeline
+      ? `[PIPELINE] ${sanitizedMessage}\n\nYou are in PIPELINE MODE. Work autonomously — do NOT ask the user questions. Read the project documents in your context and produce your deliverables.`
+      : sanitizedMessage;
+
     const messages: LLMMessage[] = [
       { role: 'system', content: context.systemMessage },
       ...context.recentHistory,
-      { role: 'user', content: sanitizedMessage },
+      { role: 'user', content: userContent },
     ];
 
     // ── Signal agent start ───────────────────────────────────────────────
