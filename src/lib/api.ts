@@ -374,6 +374,12 @@ export async function fetchSystemHealth(): Promise<any> {
   return apiFetch('/api/admin/health');
 }
 
+// ─── LLM Health ──────────────────────────────────────────────────────────────
+
+export async function checkLLMHealth(): Promise<{ configured: boolean; provider: string; model: string; error?: string }> {
+  return apiFetch('/api/llm/health');
+}
+
 // ─── Recent Activity (from audit logs) ───────────────────────────────────────
 
 export async function fetchRecentActivity(limit = 10): Promise<any[]> {

@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchAgents } from '@/lib/api';
+import { fetchAgents, checkLLMHealth } from '@/lib/api';
 
 import { useAgentStream } from '@/lib/hooks/use-agent-stream';
 import { Agent } from '@/types';
@@ -211,6 +211,8 @@ export default function ChatPage() {
   const isSendingRef = useRef(false); // Prevent double-sends (race condition guard)
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
+  const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
+  const [llmError, setLlmError] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -254,6 +256,19 @@ export default function ChatPage() {
       })
       .catch(() => setLoaded(true));
   }, [projectId]);
+
+  // Check LLM provider health on mount
+  useEffect(() => {
+    checkLLMHealth()
+      .then((result) => {
+        setLlmConfigured(result.configured);
+        setLlmError(result.error);
+      })
+      .catch(() => {
+        setLlmConfigured(false);
+        setLlmError('Failed to check LLM configuration. Please try again.');
+      });
+  }, []);
 
   // Poll for BA auto-kickoff response when only system message exists.
   // On new projects, BA generates its first message in the background (~5s).
@@ -674,6 +689,34 @@ export default function ChatPage() {
           </div>
         )}
 
+        {llmConfigured === false ? (
+          <div className="flex-1 flex items-center justify-center px-6 py-4">
+            <div className="max-w-md w-full rounded-2xl border border-amber/30 bg-amber/[0.06] p-8 text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="w-12 h-12 rounded-full bg-amber/10 border border-amber/20 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-amber" />
+                </div>
+              </div>
+              <h2 className="text-lg font-semibold text-foreground">AI Provider Not Configured</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Your AI team needs an LLM provider to work. Please configure one in Settings.
+              </p>
+              {llmError && (
+                <p className="text-xs text-amber bg-amber/[0.08] border border-amber/20 rounded-lg px-3 py-2">
+                  {llmError}
+                </p>
+              )}
+              <Button
+                className="bg-amber text-background hover:bg-amber/90 rounded-xl px-6"
+                onClick={() => router.push(`/project/${projectId}/settings`)}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Go to Settings
+              </Button>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto space-y-4">
             {messages.length > visibleCount && (
@@ -873,6 +916,8 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       <div className="w-[280px] border-l border-border flex flex-col shrink-0">
