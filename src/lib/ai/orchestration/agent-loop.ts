@@ -89,7 +89,10 @@ export interface SSEEvent {
 
 const MAX_TOOL_LOOPS = 7;
 const MAX_LLM_ATTEMPTS = 3;
-const MAX_PIPELINE_DEPTH = 15;
+// Max 2 auto-chains per request to prevent browser crashes from too many
+// simultaneous SSE streams. After 2 handoffs, the next agent starts on
+// the user's next message (or the frontend can auto-trigger it).
+const MAX_PIPELINE_DEPTH = 2;
 const MAX_CONSULTATION_DEPTH = 3;
 const TOOL_ERROR_CIRCUIT_BREAKER = 3;
 
