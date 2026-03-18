@@ -77,12 +77,15 @@ export async function POST(
         );
       }
 
+      let collector: any = null;
       try {
         // ── LangGraph Orchestration ────────────────────────────────────
         // NOTE: User message is already saved by the chat page (POST /api/projects/[id]/chat)
         // Do NOT save again here — it causes duplicate messages.
 
-        const graph = buildOrchestrationGraph();
+        const result = buildOrchestrationGraph();
+        const graph = result.graph;
+        collector = result.collector;
 
         const initialState = {
           projectId,
@@ -121,6 +124,9 @@ export async function POST(
           }
         }
 
+        // Finalize telemetry (non-blocking — persists to OrchestrationRun)
+        collector.finalize().catch(() => {});
+
         // Mark OrchestrationRun as completed
         await prisma.orchestrationRun.update({
           where: { id: runId },
@@ -129,6 +135,10 @@ export async function POST(
       } catch (streamError) {
         console.error('Stream error:', streamError);
         sendEvent('error', { message: 'An error occurred processing your request' });
+
+        // Finalize telemetry as failed
+        collector?.markFailed(streamError instanceof Error ? streamError.message : String(streamError));
+        collector?.finalize().catch(() => {});
 
         // Mark OrchestrationRun as failed
         await prisma.orchestrationRun.update({

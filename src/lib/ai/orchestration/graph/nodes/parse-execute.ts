@@ -109,9 +109,14 @@ export async function parseAndExecuteNode(
     },
   });
 
+  // ── Track response for loop detection ─────────────────────────────────
+  const existingResponses = state.recentResponses ?? [];
+  const updatedResponses = [...existingResponses, parsed.message].slice(-5);
+
   return {
     parsedResponse: parsed,
     savedMessageId: savedMessage.id,
     outputGuardrailResult: outputGuardrails,
+    recentResponses: updatedResponses,
   };
 }

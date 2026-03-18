@@ -130,11 +130,26 @@ export async function executeToolsNode(
     `[ExecuteTools] Completed ${results.filter(r => r.success).length}/${results.length} tools. Signals: ${signals.join(', ')}`,
   );
 
+  // ── Track tool calls for loop detection ─────────────────────────────
+  const now = Date.now();
+  const existingTracked = state.recentToolCalls ?? [];
+  const newTrackedCalls = toolCalls.map(tc => ({
+    name: tc.name,
+    args: JSON.stringify(tc.arguments ?? {}),
+    timestamp: now,
+  }));
+  // Keep only the last 10 calls within a 2-minute window
+  const twoMinutesAgo = now - 2 * 60 * 1000;
+  const updatedTrackedCalls = [...existingTracked, ...newTrackedCalls]
+    .filter(tc => tc.timestamp > twoMinutesAgo)
+    .slice(-10);
+
   return {
     toolResults: results,
     toolCalls: [], // Clear pending calls
     toolLoopCount: (state.toolLoopCount ?? 0) + 1,
     toolErrorCount: newErrorCount,
     completedToolSignals: [...existingSignals, ...signals],
+    recentToolCalls: updatedTrackedCalls,
   };
 }

@@ -53,21 +53,30 @@ import { llmNode } from './nodes/llm';
 import { executeToolsNode, MAX_TOOL_LOOPS } from './nodes/execute-tools';
 import { parseAndExecuteNode } from './nodes/parse-execute';
 import { pipelineRouterNode } from './nodes/pipeline-router';
+import { createTraceCollector, withTelemetry, type TraceCollector } from '../telemetry';
 
 /**
  * Build and compile the orchestration StateGraph.
- * Returns a compiled graph ready to be invoked with `.stream()`.
+ * Returns a compiled graph and its TraceCollector for finalization.
+ *
+ * The caller should call `collector.finalize()` after the graph run
+ * completes to persist the telemetry summary.
  */
-export function buildOrchestrationGraph() {
+export function buildOrchestrationGraph(): {
+  graph: any;
+  collector: TraceCollector;
+} {
+  const collector = createTraceCollector();
+
   const graph = new StateGraph(GraphState)
-    // ── Register nodes ──────────────────────────────────────────────────
-    .addNode('inputGuardrail', inputGuardrailNode)
-    .addNode('route', routeNode)
-    .addNode('context', contextNode)
-    .addNode('llm', llmNode)
-    .addNode('executeTools', executeToolsNode)
-    .addNode('parseAndExecute', parseAndExecuteNode)
-    .addNode('pipelineRouter', pipelineRouterNode)
+    // ── Register nodes (key nodes wrapped with telemetry) ───────────────
+    .addNode('inputGuardrail', withTelemetry('inputGuardrail', inputGuardrailNode, collector))
+    .addNode('route', withTelemetry('route', routeNode, collector))
+    .addNode('context', withTelemetry('context', contextNode, collector))
+    .addNode('llm', withTelemetry('llm', llmNode, collector))
+    .addNode('executeTools', withTelemetry('executeTools', executeToolsNode, collector))
+    .addNode('parseAndExecute', withTelemetry('parseAndExecute', parseAndExecuteNode, collector))
+    .addNode('pipelineRouter', withTelemetry('pipelineRouter', pipelineRouterNode, collector))
 
     // ── Edges ───────────────────────────────────────────────────────────
 
@@ -143,5 +152,5 @@ export function buildOrchestrationGraph() {
       return '__end__';
     });
 
-  return graph.compile();
+  return { graph: graph.compile(), collector };
 }

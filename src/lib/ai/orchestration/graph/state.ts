@@ -11,6 +11,7 @@ import { LLMMessage, LLMToolCall } from '@/lib/ai/providers/types';
 import { AgentAction } from '@/lib/ai/agents/types';
 import { ParsedResponse } from '@/lib/ai/agents/response-parser';
 import { ToolResult } from '@/lib/ai/tools/tool-definitions';
+import type { TrackedToolCall } from '../loop-detector';
 
 // ---------------------------------------------------------------------------
 // Guardrail Result Types
@@ -96,6 +97,12 @@ export const GraphState = Annotation.Root({
   toolLoopCount: Annotation<number>,
   /** Number of consecutive tool execution failures (resets on success, max 3). */
   toolErrorCount: Annotation<number>,
+
+  // ── Loop Detection ──────────────────────────────────────────────────────
+  /** Recent tool calls tracked for loop detection (sliding window). */
+  recentToolCalls: Annotation<TrackedToolCall[]>,
+  /** Recent agent responses tracked for text repetition & question re-ask detection. */
+  recentResponses: Annotation<string[]>,
 
   // ── Pipeline & Delegation ─────────────────────────────────────────────
   /** Whether this response triggers a delegation to another agent. */

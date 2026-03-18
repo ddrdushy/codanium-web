@@ -24,6 +24,7 @@ import { agentStateManager } from '../../state-manager';
 import { getToolsForAgent } from '@/lib/ai/tools/tool-filter';
 import type { LLMMessage, LLMToolCall, LLMToolDefinition } from '@/lib/ai/providers/types';
 import type { ToolResult } from '@/lib/ai/tools/tool-definitions';
+import { checkForLoops } from '../../loop-detector';
 
 /**
  * LLM node.
@@ -83,6 +84,18 @@ export async function llmNode(
         toolCallId: result.toolCallId,
       });
     }
+  }
+
+  // ── Loop detection: inject warning if loops detected ────────────────
+  const loopWarning = checkForLoops(state);
+  if (loopWarning) {
+    console.warn(
+      `[LLMNode] Loop detected (${loopWarning.type}): injecting corrective system message`,
+    );
+    messages.push({
+      role: 'system',
+      content: loopWarning.message,
+    });
   }
 
   // ── Get tools for this agent ────────────────────────────────────────
