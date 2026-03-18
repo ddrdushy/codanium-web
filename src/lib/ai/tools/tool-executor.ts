@@ -255,7 +255,21 @@ async function handleUpdateDocument(args: Record<string, any>, projectId: string
   });
 
   if (!existing) {
-    throw new Error(`No ${args.type} document found to update`);
+    // Auto-create the document if it doesn't exist (e.g., first update_document(BRD) call)
+    console.log(`[ToolExecutor] Auto-creating ${args.type} document (didn't exist yet)`);
+    const doc = await prisma.document.create({
+      data: {
+        projectId,
+        type: args.type,
+        title: `Staging: ${args.type} Requirements`,
+        content: args.content || '',
+        status: 'DRAFT',
+        owner: 'system',
+        wordCount: (args.content || '').split(/\s+/).length,
+        sections: ((args.content || '').match(/^#{1,3}\s/gm) || []).length,
+      },
+    });
+    return { documentId: doc.id, type: doc.type, created: true };
   }
 
   const newContent = args.mode === 'append'
