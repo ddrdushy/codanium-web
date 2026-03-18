@@ -94,6 +94,8 @@ export const GraphState = Annotation.Root({
   toolResults: Annotation<ToolResult[]>,
   /** Number of tool call → execute → LLM loops in this turn (max 10). */
   toolLoopCount: Annotation<number>,
+  /** Number of consecutive tool execution failures (resets on success, max 3). */
+  toolErrorCount: Annotation<number>,
 
   // ── Pipeline & Delegation ─────────────────────────────────────────────
   /** Whether this response triggers a delegation to another agent. */

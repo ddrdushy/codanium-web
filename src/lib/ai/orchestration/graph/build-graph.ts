@@ -116,8 +116,18 @@ export function buildOrchestrationGraph() {
       return 'parseAndExecute';
     })
 
-    // executeTools → back to llm (tool loop)
-    .addEdge('executeTools', 'llm')
+    // executeTools → back to llm (tool loop) OR parseAndExecute (circuit breaker)
+    // If 3+ consecutive tool failures, stop looping and proceed without the tool result.
+    .addConditionalEdges('executeTools', (state) => {
+      const errorCount = state.toolErrorCount ?? 0;
+      if (errorCount >= 3) {
+        console.warn(
+          `[BuildGraph] Circuit breaker: ${errorCount} consecutive tool failures, skipping to parseAndExecute`,
+        );
+        return 'parseAndExecute';
+      }
+      return 'llm';
+    })
 
     // parseAndExecute → pipelineRouter
     .addEdge('parseAndExecute', 'pipelineRouter')
