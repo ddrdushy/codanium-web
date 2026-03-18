@@ -139,10 +139,75 @@ export async function llmNode(
     }
   }
 
+  // ── Fallback: extract text-based tool calls if native tool_use was empty ──
+  // Some models output tool calls as text (e.g., [UPDATE_DOCUMENT]{...}) instead
+  // of using the native tool_use API. Parse them as a fallback.
+  if (collectedToolCalls.length === 0 && fullContent) {
+    const textToolCalls = extractTextToolCalls(fullContent);
+    if (textToolCalls.length > 0) {
+      collectedToolCalls = textToolCalls;
+      console.log(
+        `[LLMNode] Fallback: extracted ${textToolCalls.length} tool call(s) from text: ${textToolCalls.map(tc => tc.name).join(', ')}`,
+      );
+    }
+  }
+
   return {
     rawContent: fullContent,
     rawThinking: fullThinking,
     tokensUsed,
     toolCalls: collectedToolCalls,
   };
+}
+
+/**
+ * Extract tool calls from text content when the model outputs them as text
+ * instead of using the native tool_use API.
+ * Handles two formats:
+ *   [UPDATE_DOCUMENT]{ "type": "BRD", ... }
+ *   [REMEMBER {"key":"x","value":"y"}]
+ */
+function extractTextToolCalls(content: string): LLMToolCall[] {
+  const TOOL_NAMES = [
+    'update_document', 'create_document', 'approve_document',
+    'create_card', 'update_card', 'create_decision',
+    'remember', 'task_progress', 'run_code',
+    'trigger_deploy', 'create_pipeline',
+    'create_branch', 'create_pr', 'create_release',
+    'web_search', 'web_fetch',
+    'read_file', 'write_file', 'edit_file',
+    'list_directory', 'glob', 'grep',
+    'git_commit', 'git_branch', 'git_diff',
+    'run_command', 'run_tests', 'run_build',
+  ];
+
+  const toolCalls: LLMToolCall[] = [];
+
+  for (const toolName of TOOL_NAMES) {
+    const upperName = toolName.toUpperCase();
+    // Format 1: [TOOL_NAME]{ json }
+    const re1 = new RegExp(`\\[\\s*${upperName}\\s*\\]\\s*\\{([\\s\\S]*?)\\}`, 'gi');
+    // Format 2: [TOOL_NAME {json}]
+    const re2 = new RegExp(`\\[\\s*${upperName}\\s+\\{([\\s\\S]*?)\\}\\s*\\]`, 'gi');
+
+    for (const re of [re1, re2]) {
+      let match;
+      while ((match = re.exec(content)) !== null) {
+        try {
+          const jsonStr = '{' + match[1] + '}';
+          const args = JSON.parse(jsonStr);
+          toolCalls.push({
+            id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name: toolName,
+            arguments: args,
+          });
+        } catch {
+          // Invalid JSON — skip this match
+          console.warn(`[LLMNode] Failed to parse text tool call: ${toolName}`);
+        }
+      }
+    }
+  }
+
+  return toolCalls;
 }
