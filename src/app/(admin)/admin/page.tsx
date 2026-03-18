@@ -96,16 +96,18 @@ export default function AdminDashboardPage() {
   const [activities, setActivities] = useState<any[]>(mockRecentActivity);
   const [billingMetrics, setBillingMetrics] = useState(mockBillingMetrics);
   const [, setLoading] = useState(true);
+  const [isLiveData, setIsLiveData] = useState(false);
 
   useEffect(() => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     Promise.allSettled([
-      fetchAdminStats().then(setStats),
+      fetchAdminStats().then(d => { setStats(d); setIsLiveData(true); }),
       fetchBilling().then(({ metrics, transactions: txns }) => {
         setBillingMetrics(metrics);
         setTransactions(txns);
+        setIsLiveData(true);
       }),
       fetchAnalytics({ from: thirtyDaysAgo.toISOString().split('T')[0], limit: 500 }).then(
         ({ usage }) => setLlmUsage(usage)
@@ -184,9 +186,16 @@ export default function AdminDashboardPage() {
     >
       {/* Page Header */}
       <motion.div variants={itemVariants}>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          {!isLiveData && (
+            <span className="text-[10px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+              Demo Data
+            </span>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground mt-1">
-          Platform overview and key performance indicators
+          {isLiveData ? 'Platform overview and key performance indicators' : 'Showing sample data — log in as admin for live metrics'}
         </p>
       </motion.div>
 

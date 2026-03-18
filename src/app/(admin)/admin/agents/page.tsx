@@ -392,6 +392,7 @@ export default function AdminAgentsPage() {
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLiveData, setIsLiveData] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [search, setSearch] = useState('');
@@ -409,6 +410,7 @@ export default function AdminAgentsPage() {
       setGroups(data.groups);
       setTotalAgents(data.totalAgents);
       setEnabledAgents(data.enabledAgents);
+      setIsLiveData(true);
     } catch (err) {
       console.error('Failed to fetch agents:', err);
     } finally {
@@ -507,12 +509,19 @@ export default function AdminAgentsPage() {
       <motion.div variants={itemVariants}>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Bot className="w-6 h-6 text-[var(--admin-accent)]" />
-              AI Agents
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Bot className="w-6 h-6 text-[var(--admin-accent)]" />
+                AI Agents
+              </h1>
+              {!isLiveData && (
+                <span className="text-[10px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                  Demo Data
+                </span>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Configure and monitor the {totalAgents} AI agents powering every project
+              {isLiveData ? `Configure and monitor the ${totalAgents} AI agents powering every project` : 'Showing sample data — log in as admin for live metrics'}
             </p>
           </div>
           <div className="flex items-center gap-2">

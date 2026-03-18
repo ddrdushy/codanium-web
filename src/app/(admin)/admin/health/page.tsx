@@ -162,11 +162,12 @@ export default function HealthPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processResult, setProcessResult] = useState<string | null>(null);
+  const [isLiveData, setIsLiveData] = useState(false);
 
   // ─── Load health data ───
   const loadHealth = useCallback(() => {
     fetchSystemHealth()
-      .then((data: HealthData) => setHealth(data))
+      .then((data: HealthData) => { setHealth(data); setIsLiveData(true); })
       .catch(() => {/* keep default data */})
       .finally(() => setLoading(false));
   }, []);
@@ -225,9 +226,16 @@ export default function HealthPage() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-foreground">System Health</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">System Health</h1>
+            {!isLiveData && (
+              <span className="text-[10px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                Demo Data
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Infrastructure status and monitoring
+            {isLiveData ? 'Infrastructure status and monitoring' : 'Showing sample data — log in as admin for live metrics'}
           </p>
         </div>
         <button

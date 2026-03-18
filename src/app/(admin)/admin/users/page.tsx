@@ -127,6 +127,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>(mockAdminUsers);
   const [, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [isLiveData, setIsLiveData] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [planFilter, setPlanFilter] = useState<string>('all');
@@ -145,7 +146,7 @@ export default function AdminUsersPage() {
   // ─── Fetch data ───
   useEffect(() => {
     fetchAdminUsers()
-      .then((data) => setUsers(data.users))
+      .then((data) => { setUsers(data.users); setIsLiveData(true); })
       .catch(() => {
         /* keep mock data */
       })
@@ -471,6 +472,11 @@ export default function AdminUsersPage() {
       >
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-foreground">Customer Management</h1>
+          {!isLiveData && (
+            <span className="text-[10px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+              Demo Data
+            </span>
+          )}
           <Badge
             variant="outline"
             className="bg-[#0d9488]/10 text-[#0d9488] border-[#0d9488]/20 text-xs font-semibold"

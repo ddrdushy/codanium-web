@@ -79,6 +79,8 @@ function SettingField({
 }
 
 export default function SettingsPage() {
+  const [isLiveData, setIsLiveData] = useState(false);
+
   // ─── LLM Configuration state ───
   const [defaultProvider, setDefaultProvider] = useState('anthropic');
   const [defaultModel, setDefaultModel] = useState('');
@@ -132,6 +134,7 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchAdminSettings()
       .then((settings) => {
+        setIsLiveData(true);
         if (settings['llm.defaultProvider']) {
           setDefaultProvider(settings['llm.defaultProvider']);
         }
@@ -249,9 +252,16 @@ export default function SettingsPage() {
     >
       {/* Page Header */}
       <motion.div variants={itemVariants}>
-        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+          {!isLiveData && (
+            <span className="text-[10px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+              Demo Data
+            </span>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground mt-1">
-          Platform configuration and preferences
+          {isLiveData ? 'Platform configuration and preferences' : 'Showing sample data — log in as admin for live metrics'}
         </p>
       </motion.div>
 

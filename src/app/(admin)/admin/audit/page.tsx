@@ -99,10 +99,11 @@ export default function AuditLogPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
+  const [isLiveData, setIsLiveData] = useState(false);
 
   useEffect(() => {
     fetchAuditLog()
-      .then((data) => setLogs(data.logs))
+      .then((data) => { setLogs(data.logs); setIsLiveData(true); })
       .catch(() => {/* keep mock data */})
       .finally(() => setLoading(false));
   }, []);
@@ -138,9 +139,16 @@ export default function AuditLogPage() {
       {/* Page Header */}
       <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Audit Log</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">Audit Log</h1>
+            {!isLiveData && (
+              <span className="text-[10px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                Demo Data
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            System activity and security events
+            {isLiveData ? 'System activity and security events' : 'Showing sample data — log in as admin for live metrics'}
           </p>
         </div>
         <div className="relative w-full sm:w-72">

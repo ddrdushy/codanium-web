@@ -88,6 +88,7 @@ export default function AnalyticsPage() {
   const [llmUsage, setLlmUsage] = useState<LLMUsageData[]>(mockLLMUsage);
   const [loading, setLoading] = useState(true);
   const [selectedRange, setSelectedRange] = useState<number>(30);
+  const [isLiveData, setIsLiveData] = useState(false);
 
   // ─── Compute date from range ───
   const computedFrom = useMemo(() => {
@@ -100,7 +101,7 @@ export default function AnalyticsPage() {
   const loadData = useCallback(() => {
     setLoading(true);
     fetchAnalytics({ from: computedFrom, limit: 500 })
-      .then((data) => setLlmUsage(data.usage))
+      .then((data) => { setLlmUsage(data.usage); setIsLiveData(true); })
       .catch(() => {/* keep mock data */})
       .finally(() => setLoading(false));
   }, [computedFrom]);
@@ -208,9 +209,16 @@ export default function AnalyticsPage() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-foreground">LLM Analytics</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">LLM Analytics</h1>
+            {!isLiveData && (
+              <span className="text-[10px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                Demo Data
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Token usage, cost trends, and provider analysis
+            {isLiveData ? 'Token usage, cost trends, and provider analysis' : 'Showing sample data — log in as admin for live metrics'}
           </p>
         </div>
         <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/50 border border-border/50">
