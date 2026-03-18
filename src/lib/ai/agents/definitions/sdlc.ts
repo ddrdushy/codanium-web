@@ -617,92 +617,308 @@ This ensures every task traces back to a business requirement and no requirement
 Step 3: Create the BRD artifact (compiled from staging notes):
 [ARTIFACT:brd-{project-slug}.md]# Business Requirements Document: {Project Name}
 
+**Version:** 1.0
+**Date:** {current date}
+**Status:** DRAFT
+**Owner:** Business Analyst
+
+---
+
 ## 1. Executive Summary
-{Brief overview of the project and its goals}
 
-## 2. Problem Statement
-{What problem is being solved and why it matters}
+### 1.1 Project Vision
+{One-paragraph vision statement: what is this product, who is it for, and what outcome does it deliver? Write this as a compelling pitch.}
 
-## 3. User Personas
-{Who will use this product — name, role, goals, pain points}
+### 1.2 Problem Statement
+{What specific problem does this product solve? Why does this problem matter? What is the cost of NOT solving it? Describe the current pain point in concrete terms.}
 
-## 4. Functional Requirements
-{Numbered list of every feature, grouped by module. Each requirement MUST have a unique FR-XXX ID.}
+### 1.3 Target Users
+{Who are the primary and secondary users? What is the estimated market size or user base? Describe the audience in non-technical terms.}
 
-### 4.1 Core Features (Must Have)
-- **FR-001**: {Feature name}
-  - Acceptance: {Acceptance criteria}
-- **FR-002**: {Feature name}
-  - Acceptance: {Acceptance criteria}
-- **FR-003**: {Feature name}
-  - Acceptance: {Acceptance criteria}
-{Continue numbering sequentially: FR-004, FR-005, etc.}
+### 1.4 Success Vision
+{What does success look like 6 months after launch? Describe the ideal state in measurable terms.}
 
-### 4.2 Secondary Features (Should Have)
-{Continue FR-XXX numbering from where Core Features left off}
-- **FR-0XX**: {Feature name}
-  - Acceptance: {Acceptance criteria}
+---
 
-### 4.3 Future Enhancements (Nice to Have)
-{Continue FR-XXX numbering}
-- **FR-0XX**: {Feature name}
-  - Acceptance: {Acceptance criteria}
+## 2. User Personas
 
-## 5. Non-Functional Requirements
-{Performance, security, scalability, accessibility}
+### Persona 1: {Name — Primary User}
+- **Role:** {role or archetype, e.g., "Small business owner"}
+- **Age/Background:** {brief demographic context}
+- **Goals:** {what they want to accomplish with this product — 2-3 bullets}
+- **Pain Points:** {current frustrations without this product — 2-3 bullets}
+- **Behaviors:** {how they currently solve this problem, tech comfort level, device preferences}
+- **Success Criteria:** {what makes this persona say "this product is great"}
 
-## 6. User Flows
-{Step-by-step flows for key scenarios}
+### Persona 2: {Name — Secondary User}
+- **Role:** {role}
+- **Goals:** {goals — 2-3 bullets}
+- **Pain Points:** {pain points — 2-3 bullets}
+- **Behaviors:** {behaviors}
 
-## 7. Integrations
-{External services and how they connect}
+### Persona 3: {Name — Admin/Power User} (if applicable)
+- **Role:** {role}
+- **Goals:** {goals — 2-3 bullets}
+- **Pain Points:** {pain points — 2-3 bullets}
+- **Behaviors:** {behaviors}
 
-## 8. Project-Specific Details
-{Include ONLY the section relevant to the project type. Omit sections that don't apply.}
+---
 
-### 8.1 Company/Brand Identity (for corporate/company websites)
-- Company name and description
-- Brand guidelines (logo, colors, typography)
-- Existing domain/website
+## 3. Functional Requirements
 
-### 8.2 Site Structure & Content (for corporate/company websites)
-- Pages required (Home, About, Services, Team, Contact, Blog, Portfolio, etc.)
-- Homepage hero section (headline, subheadline, call-to-action)
-- Dynamic features (contact form, newsletter signup, testimonials, team profiles, blog)
-- SEO requirements
+{Every requirement has a unique FR-XXX ID, grouped by module. Each includes description, acceptance criteria, and MoSCoW priority.}
 
-### 8.3 Product Catalog (for e-commerce/marketplace)
-- Product count and categories
-- Product variants (size, color, etc.)
-- Payment methods accepted
-- Shipping and returns policy
-- Inventory management requirements
+### 3.1 {Module Name, e.g., "User Authentication"}
 
-### 8.4 Application Model (for SaaS/web apps)
-- Core user workflow
-- Data model per user
-- Collaboration model (single-user vs team)
-- Pricing model and tiers
-- Expected integrations
+| ID | Requirement | Acceptance Criteria | Priority |
+|----|-------------|---------------------|----------|
+| FR-001 | {Requirement description} | {Specific, testable criteria — what must be true for this to be "done"} | MUST |
+| FR-002 | {Requirement description} | {Acceptance criteria} | MUST |
+| FR-003 | {Requirement description} | {Acceptance criteria} | SHOULD |
 
-### 8.5 Mobile Requirements (for mobile apps)
-- Target platforms (iOS, Android, both)
-- Main screen / home experience
-- Offline support requirements
-- Push notification triggers
+### 3.2 {Module Name, e.g., "Core Product Features"}
 
-## 9. Constraints and Assumptions
-{Timeline, budget, technical constraints, assumptions}
+| ID | Requirement | Acceptance Criteria | Priority |
+|----|-------------|---------------------|----------|
+| FR-004 | {Requirement description} | {Acceptance criteria} | MUST |
+| FR-005 | {Requirement description} | {Acceptance criteria} | MUST |
+| FR-006 | {Requirement description} | {Acceptance criteria} | SHOULD |
 
-## 10. Priority Matrix
-| Priority | Requirement | Module |
-|----------|-------------|--------|
-| MUST HAVE | ... | ... |
-| SHOULD HAVE | ... | ... |
-| NICE TO HAVE | ... | ... |
+### 3.3 {Module Name, e.g., "Admin & Management"}
 
-## 11. Out of Scope
-{What is explicitly NOT included in v1}
+| ID | Requirement | Acceptance Criteria | Priority |
+|----|-------------|---------------------|----------|
+| FR-0XX | {Requirement description} | {Acceptance criteria} | MUST |
+| FR-0XX | {Requirement description} | {Acceptance criteria} | COULD |
+
+{Continue adding modules as needed: Payments, Notifications, Reporting, Social, Content Management, etc. Number FR-XXX IDs sequentially across ALL modules.}
+
+---
+
+## 4. Non-Functional Requirements
+
+### 4.1 Performance
+| ID | Requirement | Target |
+|----|-------------|--------|
+| NFR-001 | Page load time | {e.g., < 2 seconds on 3G} |
+| NFR-002 | API response time | {e.g., < 500ms for 95th percentile} |
+| NFR-003 | Concurrent users | {e.g., support 500 simultaneous users at launch} |
+
+### 4.2 Security
+| ID | Requirement | Target |
+|----|-------------|--------|
+| NFR-004 | Authentication | {e.g., secure login with password hashing, optional 2FA} |
+| NFR-005 | Data protection | {e.g., encryption at rest and in transit} |
+| NFR-006 | Authorization | {e.g., role-based access control for admin vs user} |
+
+### 4.3 Scalability
+| ID | Requirement | Target |
+|----|-------------|--------|
+| NFR-007 | Horizontal scaling | {describe growth expectations based on user's goals} |
+| NFR-008 | Data volume | {describe expected data growth} |
+
+### 4.4 Accessibility
+| ID | Requirement | Target |
+|----|-------------|--------|
+| NFR-009 | WCAG compliance | {e.g., WCAG 2.1 AA minimum} |
+| NFR-010 | Screen reader support | {e.g., all interactive elements labeled} |
+
+### 4.5 SEO (if web-facing)
+| ID | Requirement | Target |
+|----|-------------|--------|
+| NFR-011 | Search engine optimization | {e.g., server-rendered pages, meta tags, sitemap} |
+| NFR-012 | Social sharing | {e.g., Open Graph tags for link previews} |
+
+---
+
+## 5. User Flows
+
+### 5.1 {Primary Flow, e.g., "New User Signup & Onboarding"}
+1. User {action — e.g., lands on homepage}
+2. User {action — e.g., clicks "Get Started"}
+3. System {response — e.g., shows signup form}
+4. User {action — e.g., enters email and password}
+5. System {response — e.g., sends verification email}
+6. User {action — e.g., confirms email}
+7. System {response — e.g., shows onboarding wizard}
+8. **End state:** {what the user sees/has after completing this flow}
+
+### 5.2 {Core Feature Flow, e.g., "Creating a New {Item}"}
+1. User {action}
+2. System {response}
+3. {Continue step-by-step...}
+4. **End state:** {result}
+
+### 5.3 {Secondary Flow, e.g., "Admin Managing Users"}
+1. Admin {action}
+2. System {response}
+3. {Continue step-by-step...}
+4. **End state:** {result}
+
+{Add additional flows for key scenarios: checkout, search, editing, deleting, sharing, etc.}
+
+---
+
+## 6. Information Architecture
+
+{For websites: site map. For apps: screen flow. Show the page/screen hierarchy.}
+
+### 6.1 Site Map / Screen Structure
+\`\`\`
+{Project Name}
+├── Home / Landing Page
+│   ├── Hero section
+│   ├── Features overview
+│   └── Call-to-action
+├── Auth
+│   ├── Login
+│   ├── Signup
+│   └── Forgot Password
+├── Dashboard (authenticated)
+│   ├── {Main feature area}
+│   ├── {Secondary feature area}
+│   └── Settings / Profile
+├── {Additional top-level pages}
+│   ├── {Sub-page}
+│   └── {Sub-page}
+└── Admin (if applicable)
+    ├── User Management
+    ├── Content Management
+    └── Analytics / Reports
+\`\`\`
+
+### 6.2 Navigation Model
+- **Primary navigation:** {describe — e.g., top navbar with logo, main links, user menu}
+- **Mobile navigation:** {describe — e.g., hamburger menu with slide-out drawer}
+- **Footer:** {describe — e.g., links, social media, copyright}
+
+---
+
+## 7. Brand & Design Requirements
+
+### 7.1 Visual Identity
+- **Brand name:** {name}
+- **Logo:** {describe if provided, or "To be designed"}
+- **Color palette:** {primary color, secondary color, accent — if discussed}
+- **Typography:** {font preferences — if discussed, or "Modern, clean sans-serif"}
+- **Visual style:** {e.g., "Minimal and professional", "Bold and playful", "Corporate and trustworthy"}
+
+### 7.2 Design References
+{Any inspiration sites, competitors, or style references the user mentioned}
+
+### 7.3 Responsive Requirements
+- **Desktop:** {describe — e.g., full-width layout, sidebar navigation}
+- **Tablet:** {describe — e.g., adapted layout, collapsible sidebar}
+- **Mobile:** {describe — e.g., single-column, bottom navigation}
+
+---
+
+## 8. Content Requirements
+
+{What content goes on each page/screen? Who provides it?}
+
+| Page/Screen | Content Needed | Source |
+|-------------|---------------|--------|
+| {Home/Landing} | {e.g., hero headline, feature descriptions, testimonials} | {e.g., user provides, AI generates placeholder} |
+| {About} | {e.g., company story, team bios, mission statement} | {source} |
+| {Product pages} | {e.g., product descriptions, images, pricing} | {source} |
+| {Blog/Articles} | {e.g., initial posts, categories} | {source} |
+
+---
+
+## 9. Integrations & External Services
+
+| Integration | Purpose | Priority |
+|-------------|---------|----------|
+| {e.g., Stripe} | {e.g., payment processing} | {MUST/SHOULD/COULD} |
+| {e.g., SendGrid/Resend} | {e.g., transactional emails} | {MUST/SHOULD/COULD} |
+| {e.g., Google Analytics} | {e.g., usage tracking} | {SHOULD/COULD} |
+| {e.g., Social OAuth} | {e.g., login with Google/GitHub} | {SHOULD/COULD} |
+| {e.g., Cloud Storage} | {e.g., file/image uploads} | {MUST/SHOULD/COULD} |
+
+---
+
+## 10. Constraints & Assumptions
+
+### 10.1 Constraints
+- **Timeline:** {e.g., MVP in 2-4 weeks}
+- **Budget:** {e.g., minimal hosting costs, free-tier services preferred}
+- **Technical:** {e.g., must work on modern browsers, no IE support}
+- **Regulatory:** {e.g., GDPR compliance if handling EU user data}
+
+### 10.2 Assumptions
+- {e.g., Users have modern browsers and stable internet}
+- {e.g., Content will be provided by the stakeholder before launch}
+- {e.g., Initial user base will be < 1000 users}
+- {e.g., Single language (English) for v1}
+
+---
+
+## 11. Priority Matrix (MoSCoW)
+
+### MUST HAVE (v1 launch blockers)
+| FR ID | Requirement | Module |
+|-------|-------------|--------|
+| FR-001 | {requirement} | {module} |
+| FR-002 | {requirement} | {module} |
+{List all MUST requirements}
+
+### SHOULD HAVE (high value, not blockers)
+| FR ID | Requirement | Module |
+|-------|-------------|--------|
+| FR-0XX | {requirement} | {module} |
+{List all SHOULD requirements}
+
+### COULD HAVE (nice-to-have for v1)
+| FR ID | Requirement | Module |
+|-------|-------------|--------|
+| FR-0XX | {requirement} | {module} |
+{List all COULD requirements}
+
+### WON'T HAVE (explicitly deferred to v2+)
+| Requirement | Reason for Deferral |
+|-------------|---------------------|
+| {feature} | {why it's deferred — e.g., "Complexity too high for MVP"} |
+| {feature} | {reason} |
+
+---
+
+## 12. Success Metrics & KPIs
+
+| Metric | Target | Measurement Method |
+|--------|--------|--------------------|
+| {e.g., User signups (first month)} | {e.g., 100 users} | {e.g., analytics dashboard} |
+| {e.g., Core feature usage} | {e.g., 60% of users complete key action weekly} | {e.g., event tracking} |
+| {e.g., Page load performance} | {e.g., < 2s average} | {e.g., Lighthouse score} |
+| {e.g., User retention (30-day)} | {e.g., 40%} | {e.g., cohort analysis} |
+| {e.g., Uptime} | {e.g., 99.5%} | {e.g., monitoring alerts} |
+
+---
+
+## 13. Out of Scope (v1)
+
+{Explicitly list what this version does NOT include to prevent scope creep.}
+
+- {e.g., Native mobile apps — web responsive only for v1}
+- {e.g., Multi-language / internationalization}
+- {e.g., Advanced analytics or reporting dashboards}
+- {e.g., Third-party marketplace or plugin system}
+- {e.g., Real-time collaboration features}
+- {e.g., AI/ML-powered recommendations}
+
+---
+
+## 14. Glossary
+
+| Term | Definition |
+|------|-----------|
+| {domain term} | {plain-language definition} |
+| {domain term} | {definition} |
+| {domain term} | {definition} |
+
+---
+
+*End of Business Requirements Document*
 [/ARTIFACT]
 
 Step 3: Present a summary of the BRD to the user and ASK FOR APPROVAL. Do NOT delegate yet.
@@ -903,35 +1119,421 @@ Use the \`requirementIds\` parameter when calling \`create_card\` to pass the FR
 Step 1: Create the System Design Document:
 [ARTIFACT:sdd-{project-slug}.md]# System Design Document: {Project Name}
 
-## 1. Architecture Overview
-{High-level architecture description — frontend, backend, database, services}
+**Version:** 1.0
+**Date:** {current date}
+**Status:** DRAFT
+**Owner:** Solution Architect
+**BRD Reference:** brd-{project-slug}.md
 
-## 2. Tech Stack
+---
+
+## 1. Technical Overview
+
+### 1.1 Architecture Summary
+{1-2 paragraph high-level description: what type of application is this (SPA, SSR, monolith, microservices), what are the major subsystems, and how do they interact? Reference the BRD vision.}
+
+### 1.2 Tech Stack
+
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| Frontend | {chosen} | {why} |
-| Backend | {chosen} | {why} |
-| Database | {chosen} | {why} |
-| Hosting | {chosen} | {why} |
-| Auth | {chosen} | {why} |
-| CI/CD | {chosen} | {why} |
+| Frontend Framework | {e.g., Next.js 15 / React 19} | {why — e.g., "SSR for SEO, React ecosystem, fast iteration"} |
+| Styling | {e.g., Tailwind CSS 4} | {why — e.g., "Rapid UI development, consistent design system"} |
+| Backend / API | {e.g., Next.js API Routes / Node.js} | {why — e.g., "Unified stack, serverless-ready"} |
+| Database | {e.g., PostgreSQL + Prisma ORM} | {why — e.g., "Relational data model, type-safe queries"} |
+| Authentication | {e.g., NextAuth.js / Clerk} | {why — e.g., "Built-in OAuth providers, session management"} |
+| File Storage | {e.g., AWS S3 / Cloudflare R2} | {why — e.g., "Scalable object storage for uploads"} |
+| Email Service | {e.g., Resend / SendGrid} | {why — e.g., "Transactional emails, developer-friendly API"} |
+| Hosting | {e.g., Vercel / AWS} | {why — e.g., "Zero-config deploys, edge network, preview URLs"} |
+| CI/CD | {e.g., GitHub Actions} | {why — e.g., "Native GitHub integration, free for public repos"} |
 
-## 3. Component Design
-{Each major module/service, its responsibility, and interfaces.
-For each component, reference the BRD requirement IDs it addresses.
-Example: "Auth Module (FR-001, FR-002): JWT-based authentication with..."}
+---
 
-## 4. Data Model
-{Tables/collections, relationships, key fields}
+## 2. System Architecture Diagram
+
+\`\`\`
+┌─────────────────────────────────────────────────────────┐
+│                      CLIENT LAYER                        │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
+│  │   Browser    │  │  Mobile Web  │  │  Admin Panel  │  │
+│  └──────┬──────┘  └──────┬───────┘  └───────┬───────┘  │
+└─────────┼────────────────┼──────────────────┼───────────┘
+          │                │                  │
+          ▼                ▼                  ▼
+┌─────────────────────────────────────────────────────────┐
+│                    FRONTEND (SSR/SPA)                     │
+│  {e.g., Next.js — Pages, Components, State Management}   │
+│  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────┐ │
+│  │  Pages/   │ │  Shared  │ │   State   │ │   Auth    │ │
+│  │  Routes   │ │Components│ │  (Zustand) │ │  Context  │ │
+│  └──────────┘ └──────────┘ └───────────┘ └───────────┘ │
+└────────────────────────┬────────────────────────────────┘
+                         │ HTTPS / REST / tRPC
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│                      API LAYER                           │
+│  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────┐ │
+│  │   Auth   │ │  {Core}  │ │  {Module}  │ │  Admin    │ │
+│  │  Routes  │ │  Routes  │ │  Routes    │ │  Routes   │ │
+│  └──────────┘ └──────────┘ └───────────┘ └───────────┘ │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  Middleware: Auth, Validation, Rate Limiting      │   │
+│  └──────────────────────────────────────────────────┘   │
+└────────────────────────┬────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│                    DATA LAYER                            │
+│  ┌──────────┐  ┌──────────────┐  ┌───────────────────┐ │
+│  │ Database │  │  File Storage │  │  Cache (optional)  │ │
+│  │ {Postgres}│  │  {S3/R2}     │  │  {Redis/in-memory} │ │
+│  └──────────┘  └──────────────┘  └───────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│                 EXTERNAL SERVICES                        │
+│  {Stripe} │ {Email API} │ {OAuth Providers} │ {CDN}     │
+└─────────────────────────────────────────────────────────┘
+\`\`\`
+
+---
+
+## 3. Component Architecture
+
+{For each major module, describe its responsibility, interfaces, and which BRD requirements it implements.}
+
+### 3.1 {Module Name, e.g., "Authentication Module"} (FR-001, FR-002, FR-003)
+- **Responsibility:** {what this module does}
+- **Components:**
+  - {Component 1}: {description}
+  - {Component 2}: {description}
+- **Interfaces:** {what it exposes — API routes, hooks, context providers}
+- **Dependencies:** {what it depends on — database, external services}
+
+### 3.2 {Module Name, e.g., "Core Feature Module"} (FR-004, FR-005, FR-006)
+- **Responsibility:** {what this module does}
+- **Components:**
+  - {Component 1}: {description}
+  - {Component 2}: {description}
+- **Interfaces:** {exposed APIs and hooks}
+- **Dependencies:** {dependencies}
+
+### 3.3 {Module Name, e.g., "Admin Module"} (FR-0XX, FR-0XX)
+- **Responsibility:** {what this module does}
+- **Components:** {list components}
+- **Interfaces:** {exposed APIs}
+- **Dependencies:** {dependencies}
+
+{Continue for each module identified in the BRD. Every FR-XXX must map to at least one module.}
+
+---
+
+## 4. Database Schema Design
+
+{Define the data model. Use a schema format similar to Prisma for clarity.}
+
+### 4.1 Entity Relationship Overview
+
+\`\`\`
+{Entity} 1──* {Entity}     (one-to-many)
+{Entity} *──* {Entity}     (many-to-many via join table)
+{Entity} 1──1 {Entity}     (one-to-one)
+\`\`\`
+
+### 4.2 Schema Definitions
+
+\`\`\`prisma
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String   // hashed
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // {add relationships based on BRD requirements}
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model {EntityName} {
+  id          String   @id @default(cuid())
+  // {define fields based on BRD requirements}
+  // {add relationships}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// {Continue for each entity needed by the functional requirements}
+\`\`\`
+
+### 4.3 Indexing Strategy
+| Table | Index | Purpose |
+|-------|-------|---------|
+| User | email (unique) | Login lookup |
+| {Table} | {field(s)} | {purpose — e.g., "Search performance"} |
+
+---
 
 ## 5. API Design
-{Key endpoints grouped by module, request/response shapes}
 
-## 6. Security Architecture
-{Auth flow, authorization model, encryption, secrets handling}
+{RESTful endpoints grouped by module. Include method, path, auth requirement, and request/response shape.}
 
-## 7. Deployment Architecture
-{Environments, CI/CD pipeline, infrastructure as code}
+### 5.1 Authentication API
+
+| Method | Endpoint | Auth | Description | Implements |
+|--------|----------|------|-------------|------------|
+| POST | /api/auth/register | Public | Create new user account | FR-001 |
+| POST | /api/auth/login | Public | Authenticate and return session | FR-001 |
+| POST | /api/auth/logout | Authenticated | End user session | FR-001 |
+| GET | /api/auth/me | Authenticated | Get current user profile | FR-002 |
+
+**Example — POST /api/auth/register:**
+\`\`\`json
+// Request
+{ "email": "user@example.com", "password": "securepass", "name": "Jane" }
+
+// Response 201
+{ "id": "cuid_xxx", "email": "user@example.com", "name": "Jane" }
+
+// Error 400
+{ "error": "EMAIL_EXISTS", "message": "An account with this email already exists" }
+\`\`\`
+
+### 5.2 {Core Feature} API
+
+| Method | Endpoint | Auth | Description | Implements |
+|--------|----------|------|-------------|------------|
+| GET | /api/{resource} | Authenticated | List {resources} | FR-0XX |
+| POST | /api/{resource} | Authenticated | Create {resource} | FR-0XX |
+| GET | /api/{resource}/:id | Authenticated | Get {resource} detail | FR-0XX |
+| PUT | /api/{resource}/:id | Authenticated | Update {resource} | FR-0XX |
+| DELETE | /api/{resource}/:id | Authenticated | Delete {resource} | FR-0XX |
+
+{Continue for each module. Include example request/response for the most important endpoints.}
+
+### 5.3 Admin API (if applicable)
+
+| Method | Endpoint | Auth | Description | Implements |
+|--------|----------|------|-------------|------------|
+| GET | /api/admin/users | Admin | List all users | FR-0XX |
+| PUT | /api/admin/users/:id | Admin | Update user role/status | FR-0XX |
+
+---
+
+## 6. Authentication & Authorization
+
+### 6.1 Authentication Flow
+\`\`\`
+1. User submits credentials (email/password or OAuth)
+2. Server validates credentials against database
+3. Server creates session / issues JWT token
+4. Token stored in {httpOnly cookie / localStorage}
+5. Subsequent requests include token in {Cookie / Authorization header}
+6. Server middleware validates token on protected routes
+7. Token refresh: {describe refresh strategy}
+\`\`\`
+
+### 6.2 Authorization Model
+| Role | Permissions |
+|------|------------|
+| USER | {describe — e.g., "CRUD own resources, read public content"} |
+| ADMIN | {describe — e.g., "All USER permissions + manage users, view analytics"} |
+
+### 6.3 OAuth Providers (if applicable)
+{List: Google, GitHub, etc. — describe the flow briefly.}
+
+---
+
+## 7. Frontend Architecture
+
+### 7.1 Project Structure
+\`\`\`
+src/
+├── app/                    # Next.js App Router pages
+│   ├── (marketing)/        # Public pages (landing, about, pricing)
+│   ├── (auth)/             # Login, signup, forgot password
+│   ├── (dashboard)/        # Authenticated app pages
+│   │   ├── layout.tsx      # Dashboard shell (sidebar, header)
+│   │   ├── page.tsx        # Dashboard home
+│   │   ├── {feature}/      # Feature-specific pages
+│   │   └── settings/       # User settings
+│   └── api/                # API routes
+├── components/
+│   ├── ui/                 # Reusable UI primitives (Button, Input, Modal)
+│   ├── {feature}/          # Feature-specific components
+│   └── layout/             # Shell components (Sidebar, Header, Footer)
+├── lib/
+│   ├── api.ts              # API client helpers
+│   ├── auth.ts             # Auth utilities
+│   ├── utils.ts            # Shared utilities
+│   └── validations.ts      # Form validation schemas
+├── hooks/                  # Custom React hooks
+└── stores/                 # State management (Zustand stores)
+\`\`\`
+
+### 7.2 State Management
+- **Server state:** {e.g., React Server Components + fetch, or React Query/SWR}
+- **Client state:** {e.g., Zustand for UI state, React Context for auth}
+- **Form state:** {e.g., React Hook Form + Zod validation}
+
+### 7.3 Routing
+| Route | Page | Auth Required |
+|-------|------|---------------|
+| / | Landing / Home | No |
+| /login | Login page | No |
+| /signup | Registration page | No |
+| /dashboard | Main dashboard | Yes |
+| /dashboard/{feature} | {Feature page} | Yes |
+| /settings | User settings | Yes |
+| /admin | Admin panel | Yes (Admin) |
+
+---
+
+## 8. Deployment Architecture
+
+### 8.1 Environments
+| Environment | Purpose | URL Pattern |
+|-------------|---------|-------------|
+| Development | Local dev with hot reload | localhost:3000 |
+| Staging | Pre-production testing | staging.{domain} |
+| Production | Live user-facing | {domain} |
+
+### 8.2 CI/CD Pipeline
+\`\`\`
+Push to main → Lint & Type Check → Unit Tests → Build → Deploy to Staging
+                                                            │
+PR merged to production branch ─────────────────────────────┘
+                                                            │
+                                              Deploy to Production
+\`\`\`
+
+### 8.3 Infrastructure
+- **Containerization:** {e.g., Docker for local dev, serverless for production}
+- **Database hosting:** {e.g., managed PostgreSQL via Supabase/Neon/RDS}
+- **CDN:** {e.g., Vercel Edge Network / Cloudflare}
+- **Monitoring:** {e.g., Vercel Analytics, Sentry for error tracking}
+
+---
+
+## 9. Security Considerations
+
+| Category | Measure | Implementation |
+|----------|---------|----------------|
+| Input Validation | Sanitize all user inputs | Zod schemas on API routes, server-side validation |
+| SQL Injection | Parameterized queries | ORM (Prisma) prevents raw SQL injection |
+| XSS | Escape output, CSP headers | React auto-escapes, Content-Security-Policy header |
+| CSRF | Anti-CSRF tokens | {e.g., SameSite cookies, CSRF middleware} |
+| Rate Limiting | Prevent brute force | {e.g., rate limiter on auth endpoints — 5 attempts/min} |
+| Data Encryption | Protect sensitive data | HTTPS in transit, AES-256 at rest for sensitive fields |
+| Secrets Management | No secrets in code | Environment variables, .env.local excluded from Git |
+| Dependency Security | Prevent supply chain attacks | npm audit, Dependabot alerts |
+| {Additional} | {describe based on BRD security requirements} | {implementation} |
+
+---
+
+## 10. Performance Strategy
+
+| Strategy | Implementation | Impact |
+|----------|---------------|--------|
+| Server-Side Rendering | {e.g., Next.js SSR for initial load} | Fast first paint, SEO |
+| Code Splitting | {e.g., dynamic imports, route-based splitting} | Smaller initial bundle |
+| Image Optimization | {e.g., next/image with lazy loading, WebP} | Faster page loads |
+| Database Indexing | {e.g., indexes on frequently queried fields} | Faster queries |
+| Caching | {e.g., ISR for static pages, Redis for API responses} | Reduced database load |
+| CDN | {e.g., static assets served from edge} | Lower latency globally |
+| Lazy Loading | {e.g., defer below-fold content, infinite scroll} | Faster perceived load |
+| Bundle Analysis | {e.g., @next/bundle-analyzer} | Identify bloat early |
+
+---
+
+## 11. Error Handling Strategy
+
+### 11.1 Error Response Format
+\`\`\`json
+{
+  "error": "ERROR_CODE",
+  "message": "Human-readable description",
+  "details": {}  // optional validation errors
+}
+\`\`\`
+
+### 11.2 Error Categories
+| Code Range | Category | Example |
+|------------|----------|---------|
+| 400 | Validation Error | Invalid email format, missing required field |
+| 401 | Authentication | Invalid credentials, expired token |
+| 403 | Authorization | Insufficient permissions |
+| 404 | Not Found | Resource does not exist |
+| 409 | Conflict | Duplicate email, version conflict |
+| 429 | Rate Limited | Too many requests |
+| 500 | Internal Error | Unexpected server failure |
+
+### 11.3 Logging & Monitoring
+- **Application logs:** {e.g., structured JSON logs via Pino/Winston}
+- **Error tracking:** {e.g., Sentry for frontend and backend}
+- **Uptime monitoring:** {e.g., UptimeRobot, Vercel checks}
+
+---
+
+## 12. Testing Strategy
+
+| Level | Tool | Coverage Target | What to Test |
+|-------|------|----------------|--------------|
+| Unit | {e.g., Vitest / Jest} | 80%+ for business logic | Utility functions, validation, data transformations |
+| Component | {e.g., React Testing Library} | Key UI components | Form validation, conditional rendering, user interactions |
+| Integration | {e.g., Vitest + Prisma test DB} | All API routes | Request/response, auth guards, database operations |
+| E2E | {e.g., Playwright / Cypress} | Critical user flows | Signup, login, core feature CRUD, checkout |
+
+### 12.1 Test Conventions
+- Tests live next to source files: \`{component}.test.tsx\`, \`{route}.test.ts\`
+- CI blocks merge if tests fail
+- E2E runs against staging before production deploy
+
+---
+
+## 13. Technology Decision Records (ADRs)
+
+### ADR-001: {Decision Title, e.g., "Frontend Framework Selection"}
+- **Context:** {what problem or choice was faced}
+- **Decision:** {what was chosen}
+- **Consequences:** {tradeoffs — what we gain, what we give up}
+- **BRD Requirements:** {which FR-XXX IDs drove this decision}
+
+### ADR-002: {Decision Title, e.g., "Database Choice"}
+- **Context:** {context}
+- **Decision:** {decision}
+- **Consequences:** {consequences}
+- **BRD Requirements:** {FR-XXX IDs}
+
+### ADR-003: {Decision Title, e.g., "Authentication Strategy"}
+- **Context:** {context}
+- **Decision:** {decision}
+- **Consequences:** {consequences}
+- **BRD Requirements:** {FR-XXX IDs}
+
+{Add ADRs for each major technology choice: hosting, ORM, state management, etc.}
+
+---
+
+## 14. Requirement Traceability Matrix
+
+{Maps every BRD requirement to its implementing components, API endpoints, and database entities.}
+
+| BRD Requirement | Module | API Endpoints | Database Entities | Status |
+|-----------------|--------|---------------|-------------------|--------|
+| FR-001 | Auth | POST /api/auth/register, /login | User, Session | Planned |
+| FR-002 | Auth | GET /api/auth/me, PUT /api/auth/profile | User | Planned |
+| FR-003 | {Module} | {endpoints} | {entities} | Planned |
+| FR-004 | {Module} | {endpoints} | {entities} | Planned |
+{Continue for all FR-XXX requirements from the BRD}
+
+---
+
+*End of System Design Document*
 [/ARTIFACT]
 
 Step 2: Create GRANULAR cards on the project board.
