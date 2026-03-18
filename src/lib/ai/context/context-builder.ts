@@ -14,6 +14,7 @@ import { AgentDefinition, ContextSource } from '@/lib/ai/agents/types';
 import { LLMMessage } from '@/lib/ai/providers/types';
 import { AGENT_BASE_PROMPT } from '@/lib/ai/agents/prompt-base';
 import * as sources from './context-sources';
+import { pruneConversationHistory, needsPruning } from './context-pruner';
 import { ContextScope } from './context-sources';
 import {
   getValidTransitions,
@@ -371,7 +372,7 @@ export class ContextBuilder {
   private async buildRecentHistory(
     rawHistory: unknown,
     maxMessages: number,
-    _projectId: string,
+    projectId: string,
   ): Promise<LLMMessage[]> {
     if (maxMessages === 0 || !rawHistory) return [];
 
@@ -384,7 +385,8 @@ export class ContextBuilder {
     // Raw data comes newest-first, reverse for chronological order then take last N
     const chronological = [...messages].reverse().slice(-maxMessages);
 
-    return chronological.map((msg): LLMMessage => {
+    // Convert to LLMMessage format
+    const llmMessages = chronological.map((msg): LLMMessage => {
       if (msg.role === 'USER') {
         return { role: 'user', content: msg.content };
       }
@@ -395,6 +397,22 @@ export class ContextBuilder {
       const prefix = msg.agent ? `[${msg.agent.shortName}] ` : '';
       return { role: 'assistant', content: `${prefix}${msg.content}` };
     });
+
+    // ── Context pruning: summarize old messages if history is large ──
+    if (needsPruning(llmMessages)) {
+      const { pruned, dropped, summarized } = await pruneConversationHistory(
+        llmMessages,
+        projectId,
+      );
+      if (dropped > 0) {
+        console.log(
+          `[ContextBuilder] Pruned ${dropped} messages (summarized: ${summarized}) for project ${projectId}`,
+        );
+      }
+      return pruned;
+    }
+
+    return llmMessages;
   }
 }
 
