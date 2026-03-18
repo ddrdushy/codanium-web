@@ -104,6 +104,14 @@ export const GraphState = Annotation.Root({
   /** Recent agent responses tracked for text repetition & question re-ask detection. */
   recentResponses: Annotation<string[]>,
 
+  // ── LLM Retry & Model Downgrade ─────────────────────────────────────
+  /** Number of LLM call retry attempts in the current turn. */
+  llmRetryCount: Annotation<number>,
+  /** Whether the model was downgraded to a fallback during this turn. */
+  modelDowngraded: Annotation<boolean>,
+  /** The fallback model that was used after downgrade (if any). */
+  modelDowngradedTo: Annotation<string | undefined>,
+
   // ── Pipeline & Delegation ─────────────────────────────────────────────
   /** Whether this response triggers a delegation to another agent. */
   shouldDelegate: Annotation<boolean>,

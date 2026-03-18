@@ -15,6 +15,35 @@ import type { LLMToolCall } from '@/lib/ai/providers/types';
 /** Maximum number of tool call → LLM loops per agent turn. */
 export const MAX_TOOL_LOOPS = 10;
 
+// ---------------------------------------------------------------------------
+// Error Classification
+// ---------------------------------------------------------------------------
+
+export type ErrorClass = 'retryable' | 'non_retryable' | 'rate_limited';
+
+/**
+ * Classify a tool execution error to determine the appropriate recovery strategy.
+ *
+ * - retryable: transient failures (network, timeouts) — worth retrying
+ * - non_retryable: permanent failures (auth, validation) — retry won't help
+ * - rate_limited: back off before the next attempt
+ */
+export function classifyError(error: unknown): ErrorClass {
+  const message = error instanceof Error ? error.message : String(error);
+
+  // Rate limits — should back off, not retry immediately
+  if (/rate.?limit|429|too many requests/i.test(message)) return 'rate_limited';
+
+  // Auth/security — permanent failures, never retry
+  if (/401|403|unauthorized|forbidden|invalid.*key|security/i.test(message)) return 'non_retryable';
+
+  // Schema/validation — the tool call itself is wrong, retry won't help
+  if (/invalid.*argument|missing.*required|validation.*failed/i.test(message)) return 'non_retryable';
+
+  // Everything else is retryable
+  return 'retryable';
+}
+
 /**
  * Execute tools node.
  * Takes pending toolCalls from state, executes them via the tool executor,
@@ -56,7 +85,15 @@ export async function executeToolsNode(
   // Execute all tool calls individually with error recovery.
   // Each tool is wrapped in try/catch so a single failure doesn't abort the batch.
   // Failed tools return ToolResult with success: false so the LLM can self-correct.
+  //
+  // Error classification determines recovery strategy:
+  //   retryable     → counts toward toolErrorCount (LLM can self-correct)
+  //   non_retryable → immediately marked as failed, does NOT increment error count
+  //   rate_limited  → short delay before next tool, counts toward error count
   const results: ToolResult[] = [];
+  let nonRetryableCount = 0;
+  let rateLimitedCount = 0;
+
   for (const tc of toolCalls) {
     try {
       const [result] = await executeToolCalls([tc], {
@@ -66,19 +103,35 @@ export async function executeToolsNode(
       });
       results.push(result);
     } catch (err: any) {
-      // Unexpected crash during execution — convert to a recoverable error result
+      const errorClass = classifyError(err);
+
       console.error(
-        `[ExecuteTools] Tool "${tc.name}" threw unexpectedly:`,
+        `[ExecuteTools] Tool "${tc.name}" threw unexpectedly (${errorClass}):`,
         err.message,
         err.stack,
       );
+
+      const errorSuffix = errorClass === 'non_retryable'
+        ? ' [NON-RETRYABLE: do not retry this tool call]'
+        : errorClass === 'rate_limited'
+          ? ' [RATE LIMITED: wait before retrying]'
+          : '';
+
       results.push({
         toolCallId: tc.id,
         name: tc.name,
         success: false,
         result: null,
-        error: `Tool execution failed: ${err.message}${err.stack ? `\n${err.stack}` : ''}`,
+        error: `Tool execution failed: ${err.message}${errorSuffix}`,
       });
+
+      if (errorClass === 'non_retryable') {
+        nonRetryableCount++;
+      } else if (errorClass === 'rate_limited') {
+        rateLimitedCount++;
+        // Short delay before executing the next tool to respect rate limits
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
   }
 
@@ -100,16 +153,25 @@ export async function executeToolsNode(
     }
   }
 
-  // Track consecutive error count for circuit-breaker routing
-  const allFailed = results.length > 0 && results.every(r => !r.success);
+  // Track consecutive error count for circuit-breaker routing.
+  // Non-retryable errors don't increment the counter — they are permanent
+  // failures that should not trigger the circuit breaker (the LLM should
+  // simply stop calling that tool).
+  const failedResults = results.filter(r => !r.success);
+  const retryableFailures = failedResults.length - nonRetryableCount;
   const anySucceeded = results.some(r => r.success);
+  const allFailed = results.length > 0 && !anySucceeded;
   const prevErrorCount = state.toolErrorCount ?? 0;
-  // Reset on any success; increment if every tool in this batch failed
-  const newErrorCount = anySucceeded ? 0 : allFailed ? prevErrorCount + 1 : prevErrorCount;
+  // Reset on any success; only increment for retryable failures
+  const newErrorCount = anySucceeded
+    ? 0
+    : retryableFailures > 0
+      ? prevErrorCount + 1
+      : prevErrorCount;
 
   if (allFailed) {
     console.error(
-      `[ExecuteTools] All ${results.length} tool(s) failed. Consecutive error count: ${newErrorCount}/3`,
+      `[ExecuteTools] All ${results.length} tool(s) failed (${nonRetryableCount} non-retryable, ${rateLimitedCount} rate-limited). Consecutive error count: ${newErrorCount}/3`,
     );
   }
 
