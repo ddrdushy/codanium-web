@@ -12,8 +12,10 @@ import { executeToolCalls } from '@/lib/ai/tools/tool-executor';
 import type { ToolCall, ToolResult } from '@/lib/ai/tools/tool-definitions';
 import type { LLMToolCall } from '@/lib/ai/providers/types';
 
-/** Maximum number of tool call → LLM loops per agent turn. */
-export const MAX_TOOL_LOOPS = 10;
+/** Maximum number of tool call → LLM loops per agent turn.
+ * Most agents need 1-2 tool calls per turn (e.g., update_document + respond).
+ * Set conservatively to prevent runaway loops hitting LangGraph's recursion limit. */
+export const MAX_TOOL_LOOPS = 3;
 
 // ---------------------------------------------------------------------------
 // Error Classification

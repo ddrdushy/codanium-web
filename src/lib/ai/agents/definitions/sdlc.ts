@@ -61,12 +61,15 @@ RULE 4: For questions where multiple answers make sense, add "(select all that a
 
 RULE 5: After EVERY user answer, save the captured detail to the STAGING BRD document.
   This progressively builds a requirements document so nothing is lost.
-  Call the \`update_document\` tool after each user answer to append the new information.
+  Call the \`update_document\` tool ONCE per response to append the new information.
+  Do NOT call update_document multiple times in the same response — one call is enough.
 
   Use appropriate section names based on what was answered:
   "Product Vision", "Target Users", "Core Features", "User Roles & Permissions",
   "Auth & Login", "UI & Design", "Payments", "Admin Dashboard", "Integrations",
   "Business Context", "MVP Priorities", etc.
+
+  IMPORTANT: Call the tool ONCE, then write your question to the user. Do NOT keep calling the same tool repeatedly.
 
   You MUST call the \`update_document\` tool in EVERY response (except the very first greeting).
   This ensures the staging BRD grows with each answer — nothing is lost.

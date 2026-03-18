@@ -118,6 +118,7 @@ export async function POST(
 
         const graphStream = await graph.stream(initialState, {
           streamMode: 'custom',
+          recursionLimit: 50,
         });
 
         for await (const event of graphStream) {
