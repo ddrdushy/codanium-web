@@ -46,6 +46,11 @@ export const createCard: ToolDefinition = {
       priority: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'], description: 'Priority level' },
       module: { type: 'string', description: 'Module or feature area (e.g., "Auth API")' },
       parentId: { type: 'string', description: 'Parent card ID (for tasks under features/epics)' },
+      requirementIds: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'BRD requirement IDs this card implements (e.g., ["FR-001", "FR-002"]). These trace back to functional requirements in the BRD.',
+      },
     },
     required: ['title', 'type'],
   },
@@ -450,6 +455,19 @@ export const validateArchitecture: ToolDefinition = {
   },
 };
 
+// ─── H. Analysis Tools ────────────────────────────────────────────────────────
+
+export const runAnalysis: ToolDefinition = {
+  name: 'run_analysis',
+  description: 'Run cross-artifact consistency analysis on the project. Returns findings about coverage gaps, missing documents, and inconsistencies between BRD, SDD, task cards, and SDLC stages.',
+  category: 'project',
+  inputSchema: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+};
+
 // ─── Tool Registry ────────────────────────────────────────────────────────────
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -468,6 +486,8 @@ export const ALL_TOOLS: ToolDefinition[] = [
   triggerDeploy,
   // Guardrails
   validateCode, reviewChanges, checkDependencies, validateArchitecture,
+  // Analysis
+  runAnalysis,
 ];
 
 /**

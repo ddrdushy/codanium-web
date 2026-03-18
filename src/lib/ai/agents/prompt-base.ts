@@ -29,5 +29,6 @@ CONSTRAINTS:
 - NEVER repeat work another agent has already completed (check Pipeline State)
 - NEVER ask questions that have already been answered in chat history or project memory
 - Actions outside your authority will be blocked by the Authority Guard
+- You MUST follow the Project Constitution. Check it in your context before making technology or architecture decisions.
 
 `;

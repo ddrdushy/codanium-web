@@ -22,6 +22,7 @@ import {
   CardState as LifecycleCardState,
   CardType as LifecycleCardType,
 } from '@/lib/ai/orchestration/card-lifecycle';
+import { DEFAULT_CONSTITUTION } from '@/lib/ai/constitution/default-constitution';
 
 // ─── Public Interface ────────────────────────────────────────────────────────
 
@@ -167,9 +168,12 @@ export class ContextBuilder {
     // Build pipeline state summary — tells the agent where we are in the workflow
     const pipelineState = this.buildPipelineState(agentDef.shortName, contextData);
 
+    // Fetch project constitution (governance rules all agents must follow)
+    const constitutionBlock = await this.buildConstitutionBlock(projectId);
+
     // Fixed parts (always included)
-    // Base prompt (shared rules) + agent-specific prompt + scope + pipeline state
-    const fixedPart = AGENT_BASE_PROMPT + agentDef.systemPrompt + scopeBlock + pipelineState;
+    // Base prompt (shared rules) + constitution + agent-specific prompt + scope + pipeline state
+    const fixedPart = AGENT_BASE_PROMPT + constitutionBlock + agentDef.systemPrompt + scopeBlock + pipelineState;
     const fixedTokens = Math.ceil(fixedPart.length / 4);
 
     // Budget trimming: drop lowest-priority sources if over budget
@@ -248,6 +252,7 @@ export class ContextBuilder {
 
     const hasBRD = docs?.some(d => d.type === 'BRD' || d.title.toLowerCase().includes('business requirements')) ?? false;
     const hasSDD = docs?.some(d => d.type === 'SDD' || d.title.toLowerCase().includes('system design') || d.title.toLowerCase().includes('sdd')) ?? false;
+    const hasConstitution = docs?.some(d => d.type === 'CONSTITUTION') ?? false;
 
     // Check cards
     const cards = contextData.get('cards') as Array<{
@@ -278,6 +283,7 @@ export class ContextBuilder {
 
     // Pipeline completion status
     const completionLines: string[] = [];
+    if (hasConstitution) completionLines.push('  ✅ CONSTITUTION — project governance rules established');
     if (agentsThatSpoke.has('BA')) completionLines.push('  ✅ BA (Business Analyst) — requirements gathered');
     if (hasBRD) completionLines.push('  ✅ BRD (Business Requirements Document) — created');
     if (agentsThatSpoke.has('SA')) completionLines.push('  ✅ SA (Solution Architect) — architecture designed');
@@ -363,6 +369,48 @@ export class ContextBuilder {
     // and the authority guard enforces it at runtime regardless
 
     return lines.join('\n');
+  }
+
+  /**
+   * Fetch the project constitution and format it as a high-priority prompt block.
+   * If a CONSTITUTION document exists for the project, use its content.
+   * Otherwise, inject the default constitution template.
+   */
+  private async buildConstitutionBlock(projectId: string): Promise<string> {
+    try {
+      const constitutionDoc = await sources.fetchConstitution(projectId);
+      const content = constitutionDoc?.content?.trim()
+        ? constitutionDoc.content
+        : DEFAULT_CONSTITUTION;
+
+      return `
+═══════════════════════════════════════════════════════════
+PROJECT CONSTITUTION (mandatory rules — you MUST follow these):
+═══════════════════════════════════════════════════════════
+
+${content}
+
+═══════════════════════════════════════════════════════════
+END PROJECT CONSTITUTION
+═══════════════════════════════════════════════════════════
+
+`;
+    } catch (error) {
+      // If fetching fails, still inject the default constitution
+      console.warn('[ContextBuilder] Failed to fetch constitution, using default:', error);
+      return `
+═══════════════════════════════════════════════════════════
+PROJECT CONSTITUTION (mandatory rules — you MUST follow these):
+═══════════════════════════════════════════════════════════
+
+${DEFAULT_CONSTITUTION}
+
+═══════════════════════════════════════════════════════════
+END PROJECT CONSTITUTION
+═══════════════════════════════════════════════════════════
+
+`;
+    }
   }
 
   /**
@@ -578,7 +626,7 @@ function formatDocuments(data: unknown): string {
   const docContents: string[] = [];
 
   // Key document types that downstream agents need to read in full
-  const KEY_DOC_TYPES = new Set(['BRD', 'SDD', 'DESIGN_SYSTEM']);
+  const KEY_DOC_TYPES = new Set(['BRD', 'SDD', 'DESIGN_SYSTEM', 'CONSTITUTION']);
 
   for (const d of docs) {
     lines.push(`  ${d.title} (${d.type}) — ${statusIcon[d.status] ?? d.status}`);

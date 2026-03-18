@@ -9,6 +9,10 @@
 import { type ToolCall, type ToolResult } from './tool-definitions';
 import { isToolAuthorized } from './tool-filter';
 import {
+  analyzeProjectArtifacts,
+  formatAnalysisResults,
+} from '@/lib/ai/analysis/cross-artifact-analyzer';
+import {
   readFileInWorkspace,
   writeFileInWorkspace,
   editFileInWorkspace,
@@ -157,6 +161,10 @@ async function executeToolInternal(
     case 'trigger_deploy':
       return { message: `Deploy to ${args.environment} queued`, environment: args.environment };
 
+    // ── Analysis ────────────────────────────────────────────
+    case 'run_analysis':
+      return handleRunAnalysis(projectId);
+
     // ── Guardrails ──────────────────────────────────────────
     case 'validate_code':
       return handleValidateCode(args, projectId);
@@ -179,11 +187,22 @@ async function handleCreateCard(
   projectId: string,
   agentId?: string,
 ) {
+  // Append requirement IDs to description for traceability
+  let description = args.description || '';
+  const requirementIds: string[] = args.requirementIds || [];
+  if (requirementIds.length > 0) {
+    const implLine = `\n\nImplements: ${requirementIds.join(', ')}`;
+    // Only append if not already present in description
+    if (!description.includes('Implements:')) {
+      description += implLine;
+    }
+  }
+
   const card = await prisma.card.create({
     data: {
       projectId,
       title: args.title,
-      description: args.description || '',
+      description,
       type: args.type || 'TASK',
       priority: args.priority || 'MEDIUM',
       state: 'PLANNED',
@@ -192,7 +211,7 @@ async function handleCreateCard(
       parentId: args.parentId,
     },
   });
-  return { cardId: card.id, title: card.title, state: card.state };
+  return { cardId: card.id, title: card.title, state: card.state, requirementIds };
 }
 
 async function handleUpdateCard(args: Record<string, any>, projectId: string) {
@@ -374,6 +393,21 @@ async function handleValidateArchitecture(args: Record<string, any>, projectId: 
   return {
     circularDependencies: circularCheck.stdout.slice(0, 5000),
     exitCode: circularCheck.exitCode,
+  };
+}
+
+async function handleRunAnalysis(projectId: string) {
+  const results = await analyzeProjectArtifacts(projectId);
+  return {
+    findings: results,
+    summary: {
+      total: results.length,
+      critical: results.filter(r => r.severity === 'CRITICAL').length,
+      high: results.filter(r => r.severity === 'HIGH').length,
+      medium: results.filter(r => r.severity === 'MEDIUM').length,
+      low: results.filter(r => r.severity === 'LOW').length,
+    },
+    formatted: formatAnalysisResults(results),
   };
 }
 

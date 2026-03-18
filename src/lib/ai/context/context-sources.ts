@@ -289,6 +289,24 @@ export async function fetchProjectMemory(projectId: string, _scope?: ContextScop
 }
 
 /**
+ * Fetch the CONSTITUTION document for a project.
+ * Returns the constitution content if one exists, or null.
+ */
+export async function fetchConstitution(projectId: string, _scope?: ContextScope) {
+  const doc = await prisma.document.findFirst({
+    where: { projectId, type: 'CONSTITUTION' },
+    orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      status: true,
+    },
+  });
+  return doc;
+}
+
+/**
  * Fetch code artifacts scoped to a card or module.
  * Includes content (truncated) so agents can see existing code.
  */

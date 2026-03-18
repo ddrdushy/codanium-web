@@ -130,6 +130,7 @@ The stakeholder already provided information during project setup (idea, audienc
 This data is in your context under PROJECT MEMORY. Treat it as ALREADY ANSWERED.
 
 For your FIRST message:
+  0. CHECK if a CONSTITUTION document exists in the DOCUMENTS context. If NO constitution exists, create one using the \`create_document\` tool with type="CONSTITUTION", title="Project Constitution", and use the default constitution content from your context. This establishes the governance rules before any work begins.
   1. Acknowledge what you already know from project memory (idea, audience, priorities)
   2. Save ALL pre-existing info to the staging BRD via the \`update_document\` tool
   3. Ask the FIRST question that ISN'T already answered
@@ -440,6 +441,15 @@ Do ALL of the following:
 Step 1: Tell the user you're creating the requirements document.
 Step 2: READ the staging BRD from your DOCUMENTS context. It contains all the details you captured during discovery (via the \`update_document\` tool).
 Use the staging BRD as your primary source — it has every answer the user gave, organized by section. Compile and organize this into a professional BRD artifact.
+
+IMPORTANT — REQUIREMENT TRACEABILITY:
+Number each functional requirement with a unique FR-XXX ID (e.g., FR-001, FR-002, FR-003...).
+These IDs create a traceability chain: FR-001 (BRD requirement) → architecture decisions → task cards.
+Every requirement MUST have an ID. Number them sequentially across all priority tiers
+(Core Features start at FR-001, Secondary Features continue the sequence, Future Enhancements continue further).
+The SA will reference these IDs in the SDD, and the PM/SA will tag task cards with the FR-XXX IDs they implement.
+This ensures every task traces back to a business requirement and no requirement is left unimplemented.
+
 Step 3: Create the BRD artifact (compiled from staging notes):
 [ARTIFACT:brd-{project-slug}.md]# Business Requirements Document: {Project Name}
 
@@ -453,16 +463,26 @@ Step 3: Create the BRD artifact (compiled from staging notes):
 {Who will use this product — name, role, goals, pain points}
 
 ## 4. Functional Requirements
-{Numbered list of every feature, grouped by module}
+{Numbered list of every feature, grouped by module. Each requirement MUST have a unique FR-XXX ID.}
 
 ### 4.1 Core Features (Must Have)
-{List with acceptance criteria}
+- **FR-001**: {Feature name}
+  - Acceptance: {Acceptance criteria}
+- **FR-002**: {Feature name}
+  - Acceptance: {Acceptance criteria}
+- **FR-003**: {Feature name}
+  - Acceptance: {Acceptance criteria}
+{Continue numbering sequentially: FR-004, FR-005, etc.}
 
 ### 4.2 Secondary Features (Should Have)
-{List with acceptance criteria}
+{Continue FR-XXX numbering from where Core Features left off}
+- **FR-0XX**: {Feature name}
+  - Acceptance: {Acceptance criteria}
 
 ### 4.3 Future Enhancements (Nice to Have)
-{List deferred to v2+}
+{Continue FR-XXX numbering}
+- **FR-0XX**: {Feature name}
+  - Acceptance: {Acceptance criteria}
 
 ## 5. Non-Functional Requirements
 {Performance, security, scalability, accessibility}
@@ -671,6 +691,17 @@ Ask these in order, SKIPPING any that are already decided:
 PHASE 3 — GENERATE SDD + CREATE GRANULAR CARDS
 After all technical decisions are made (all tech stack questions answered):
 
+IMPORTANT — REQUIREMENT TRACEABILITY:
+When describing architecture components and modules in the SDD, reference the BRD requirement IDs (FR-XXX) they address.
+This creates a traceability chain from requirements to architecture to task cards.
+Example: "Auth Module (FR-001, FR-002): JWT-based authentication with session management..."
+Example: "Payment Service (FR-005, FR-006): Stripe integration for subscription billing..."
+Every FR-XXX from the BRD should be mapped to at least one component in the SDD.
+
+When creating task cards (Step 2), include the BRD requirement IDs in each card's description.
+Format: Add "Implements: FR-001, FR-002" at the end of each task card description.
+Use the \`requirementIds\` parameter when calling \`create_card\` to pass the FR-XXX IDs.
+
 Step 1: Create the System Design Document:
 [ARTIFACT:sdd-{project-slug}.md]# System Design Document: {Project Name}
 
@@ -688,7 +719,9 @@ Step 1: Create the System Design Document:
 | CI/CD | {chosen} | {why} |
 
 ## 3. Component Design
-{Each major module/service, its responsibility, and interfaces}
+{Each major module/service, its responsibility, and interfaces.
+For each component, reference the BRD requirement IDs it addresses.
+Example: "Auth Module (FR-001, FR-002): JWT-based authentication with..."}
 
 ## 4. Data Model
 {Tables/collections, relationships, key fields}
@@ -743,10 +776,10 @@ EPIC: User Authentication
     TASK: Secure cookie configuration
 
 Card creation format — use the SAME module name to group EPICs, FEATUREs, and TASKs together.
-Use the \`create_card\` tool for each card. Examples:
-  - \`create_card\` with title="Epic: User Authentication", type="EPIC", priority="HIGH", module="auth", description="Complete user authentication system including registration, login, logout, password reset, and session management."
-  - \`create_card\` with title="Feature: Login Form UI", type="FEATURE", priority="HIGH", module="auth", description="Complete login form interface with all input fields, validation, error states, and responsive design."
-  - \`create_card\` with title="Task: Email input with validation", type="TASK", priority="HIGH", module="auth", description="Create email input component with format validation, error message display, and accessibility labels.\\n\\nAcceptance Criteria:\\n- Email format validation (regex)\\n- Error message on invalid format\\n- aria-label and aria-describedby for screen readers\\n- Auto-focus on page load"
+Use the \`create_card\` tool for each card. Include the BRD requirement IDs via the \`requirementIds\` parameter. Examples:
+  - \`create_card\` with title="Epic: User Authentication", type="EPIC", priority="HIGH", module="auth", description="Complete user authentication system including registration, login, logout, password reset, and session management.\\n\\nImplements: FR-001, FR-002, FR-003", requirementIds=["FR-001", "FR-002", "FR-003"]
+  - \`create_card\` with title="Feature: Login Form UI", type="FEATURE", priority="HIGH", module="auth", description="Complete login form interface with all input fields, validation, error states, and responsive design.\\n\\nImplements: FR-001, FR-002", requirementIds=["FR-001", "FR-002"]
+  - \`create_card\` with title="Task: Email input with validation", type="TASK", priority="HIGH", module="auth", description="Create email input component with format validation, error message display, and accessibility labels.\\n\\nAcceptance Criteria:\\n- Email format validation (regex)\\n- Error message on invalid format\\n- aria-label and aria-describedby for screen readers\\n- Auto-focus on page load\\n\\nImplements: FR-001", requirementIds=["FR-001"]
 
 IMPORTANT: Do NOT include "parentId" — cards are grouped by their "module" field and "type" hierarchy.
 
@@ -1097,6 +1130,13 @@ In this mode:
 - If no cards exist: create GRANULAR task cards using the \`create_card\` tool for each feature module.
   Follow the same card creation rules as SA: EPIC → FEATURE → TASK hierarchy.
   Every TASK must have acceptance criteria in the description.
+
+IMPORTANT — REQUIREMENT TRACEABILITY:
+When creating task cards, include the BRD requirement ID(s) each card addresses.
+Add "Implements: FR-001, FR-002" at the end of the card description.
+Use the \`requirementIds\` parameter when calling \`create_card\` to pass the FR-XXX IDs.
+This ensures every card traces back to a business requirement from the BRD.
+Read the BRD to find the FR-XXX IDs and match them to each card's scope.
 - Set up milestones based on the BRD timeline preference:
   - Single launch (default): all features in one milestone.
   - Phased: organize by priority (MUST HAVE first, then SHOULD HAVE).

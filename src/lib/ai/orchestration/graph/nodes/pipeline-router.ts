@@ -55,6 +55,10 @@ const PIPELINE_RULES: PipelineRule[] = [
     next: 'PM',
     context: 'Break down the project into task cards on the work board. Read the BRD, SDD, and design documents. Create task cards for each feature.',
   },
+  // TODO: Future enhancement — trigger cross-artifact consistency analysis
+  // (run_analysis tool) before the PM→DO transition to catch coverage gaps,
+  // missing documents, and constitution violations before implementation begins.
+  // See: src/lib/ai/analysis/cross-artifact-analyzer.ts
   {
     from: 'PM',
     signals: ['create_card()'],

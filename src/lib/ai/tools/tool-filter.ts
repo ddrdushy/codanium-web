@@ -32,6 +32,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'create_card', 'update_card',
     'create_document', 'update_document',
     'create_decision', 'remember', 'task_progress',
+    'run_analysis',
   ],
   TL: [
     'create_card', 'update_card',
@@ -64,6 +65,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'git_diff',
     'update_card', 'create_card', 'task_progress',
     'validate_code', 'review_changes', 'check_dependencies',
+    'run_analysis',
   ],
   AT: [ // Automation Tester
     'read_file', 'write_file',
@@ -116,10 +118,12 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'update_card', 'create_card',
     'create_document', 'task_progress',
     'validate_code', 'review_changes', 'check_dependencies', 'validate_architecture',
+    'run_analysis',
   ],
   ORC: [ // Orchestrator
     'create_card', 'update_card',
     'create_decision', 'remember', 'task_progress',
+    'run_analysis',
   ],
   STC: [ // Stakeholder
     'create_decision', 'remember', 'task_progress',
@@ -130,6 +134,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
   AUD: [ // Auditor
     'read_file', 'list_directory', 'glob', 'grep',
     'create_document', 'task_progress',
+    'run_analysis',
   ],
 
   // ─── AI & Cost Agents ──────────────────────────────────
