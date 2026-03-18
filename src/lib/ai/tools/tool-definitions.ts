@@ -9,7 +9,7 @@
 export interface ToolDefinition {
   name: string;
   description: string;
-  category: 'project' | 'filesystem' | 'shell' | 'git' | 'web' | 'deploy';
+  category: 'project' | 'filesystem' | 'shell' | 'git' | 'web' | 'deploy' | 'communication';
   inputSchema: {
     type: 'object';
     properties: Record<string, any>;
@@ -468,6 +468,29 @@ export const runAnalysis: ToolDefinition = {
   },
 };
 
+// ─── I. Communication Tools ───────────────────────────────────────────────
+
+export const consultAgent: ToolDefinition = {
+  name: 'consult_agent',
+  description: 'Ask another AI team member for their expert input on a question. Use this when you need technical advice, design feedback, or domain expertise from a specialist.',
+  category: 'communication',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      agent: {
+        type: 'string',
+        enum: ['BA', 'SA', 'UX', 'PM', 'TL', 'JD', 'SD', 'QA', 'SEC', 'DO', 'PE', 'IE', 'SM', 'SR', 'DEC', 'AUD', 'CA'],
+        description: 'The agent to consult (e.g., SA for architecture, QA for testing, SEC for security)',
+      },
+      question: {
+        type: 'string',
+        description: 'The specific question to ask the other agent',
+      },
+    },
+    required: ['agent', 'question'],
+  },
+};
+
 // ─── Tool Registry ────────────────────────────────────────────────────────────
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -488,6 +511,8 @@ export const ALL_TOOLS: ToolDefinition[] = [
   validateCode, reviewChanges, checkDependencies, validateArchitecture,
   // Analysis
   runAnalysis,
+  // Communication
+  consultAgent,
 ];
 
 /**

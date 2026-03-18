@@ -20,12 +20,13 @@ export { parseAgentResponse } from './agents/response-parser';
 // Context builder
 export { contextBuilder, ContextBuilder } from './context/context-builder';
 
-// Orchestration engine (LangGraph-based)
+// Orchestration engine (agent-loop-based)
 export { saveUserMessage, saveAgentMessage, persistArtifact } from './orchestration/engine';
 export { messageRouter } from './orchestration/router';
 export { agentStateManager } from './orchestration/state-manager';
 export { eventBus } from './orchestration/event-bus';
-export { buildOrchestrationGraph } from './orchestration/graph/build-graph';
+export { agentLoop, runAgentSilent } from './orchestration/agent-loop';
+export type { AgentLoopInput, SSEEvent } from './orchestration/agent-loop';
 export { createTraceCollector, withTelemetry, TraceCollector } from './orchestration/telemetry';
 export * from './orchestration/types';
 

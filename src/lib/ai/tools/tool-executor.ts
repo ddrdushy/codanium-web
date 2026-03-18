@@ -8,6 +8,7 @@
 
 import { type ToolCall, type ToolResult } from './tool-definitions';
 import { isToolAuthorized } from './tool-filter';
+import { runAgentSilent } from '../orchestration/agent-loop';
 import {
   analyzeProjectArtifacts,
   formatAnalysisResults,
@@ -57,7 +58,7 @@ export async function executeTool(
   }
 
   try {
-    const result = await executeToolInternal(name, args, projectId, agentId);
+    const result = await executeToolInternal(name, args, projectId, agentId, agentShortName);
     console.log(`[ToolExecutor] ✅ ${agentShortName} → ${name}(${JSON.stringify(args).slice(0, 100)})`);
     return {
       toolCallId: toolCall.id,
@@ -99,6 +100,7 @@ async function executeToolInternal(
   args: Record<string, any>,
   projectId: string,
   agentId?: string,
+  agentShortName?: string,
 ): Promise<any> {
   switch (name) {
     // ── Project Management ──────────────────────────────────
@@ -164,6 +166,10 @@ async function executeToolInternal(
     // ── Analysis ────────────────────────────────────────────
     case 'run_analysis':
       return handleRunAnalysis(projectId);
+
+    // ── Communication ──────────────────────────────────────
+    case 'consult_agent':
+      return handleConsultAgent(args, projectId, agentShortName);
 
     // ── Guardrails ──────────────────────────────────────────
     case 'validate_code':
@@ -423,6 +429,29 @@ async function handleRunAnalysis(projectId: string) {
     },
     formatted: formatAnalysisResults(results),
   };
+}
+
+// ─── Communication Handlers ───────────────────────────────────────────────────
+
+const MAX_CONSULT_DEPTH = 3;
+
+async function handleConsultAgent(
+  args: Record<string, any>,
+  projectId: string,
+  agentShortName?: string,
+) {
+  const targetAgent: string = args.agent;
+  const question: string = args.question;
+
+  // Prevent self-consultation
+  if (agentShortName && targetAgent === agentShortName) {
+    throw new Error(`Agent ${agentShortName} cannot consult itself.`);
+  }
+
+  // Run the target agent silently and collect its response
+  const result = await runAgentSilent(targetAgent, question, projectId, 1);
+
+  return { agent: targetAgent, response: result };
 }
 
 async function handleWebFetch(url: string) {

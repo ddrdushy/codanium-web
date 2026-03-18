@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { prisma } from '@/lib/prisma';
 import { taskQueue } from '@/lib/ai/orchestration/task-queue';
-import { buildOrchestrationGraph } from '@/lib/ai/orchestration/graph/build-graph';
+import { agentLoop } from '@/lib/ai/orchestration/agent-loop';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,59 +77,21 @@ export async function POST(
         );
       }
 
-      let collector: any = null;
       try {
-        // ── LangGraph Orchestration ────────────────────────────────────
+        // ── Agent Loop Orchestration ───────────────────────────────────
         // NOTE: User message is already saved by the chat page (POST /api/projects/[id]/chat)
         // Do NOT save again here — it causes duplicate messages.
 
-        const result = buildOrchestrationGraph();
-        const graph = result.graph;
-        collector = result.collector;
-
-        const initialState = {
+        const events = agentLoop({
           projectId,
           userId,
           userMessage: body.content.trim(),
           targetAgentShortName: body.agentShortName ?? undefined,
-          inputGuardrailResult: null,
-          routedAgent: '',
-          routedIntent: '',
-          systemMessage: '',
-          recentHistory: [],
-          llmMessages: [],
-          tokenBudgetRemaining: null,
-          rawContent: '',
-          rawThinking: '',
-          tokensUsed: null,
-          parsedResponse: null,
-          savedMessageId: '',
-          outputGuardrailResult: null,
-          shouldDelegate: false,
-          delegationDepth: 0,
-          toolCalls: [],
-          toolResults: [],
-          toolLoopCount: 0,
-          toolErrorCount: 0,
-          completedToolSignals: [],
-          recentToolCalls: [],
-          recentResponses: [],
-        };
-
-        const graphStream = await graph.stream(initialState, {
-          streamMode: 'custom',
-          recursionLimit: 50,
         });
 
-        for await (const event of graphStream) {
-          const sseEvent = event as { type: string; data: Record<string, unknown> };
-          if (sseEvent.type && sseEvent.data) {
-            sendEvent(sseEvent.type, sseEvent.data);
-          }
+        for await (const event of events) {
+          sendEvent(event.type, event.data);
         }
-
-        // Finalize telemetry (non-blocking — persists to OrchestrationRun)
-        collector.finalize().catch(() => {});
 
         // Mark OrchestrationRun as completed
         await prisma.orchestrationRun.update({
@@ -139,10 +101,6 @@ export async function POST(
       } catch (streamError) {
         console.error('Stream error:', streamError);
         sendEvent('error', { message: 'An error occurred processing your request' });
-
-        // Finalize telemetry as failed
-        collector?.markFailed(streamError instanceof Error ? streamError.message : String(streamError));
-        collector?.finalize().catch(() => {});
 
         // Mark OrchestrationRun as failed
         await prisma.orchestrationRun.update({

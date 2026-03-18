@@ -8,7 +8,7 @@
 //   - Fetches full OrchestrationRun from Postgres (BullMQ payload is minimal)
 //   - Idempotency guard: skips already completed/failed/cancelled runs
 //   - Syncs retry state back to Postgres on failure
-//   - Dynamic import of buildOrchestrationGraph to avoid circular deps
+//   - Dynamic import of agentLoop to avoid circular deps
 //   - Concurrency 5, rate limited to 10 jobs/second
 // =============================================================================
 
@@ -61,52 +61,23 @@ async function processOrchestrationJob(
   const startTime = Date.now();
 
   // 4. Dynamic import to avoid circular dependencies
-  const { buildOrchestrationGraph } = await import(
-    '@/lib/ai/orchestration/graph/build-graph'
+  const { agentLoop } = await import(
+    '@/lib/ai/orchestration/agent-loop'
   );
 
-  // 5. Execute orchestration via LangGraph
-  const { graph, collector } = buildOrchestrationGraph();
-
-  const initialState = {
+  // 5. Execute orchestration via agent loop
+  const events = agentLoop({
     projectId: run.projectId,
     userId: run.userId,
     userMessage: run.userMessage,
     targetAgentShortName: run.routedTo,
-    inputGuardrailResult: null,
-    routedAgent: '',
-    routedIntent: '',
-    systemMessage: '',
-    recentHistory: [],
-    llmMessages: [],
-    tokenBudgetRemaining: null,
-    rawContent: '',
-    rawThinking: '',
-    tokensUsed: null,
-    parsedResponse: null,
-    savedMessageId: '',
-    outputGuardrailResult: null,
-    shouldDelegate: false,
-    delegationDepth: 0,
-    toolCalls: [],
-    toolResults: [],
-    toolLoopCount: 0,
-    toolErrorCount: 0,
-    completedToolSignals: [],
-    recentToolCalls: [],
-    recentResponses: [],
-  };
-
-  // Run graph without streaming — drain all events silently
-  const graphStream = await graph.stream(initialState, {
-    streamMode: 'custom',
+    isPipeline: true,
   });
-  for await (const _event of graphStream) {
+
+  // Drain the generator silently — no SSE streaming in background mode
+  for await (const _event of events) {
     // Events discarded in background mode
   }
-
-  // Finalize telemetry (non-blocking)
-  collector.finalize().catch(() => {});
 
   // 6. Mark COMPLETED in Postgres
   await prisma.orchestrationRun.update({
