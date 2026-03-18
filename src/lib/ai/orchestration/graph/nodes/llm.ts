@@ -253,13 +253,55 @@ export async function llmNode(
   }
 
   // Preserve text from previous tool loop iterations.
-  // The first LLM call typically produces the user-facing text + a tool call.
-  // Subsequent calls (after tool execution) may produce only tool calls with empty text.
-  // We must keep the text from ALL iterations so parseAndExecute has the full response.
   const previousContent = state.rawContent ?? '';
   const combinedContent = previousContent && fullContent
-    ? `${previousContent}\n${fullContent}`  // Both have content — concatenate
-    : fullContent || previousContent;        // One or the other
+    ? `${previousContent}\n${fullContent}`
+    : fullContent || previousContent;
+
+  // ── Final response generation ──────────────────────────────────────
+  // Many models (Ollama, OpenAI) return ONLY tool calls with empty text content.
+  // After tool loops complete (no more tool calls OR limit reached), if we still
+  // have no text, make ONE final LLM call WITHOUT tools to get the user-facing response.
+  const isAfterToolLoop = (state.toolLoopCount ?? 0) > 0;
+  const hasNoContent = !combinedContent.trim();
+  const hasNoMoreToolCalls = collectedToolCalls.length === 0;
+
+  if (isAfterToolLoop && hasNoContent && hasNoMoreToolCalls) {
+    console.log('[LLMNode] No text after tool loops — making final call WITHOUT tools for user response');
+    let finalContent = '';
+    try {
+      for await (const chunk of llmGateway.stream({
+        messages,
+        model: modelOverride,
+        temperature: agentDef.temperature,
+        agentId: state.routedAgent,
+        projectId: state.projectId,
+        metadata: { userId: state.userId },
+        // NO tools — force text-only response
+      })) {
+        if (chunk.content) {
+          finalContent += chunk.content;
+          if (writer) {
+            writer({ type: 'chunk', data: { content: chunk.content } });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[LLMNode] Final text-only call failed:', e);
+    }
+    if (finalContent.trim()) {
+      console.log(`[LLMNode] Final response generated: ${finalContent.length} chars`);
+      return {
+        rawContent: finalContent,
+        rawThinking: fullThinking ? (state.rawThinking ?? '') + fullThinking : (state.rawThinking ?? ''),
+        tokensUsed,
+        toolCalls: [],
+        llmRetryCount,
+        modelDowngraded,
+        modelDowngradedTo,
+      };
+    }
+  }
 
   return {
     rawContent: combinedContent,

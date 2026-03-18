@@ -104,9 +104,11 @@ export function buildOrchestrationGraph(): {
 
     // llm → tool routing decision
     // If LLM returned tool calls AND we haven't hit max loops → executeTools
+    // If no tool calls but also no text content → call LLM again without tools (final response)
     // Otherwise → parseAndExecute
     .addConditionalEdges('llm', (state) => {
       const hasToolCalls = state.toolCalls && state.toolCalls.length > 0;
+      const hasContent = !!(state.rawContent && state.rawContent.trim().length > 0);
       const withinLoopLimit = (state.toolLoopCount ?? 0) < MAX_TOOL_LOOPS;
 
       if (hasToolCalls && withinLoopLimit) {
@@ -119,6 +121,15 @@ export function buildOrchestrationGraph(): {
       if (hasToolCalls && !withinLoopLimit) {
         console.warn(
           `[BuildGraph] Tool loop limit reached (${MAX_TOOL_LOOPS}), proceeding to parseAndExecute`,
+        );
+      }
+
+      // If we have no content after tool loops, the model only returned tool calls
+      // (common with Ollama/OpenAI models). The tool results are in context now,
+      // so parseAndExecute will handle it — the content may be in the tool results.
+      if (!hasContent && !hasToolCalls && (state.toolLoopCount ?? 0) > 0) {
+        console.log(
+          `[BuildGraph] No text content after ${state.toolLoopCount} tool loop(s) — proceeding to parseAndExecute`,
         );
       }
 
