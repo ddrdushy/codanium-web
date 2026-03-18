@@ -26,6 +26,7 @@ export { messageRouter } from './orchestration/router';
 export { agentStateManager } from './orchestration/state-manager';
 export { eventBus } from './orchestration/event-bus';
 export { buildOrchestrationGraph } from './orchestration/graph/build-graph';
+export { createTraceCollector, withTelemetry, TraceCollector } from './orchestration/telemetry';
 export * from './orchestration/types';
 
 // Tool system

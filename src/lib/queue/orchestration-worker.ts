@@ -66,7 +66,7 @@ async function processOrchestrationJob(
   );
 
   // 5. Execute orchestration via LangGraph
-  const graph = buildOrchestrationGraph();
+  const { graph, collector } = buildOrchestrationGraph();
 
   const initialState = {
     projectId: run.projectId,
@@ -101,6 +101,9 @@ async function processOrchestrationJob(
   for await (const _event of graphStream) {
     // Events discarded in background mode
   }
+
+  // Finalize telemetry (non-blocking)
+  collector.finalize().catch(() => {});
 
   // 6. Mark COMPLETED in Postgres
   await prisma.orchestrationRun.update({

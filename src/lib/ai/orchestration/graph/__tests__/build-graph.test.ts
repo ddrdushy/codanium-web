@@ -93,7 +93,7 @@ function baseInput(overrides: Record<string, any> = {}) {
  * that were invoked, in order.
  */
 async function runGraphAndCollectNodes(input: Record<string, any>) {
-  const graph = buildOrchestrationGraph();
+  const { graph } = buildOrchestrationGraph();
   const visited: string[] = [];
 
   // Wrap each mock to record invocations
@@ -213,7 +213,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         completedToolSignals: ['update_document(BRD)'],
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       const result = await graph.invoke(baseInput());
 
       // executeTools was called at least once
@@ -256,7 +256,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         };
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput());
 
       // executeTools called exactly 2 times (once per tool-call LLM response)
@@ -280,7 +280,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
       });
 
       // Start with toolLoopCount at 10 (the max)
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       const result = await graph.invoke(baseInput({ toolLoopCount: 10 }));
 
       // executeTools should NOT be called because loop limit is reached
@@ -297,7 +297,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         toolCalls: [{ id: 'tc-1', name: 'write_file', arguments: {} }],
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput({ toolLoopCount: 10 }));
 
       expect(mockExecuteToolsNode).not.toHaveBeenCalled();
@@ -332,7 +332,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
           shouldDelegate: false,
         });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput());
 
       // context should be called twice (initial + after delegation)
@@ -360,7 +360,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         delegationDepth: 16,
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput({ delegationDepth: 16 }));
 
       // context called only once (the initial pass, no loop-back)
@@ -392,7 +392,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
           shouldDelegate: false,
         });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput({ delegationDepth: 14 }));
 
       // context called twice: initial + delegation loop-back
@@ -410,7 +410,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         toolCalls: [],
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput());
 
       expect(mockExecuteToolsNode).not.toHaveBeenCalled();
@@ -426,7 +426,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         // toolCalls not set at all
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput());
 
       expect(mockExecuteToolsNode).not.toHaveBeenCalled();
@@ -472,7 +472,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         completedToolSignals: ['update_document(BRD)'],
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput());
 
       // The text-extracted tool calls should route to executeTools
@@ -489,7 +489,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         inputGuardrailResult: { blocked: true, reason: 'harmful content', sanitizedMessage: '', flags: ['harmful'] },
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       const result = await graph.invoke(baseInput());
 
       // No downstream nodes should be called
@@ -508,7 +508,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         tokenBudgetRemaining: 0,
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       const result = await graph.invoke(baseInput());
 
       // context was called, but llm should not be called
@@ -524,7 +524,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
         tokenBudgetRemaining: -100,
       });
 
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput());
 
       expect(mockLlmNode).not.toHaveBeenCalled();
@@ -533,7 +533,7 @@ describe('Orchestration Graph — Conditional Edge Routing', () => {
 
   describe('Happy path — full traversal', () => {
     it('traverses START -> inputGuardrail -> route -> context -> llm -> parseAndExecute -> pipelineRouter -> END', async () => {
-      const graph = buildOrchestrationGraph();
+      const { graph } = buildOrchestrationGraph();
       await graph.invoke(baseInput());
 
       expect(mockInputGuardrailNode).toHaveBeenCalledTimes(1);

@@ -12,7 +12,7 @@ export class TaskProcessor {
       // Dynamic import to avoid circular dependency
       const { buildOrchestrationGraph } = await import('./graph/build-graph');
 
-      const graph = buildOrchestrationGraph();
+      const { graph, collector } = buildOrchestrationGraph();
 
       const initialState = {
         projectId: task.projectId,
@@ -50,6 +50,9 @@ export class TaskProcessor {
       for await (const _event of graphStream) {
         // Events are discarded in background mode
       }
+
+      // Finalize telemetry (non-blocking)
+      collector.finalize().catch(() => {});
 
       await taskQueue.complete(task.id, {
         latencyMs: Date.now() - startTime,
