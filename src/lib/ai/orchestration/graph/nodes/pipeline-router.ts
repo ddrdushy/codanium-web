@@ -36,19 +36,22 @@ const PIPELINE_RULES: PipelineRule[] = [
   // ── Upstream: Requirements → Architecture → Design → Planning → Dev ──
   {
     from: 'BA',
-    signals: ['approve_document(BRD)', 'create_document(BRD)', 'update_document(BRD)'],
+    // ONLY approve_document triggers handoff — update_document is used for staging BRD
+    // during discovery and must NOT trigger the BA→SA transition
+    signals: ['approve_document(BRD)'],
     next: 'SA',
-    context: 'Design the technical architecture based on the approved requirements. Read the BRD and produce a System Design Document (SDD).',
+    context: 'Design the technical architecture based on the approved requirements. Read the BRD document in your context — it contains the full requirements. Produce a System Design Document (SDD).',
   },
   {
     from: 'SA',
-    signals: ['create_document(SDD)', 'update_document(SDD)', 'approve_document(SDD)'],
+    // ONLY approve_document triggers handoff — update/create are used during SA's work
+    signals: ['approve_document(SDD)'],
     next: 'UX',
     context: 'Create wireframes and design system based on the BRD and SDD. Focus on user experience and interface design.',
   },
   {
     from: 'UX',
-    signals: ['create_document(DESIGN_SYSTEM)', 'update_document(DESIGN_SYSTEM)', 'write_file()', 'task_progress()'],
+    signals: ['approve_document(DESIGN_SYSTEM)', 'task_progress()'],
     next: 'PM',
     context: 'Break down the project into task cards on the work board. Read the BRD, SDD, and design documents. Create task cards for each feature.',
   },

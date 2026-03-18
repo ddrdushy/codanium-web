@@ -75,8 +75,10 @@ function stripAgentMarkers(content: string): string {
     .replace(/^\s*\*{0,2}\[\s*\/\s*ACTION\s*\]\*{0,2}/gm, '')
     .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\]\s*$/gm, '')
     .replace(/^\s*\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gm, '')
-    // Strip text-based tool calls: [UPDATE_DOCUMENT]{ ... }, [CREATE_CARD]{ ... }, etc.
-    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*\]\s*\{[\s\S]*?\}\s*/gi, '')
+    // Strip text-based tool calls in two formats:
+    //   [UPDATE_DOCUMENT]{ "type": "BRD", ... }    (bracket then JSON)
+    //   [REMEMBER {"key":"x","value":"y"}]          (JSON inside brackets)
+    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/gi, '')
     // Strip agent name prefixes like "[BA]", "[SA]", "[DEC]", "[ORC]" at start of lines
     .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*/gm, '')
     // Clean up whitespace

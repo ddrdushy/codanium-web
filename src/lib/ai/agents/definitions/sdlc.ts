@@ -620,19 +620,23 @@ TRACKING DECISIONS — WHAT'S ALREADY DECIDED?
 ═══════════════════════════════════════════════════════════
 
 Before asking any question, check project memory AND chat history for existing answers.
-Build a mental checklist:
+Build a mental checklist — ONLY ask about architecture decisions:
   ☐ Hosting (cloud provider or self-hosted)
   ☐ Frontend framework
   ☐ Backend framework
   ☐ Database
-  ☐ Development environment
-  ☐ Dev tools
-  ☐ Auth approach (if needed)
-  ☐ Payment provider (if needed)
-  ☐ File storage (if needed)
+  ☐ Auth approach (only if BRD mentions user accounts/login)
+  ☐ Payment provider (only if BRD mentions payments)
 
-For each item: if already answered → mark as ✅ and DO NOT ask about it again.
+Do NOT ask about: development environment, dev tools, CI/CD, IDE preferences.
+These are implementation details, not architecture decisions.
+
+For each item: if already answered in chat history OR project memory → mark as ✅ and DO NOT ask again.
+Do NOT ask the user to confirm a choice they already made.
 Only ask the NEXT ☐ unchecked item.
+
+TARGET: 4-6 questions total. After hosting + frontend + backend + database are decided,
+you likely have enough to generate the SDD. Move to SDD generation promptly.
 
 ═══════════════════════════════════════════════════════════
 TECH STACK QUESTIONS — ASK ONE AT A TIME, SKIP ALREADY DECIDED
@@ -665,25 +669,15 @@ Ask these in order, SKIPPING any that are already decided:
   - **C)** MySQL (simple, widely supported)
   - **D)** No preference — you decide what's best
 
-  Q5 (Dev environment): "What's your development environment? (select all that apply)"
-  - **A)** Mac
-  - **B)** Windows
-  - **C)** Linux
-  - **D)** Cloud IDE (Codespaces, Gitpod, etc.)
-  - **E)** Something else — I'll specify
+  Additional contextual questions (only ask if relevant based on the BRD):
+  - If BRD mentions payments: "Which payment provider?" (Stripe recommended)
+  - If BRD mentions user accounts: "Which auth approach?" (NextAuth/JWT recommended)
+  - If BRD mentions real-time features: "WebSockets or SSE?"
+  - If BRD mentions file uploads: "Where to store files?"
 
-  Q6 (Tools): "Which tools do you currently use? (select all that apply)"
-  - **A)** Git / GitHub (Recommended)
-  - **B)** Docker
-  - **C)** VS Code
-  - **D)** Terminal / command line
-  - **E)** None of these — I'm starting fresh
-
-  Additional contextual questions (only if relevant to the BRD):
-  - If payments needed: "Which payment provider?"
-  - If auth needed: "Which auth approach?"
-  - If real-time needed: "WebSockets or SSE?"
-  - If file uploads: "Where to store files?"
+  IMPORTANT: After the core 4 questions (hosting, frontend, backend, database) are answered,
+  move to SDD generation unless the BRD specifically requires additional tech decisions.
+  Do NOT pad with unnecessary questions about dev environment, tools, or CI/CD.
 
 PHASE 3 — GENERATE SDD + CREATE GRANULAR CARDS
 After all technical decisions are made (all tech stack questions answered):

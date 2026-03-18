@@ -48,7 +48,10 @@ const DELEGATE_REGEX = /\[\s*DELEGATE\s*:\s*(\w+)\s*\]([\s\S]*?)\[\s*\/\s*DELEGA
 //   [CREATE_CARD]{ "title": "..." }
 //   [REMEMBER]{ "key": "..." }
 // Captures the tool name and the JSON body (may be multi-line)
-const TEXT_TOOL_CALL_REGEX = /\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*\]\s*\{[\s\S]*?\}\s*/gi;
+// Handles two formats:
+//   [UPDATE_DOCUMENT]{ "type": "BRD", ... }    (bracket then JSON)
+//   [REMEMBER {"key":"x","value":"y"}]          (JSON inside brackets)
+const TEXT_TOOL_CALL_REGEX = /\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/gi;
 
 // ─── File Extension to Type Mapping ──────────────────────────────────────────
 
