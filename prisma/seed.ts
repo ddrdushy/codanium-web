@@ -320,11 +320,34 @@ async function main() {
   }
   console.log(`  Created ${allUsers.length} users`);
 
-  // ── NOTE: Project-specific data (projects, members, agents, cards, decisions,
-  //    SDLC stages, documents, notifications, git data, wireframes, artifacts,
-  //    orchestration data, deployment data) are no longer seeded here.
-  //    Projects are created by users via the UI, and project-seed.ts
-  //    handles agent/stage initialization on project creation.
+  // ── 2b. Seed Projects for admin panel realism ──────────────────────────
+  // These give users realistic project counts in the admin Users table.
+  // Actual project data (agents, stages, cards) is created by project-seed.ts on demand.
+
+  console.log('Seeding demo projects...');
+
+  const seedProjects = [
+    { id: 'prj-001', name: 'E-Commerce Platform v2', description: 'Modern e-commerce platform with AI recommendations', ownerId: 'usr_001', currentStage: 'Development', completion: 68, createdAt: daysAgo(45) },
+    { id: 'prj-002', name: 'Healthcare Dashboard', description: 'Patient monitoring dashboard for clinics', ownerId: 'usr_002', currentStage: 'Architecture', completion: 25, createdAt: daysAgo(30) },
+    { id: 'prj-003', name: 'Mobile Fitness App', description: 'Fitness tracking with AI workout plans', ownerId: 'usr_005', currentStage: 'Testing', completion: 85, createdAt: daysAgo(60) },
+    { id: 'prj-004', name: 'SaaS Analytics Tool', description: 'Business analytics with real-time dashboards', ownerId: 'usr_005', currentStage: 'Planning', completion: 30, createdAt: daysAgo(20) },
+    { id: 'prj-005', name: 'Portfolio Website', description: 'Personal portfolio with project showcase', ownerId: 'usr_003', currentStage: 'Development', completion: 55, createdAt: daysAgo(15) },
+    { id: 'prj-006', name: 'Restaurant Booking System', description: 'Online table reservation system', ownerId: 'usr_010', currentStage: 'Business Analysis', completion: 10, createdAt: daysAgo(5) },
+    { id: 'prj-007', name: 'AI Chatbot Platform', description: 'Customer support chatbot builder', ownerId: 'usr_004', currentStage: 'Code Review', completion: 90, createdAt: daysAgo(40) },
+    { id: 'prj-008', name: 'Inventory Management', description: 'Warehouse inventory tracking system', ownerId: 'usr_004', currentStage: 'Development', completion: 60, createdAt: daysAgo(25) },
+    { id: 'prj-009', name: 'Social Media Scheduler', description: 'Schedule and manage social media posts', ownerId: 'usr_002', currentStage: 'Architecture', completion: 20, createdAt: daysAgo(10) },
+    { id: 'prj-010', name: 'Learning Management System', description: 'Online course platform for enterprises', ownerId: 'usr_001', currentStage: 'Planning', completion: 35, createdAt: daysAgo(35) },
+    { id: 'prj-011', name: 'Real Estate Listings', description: 'Property listing and search platform', ownerId: 'usr_013', currentStage: 'Development', completion: 72, createdAt: daysAgo(50) },
+    { id: 'prj-012', name: 'Travel Booking App', description: 'Flight and hotel booking platform', ownerId: 'usr_007', currentStage: 'Business Analysis', completion: 5, createdAt: daysAgo(3) },
+    { id: 'prj-013', name: 'Event Management', description: 'Corporate event planning tool', ownerId: 'usr_018', currentStage: 'Architecture', completion: 22, createdAt: daysAgo(18) },
+    { id: 'prj-014', name: 'HR Onboarding Portal', description: 'Employee onboarding workflow system', ownerId: 'usr_016', currentStage: 'Development', completion: 48, createdAt: daysAgo(28) },
+    { id: 'prj-015', name: 'Cloud Cost Optimizer', description: 'AWS/GCP cost monitoring and optimization', ownerId: 'usr_016', currentStage: 'Testing', completion: 82, createdAt: daysAgo(55) },
+  ];
+
+  for (const prj of seedProjects) {
+    await prisma.project.create({ data: prj });
+  }
+  console.log(`  Created ${seedProjects.length} demo projects`);
 
   // ── 3. Seed Audit Logs (20 entries from mock-admin-data) ────────────────
 
