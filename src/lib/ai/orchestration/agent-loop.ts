@@ -128,6 +128,25 @@ interface PipelineRule {
   context: string;
 }
 
+/**
+ * Context corrections injected AFTER chat history to override bad patterns.
+ * This fixes the "poisoned context" problem where old messages teach the LLM
+ * wrong behaviors (e.g., TL asking for developer IDs because it did so before).
+ */
+function buildContextCorrection(agent: string): string {
+  const corrections: Record<string, string> = {
+    TL: `IMPORTANT CORRECTION: In previous messages you may have asked the user for developer IDs or system IDs. This was a mistake. You MUST NOT ask for any IDs. To assign tasks:
+- Use assigneeId="JD" for Junior Developer
+- Use assigneeId="SD" for Senior Developer
+The system resolves these automatically. NEVER ask the user for IDs again. Just use "JD" or "SD".`,
+    PM: `IMPORTANT CORRECTION: You do NOT need user IDs or agent IDs to create or update cards. Use assignee="JD" or assignee="SD" (short names). The system resolves them automatically. NEVER ask the user for system IDs.`,
+    BA: `IMPORTANT CORRECTION: If you have already asked 10+ questions in the chat history above, do NOT ask more. Proceed to generate the BRD immediately. If the user says "I'm done", "that's enough", or similar — generate the BRD now.`,
+    SA: `IMPORTANT CORRECTION: If the user already answered technical questions (hosting, framework, database) in the chat history above, do NOT re-ask them. Read the answers from history and proceed with the SDD.`,
+    UX: `IMPORTANT CORRECTION: If wireframes were already discussed or the BRD/SDD exist, generate wireframes immediately in .pen JSON format. Do NOT ask the user which screens to create — read the BRD and create wireframes for ALL screens mentioned there.`,
+  };
+  return corrections[agent] || '';
+}
+
 const PIPELINE_RULES: PipelineRule[] = [
   { from: 'BA', signals: ['approve_document(BRD)'], next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document in your context \u2014 it contains the full requirements. Produce a System Design Document (SDD).' },
   { from: 'SA', signals: ['approve_document(SDD)'], next: 'UX', context: 'Create wireframes and design system based on the BRD and SDD. Focus on user experience and interface design.' },
@@ -360,6 +379,8 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
     const messages: LLMMessage[] = [
       { role: 'system', content: context.systemMessage },
       ...context.recentHistory,
+      // Inject context correction AFTER history — overrides any bad patterns in previous messages
+      { role: 'system', content: buildContextCorrection(currentAgent) },
       { role: 'user', content: userContent },
     ];
 
