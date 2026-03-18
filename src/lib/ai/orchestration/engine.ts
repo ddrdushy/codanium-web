@@ -1802,6 +1802,29 @@ export async function persistArtifact(
       // Non-fatal: artifact created without card link if lookup fails
     }
 
+    // .pen wireframe files → save to wireframes table with penData
+    if (artifact.name.endsWith('.pen')) {
+      let penData: any = null;
+      try {
+        penData = JSON.parse(artifact.content);
+      } catch {
+        // If not valid JSON, store as content string
+      }
+      const screenName = artifact.name.replace(/^wireframe-/, '').replace(/\.pen$/, '');
+      await prisma.wireframe.create({
+        data: {
+          title: screenName.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          screen: screenName,
+          content: artifact.content,
+          penData,
+          owner: agentShortName,
+          components: penData?.children?.[0]?.children?.length ?? 0,
+          projectId,
+        },
+      });
+      return;
+    }
+
     if (category === 'DOCUMENT') {
       const docType = inferDocumentType(artifact.type, artifact.name);
       const wordCount = artifact.content.split(/\s+/).filter(Boolean).length;

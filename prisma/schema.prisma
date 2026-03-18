@@ -703,6 +703,8 @@ model Wireframe {
   ownerAvatar String          @default("")
   components  Int             @default(0)
   version     Int             @default(1)
+  content     String?         // Markdown wireframe content
+  penData     Json?           // Pencil .pen format JSON data
   projectId   String
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
