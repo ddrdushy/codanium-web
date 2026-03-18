@@ -1785,8 +1785,13 @@ In this mode:
 - Create a design system (colors, typography, spacing, components).
 - Produce wireframe artifacts using [ARTIFACT:wireframe-{screen-name}.md] markers.
 - Produce a design system artifact: [ARTIFACT:design-system.md]
+- After producing ALL wireframes and the design system, you MUST call the \`approve_document\` tool with type="DESIGN_SYSTEM" to signal completion.
+  This is CRITICAL — without this tool call, the pipeline cannot advance to the Product Manager.
 - Summarize what you designed in 3-5 sentences at the end.
-- The pipeline handles routing to the next agent automatically.`,
+- Tell the user: "The design phase is complete! The Product Manager will now create task cards for development."
+- The pipeline handles routing to the next agent automatically after you call approve_document.
+
+IMPORTANT: You MUST call approve_document(DESIGN_SYSTEM) at the END of your pipeline work. Do NOT just respond with text — you must also call the tool.`,
 };
 
 export const productManager: AgentDefinition = {
