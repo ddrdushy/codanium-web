@@ -24,8 +24,12 @@ export async function GET(request: NextRequest) {
     // Not authenticated — redirect to login with return URL
     if (!session?.user) {
       const returnUrl = encodeURIComponent('/api/vscode/auth');
+      // Use the host from request headers (not request.url which is the internal Docker address)
+      const host = request.headers.get('host') || 'localhost:14001';
+      const protocol = request.headers.get('x-forwarded-proto') || 'http';
+      const externalBase = `${protocol}://${host}`;
       return NextResponse.redirect(
-        new URL(`/login?callbackUrl=${returnUrl}`, request.url)
+        new URL(`/login?callbackUrl=${returnUrl}`, externalBase)
       );
     }
 
