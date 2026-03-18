@@ -110,7 +110,10 @@ export async function POST(
           toolCalls: [],
           toolResults: [],
           toolLoopCount: 0,
+          toolErrorCount: 0,
           completedToolSignals: [],
+          recentToolCalls: [],
+          recentResponses: [],
         };
 
         const graphStream = await graph.stream(initialState, {

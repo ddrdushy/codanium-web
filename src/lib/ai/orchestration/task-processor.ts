@@ -37,7 +37,10 @@ export class TaskProcessor {
         toolCalls: [],
         toolResults: [],
         toolLoopCount: 0,
+        toolErrorCount: 0,
         completedToolSignals: [],
+        recentToolCalls: [],
+        recentResponses: [],
       };
 
       // Run the graph without streaming (background mode)

@@ -135,6 +135,17 @@ export async function llmNode(
       }
     }
 
+    // Accumulate tool calls from ANY chunk (not just final)
+    // Some adapters emit tool calls on intermediate chunks
+    if (chunk.toolCalls && chunk.toolCalls.length > 0) {
+      for (const tc of chunk.toolCalls) {
+        // Deduplicate by tool call ID
+        if (!collectedToolCalls.some(existing => existing.id === tc.id)) {
+          collectedToolCalls.push(tc);
+        }
+      }
+    }
+
     if (chunk.done) {
       if (chunk.tokensUsed) {
         tokensUsed = chunk.tokensUsed;
@@ -142,11 +153,9 @@ export async function llmNode(
           writer({ type: 'usage', data: { tokensUsed: chunk.tokensUsed } });
         }
       }
-      // Collect tool calls from final chunk
-      if (chunk.toolCalls && chunk.toolCalls.length > 0) {
-        collectedToolCalls = chunk.toolCalls;
+      if (collectedToolCalls.length > 0) {
         console.log(
-          `[LLMNode] Tool calls received: ${collectedToolCalls.map(tc => tc.name).join(', ')}`,
+          `[LLMNode] Native tool calls collected: ${collectedToolCalls.map(tc => tc.name).join(', ')}`,
         );
       }
     }

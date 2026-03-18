@@ -91,7 +91,10 @@ async function processOrchestrationJob(
     toolCalls: [],
     toolResults: [],
     toolLoopCount: 0,
+    toolErrorCount: 0,
     completedToolSignals: [],
+    recentToolCalls: [],
+    recentResponses: [],
   };
 
   // Run graph without streaming — drain all events silently

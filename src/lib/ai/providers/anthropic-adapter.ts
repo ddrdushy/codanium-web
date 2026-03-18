@@ -427,6 +427,7 @@ export class AnthropicAdapter implements LLMProvider {
                     name: currentToolName,
                     arguments: parsedArgs,
                   });
+                  console.log(`[Anthropic] ✅ Native tool_use collected: ${currentToolName} (id: ${currentToolId})`);
                   currentToolId = '';
                   currentToolName = '';
                   currentToolArgsJson = '';
