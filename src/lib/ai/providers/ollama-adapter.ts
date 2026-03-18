@@ -61,7 +61,16 @@ const RETRYABLE_STATUS_CODES = new Set([502, 503, 504, 524]);
 // ---------------------------------------------------------------------------
 
 function baseUrl(config: ProviderConfig): string {
-  return config.baseUrl?.replace(/\/+$/, '') || DEFAULT_BASE_URL;
+  let url = config.baseUrl?.replace(/\/+$/, '') || DEFAULT_BASE_URL;
+  // When running inside Docker, localhost won't reach the host machine.
+  // Detect Docker: /.dockerenv file exists, or DOCKER_ENV is set.
+  const isDocker = process.env.DOCKER_ENV === 'true' ||
+    (() => { try { return require('fs').existsSync('/.dockerenv'); } catch { return false; } })();
+  if (isDocker) {
+    url = url.replace('://localhost:', '://host.docker.internal:')
+             .replace('://127.0.0.1:', '://host.docker.internal:');
+  }
+  return url;
 }
 
 function headers(config: ProviderConfig): Record<string, string> {
