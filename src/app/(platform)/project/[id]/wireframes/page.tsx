@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { WireframeModal, DeleteWireframeDialog } from '@/components/modals/wireframe-modal';
+import { PenRenderer, type PenDocument } from '@/components/pen-renderer/PenRenderer';
 import {
   PenTool, Plus, Grid3X3, Layers, Eye, Edit3,
   Smartphone, Monitor, Tablet, ChevronRight,
@@ -26,14 +27,71 @@ interface Wireframe {
   lastUpdated: string;
   components: number;
   version: number;
+  penData?: PenDocument | null;
 }
+
+// Sample .pen document for demo rendering
+const samplePenDoc: PenDocument = {
+  name: 'Login Screen',
+  width: 375,
+  height: 667,
+  variables: { 'app.name': 'AI Team Studio' },
+  components: {
+    'btn-primary': {
+      id: 'btn-primary', type: 'frame', layout: 'horizontal', justifyContent: 'center', alignItems: 'center',
+      width: 'fill_container', height: 48, fill: '#f59e0b', cornerRadius: 12, padding: [12, 16],
+      children: [{ type: 'text', content: 'Button', fontSize: 16, fontWeight: 600, fill: '#000000' }],
+    },
+  },
+  children: [
+    {
+      type: 'frame', layout: 'vertical', width: 'fill_container', height: 'fill_container',
+      fill: '#0a0a0a', padding: [60, 24, 24, 24], gap: 24, alignItems: 'center',
+      children: [
+        { type: 'ellipse', width: 64, height: 64, fill: '#f59e0b', opacity: 0.2 },
+        { type: 'text', content: '$app.name', fontSize: 24, fontWeight: 700, fill: '#ffffff', textAlign: 'center' },
+        { type: 'text', content: 'Sign in to continue', fontSize: 14, fill: '#a1a1aa', textAlign: 'center' },
+        {
+          type: 'frame', layout: 'vertical', width: 'fill_container', gap: 12, padding: [20, 0, 0, 0],
+          children: [
+            {
+              type: 'frame', layout: 'vertical', width: 'fill_container', gap: 6,
+              children: [
+                { type: 'text', content: 'Email', fontSize: 13, fontWeight: 500, fill: '#d4d4d8' },
+                {
+                  type: 'rectangle', width: 'fill_container', height: 44, fill: '#18181b',
+                  cornerRadius: 8, stroke: { color: '#27272a', width: 1 }, padding: [0, 12],
+                },
+              ],
+            },
+            {
+              type: 'frame', layout: 'vertical', width: 'fill_container', gap: 6,
+              children: [
+                { type: 'text', content: 'Password', fontSize: 13, fontWeight: 500, fill: '#d4d4d8' },
+                {
+                  type: 'rectangle', width: 'fill_container', height: 44, fill: '#18181b',
+                  cornerRadius: 8, stroke: { color: '#27272a', width: 1 }, padding: [0, 12],
+                },
+              ],
+            },
+            {
+              type: 'ref', refId: 'btn-primary',
+              overrides: { children: [{ type: 'text', content: 'Sign In', fontSize: 16, fontWeight: 600, fill: '#000000' }] },
+            },
+          ],
+        },
+        { type: 'text', content: 'Forgot password?', fontSize: 13, fill: '#f59e0b', textAlign: 'center' },
+      ],
+    },
+  ],
+};
 
 const mockWireframes: Wireframe[] = [
   { id: 'wf-001', title: 'Dashboard Overview', screen: 'dashboard', status: 'approved', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '3d ago', components: 14, version: 3 },
   { id: 'wf-002', title: 'Kanban Board', screen: 'board', status: 'approved', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '2d ago', components: 22, version: 5 },
   { id: 'wf-003', title: 'Agent Chat Interface', screen: 'chat', status: 'review', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '6h ago', components: 18, version: 2 },
   { id: 'wf-004', title: 'Decision Panel', screen: 'decisions', status: 'approved', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '4d ago', components: 16, version: 4 },
-  { id: 'wf-005', title: 'Mobile Dashboard', screen: 'dashboard-mobile', status: 'draft', device: 'mobile', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '1h ago', components: 8, version: 1 },
+  { id: 'wf-005', title: 'Mobile Login (.pen)', screen: 'login', status: 'draft', device: 'mobile', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '1h ago', components: 8, version: 1, penData: samplePenDoc },
   { id: 'wf-006', title: 'Settings - LLM Config', screen: 'settings', status: 'draft', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '2h ago', components: 12, version: 1 },
 ];
 
@@ -215,6 +273,7 @@ function mapApiWireframe(w: any): Wireframe {
     lastUpdated: w.updatedAt ? formatRelative(w.updatedAt) : 'just now',
     components: w.components ?? 0,
     version: w.version ?? 1,
+    penData: w.penData ?? null,
   };
 }
 
@@ -356,9 +415,20 @@ export default function WireframesPage() {
                   >
                     {/* Mini preview */}
                     <div className="aspect-[4/3] rounded-lg bg-background border border-border mb-2 overflow-hidden">
-                      <div className="scale-[0.4] origin-top-left w-[250%] h-[250%]">
-                        <WireframePreview screen={wf.screen} />
-                      </div>
+                      {wf.penData ? (
+                        <div className="scale-[0.25] origin-top-left w-[400%] h-[400%] pointer-events-none">
+                          {wf.penData.children?.map((node, i) => (
+                            <div key={i} style={{ width: wf.penData!.width ?? 375, minHeight: wf.penData!.height ?? 667 }}>
+                              {/* Tiny static preview - full render in canvas */}
+                              <div className="p-2 text-center text-[8px] text-muted-foreground/30">.pen</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="scale-[0.4] origin-top-left w-[250%] h-[250%]">
+                          <WireframePreview screen={wf.screen} />
+                        </div>
+                      )}
                     </div>
                     <p className="text-[11px] font-medium truncate">{wf.title}</p>
                     <div className="flex items-center gap-1 mt-1">
@@ -496,16 +566,20 @@ export default function WireframesPage() {
               </div>
 
               {/* Canvas */}
-              <div className="flex-1 flex items-center justify-center p-8 bg-[var(--sidebar-accent)]">
-                <div className={cn(
-                  'bg-background border border-border rounded-xl shadow-2xl overflow-hidden transition-all duration-300',
-                  selectedWireframe.device === 'desktop' && 'w-full max-w-4xl aspect-[16/10]',
-                  selectedWireframe.device === 'tablet' && 'w-[600px] aspect-[4/3]',
-                  selectedWireframe.device === 'mobile' && 'w-[375px] aspect-[9/16]',
-                )}>
-                  <WireframePreview screen={selectedWireframe.screen} />
+              {selectedWireframe.penData ? (
+                <PenRenderer document={selectedWireframe.penData} className="flex-1" />
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-8 bg-[var(--sidebar-accent)]">
+                  <div className={cn(
+                    'bg-background border border-border rounded-xl shadow-2xl overflow-hidden transition-all duration-300',
+                    selectedWireframe.device === 'desktop' && 'w-full max-w-4xl aspect-[16/10]',
+                    selectedWireframe.device === 'tablet' && 'w-[600px] aspect-[4/3]',
+                    selectedWireframe.device === 'mobile' && 'w-[375px] aspect-[9/16]',
+                  )}>
+                    <WireframePreview screen={selectedWireframe.screen} />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Bottom bar */}
               <div className="px-6 py-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground/40 shrink-0">

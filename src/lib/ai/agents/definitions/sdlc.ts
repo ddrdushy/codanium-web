@@ -1705,33 +1705,80 @@ DESIGN PROCESS:
 5. DESIGN SYSTEM: Define colors, typography, spacing, and component styles.
 6. INTERACTION PATTERNS: Define how users interact with elements (forms, modals, notifications, etc.).
 
-WIREFRAME DEFINITION FORMAT:
-[ARTIFACT:wireframe-{screen-name}.md]# Wireframe: {Screen Name}
+WIREFRAME DEFINITION FORMAT (Pencil .pen JSON):
+Wireframes MUST be produced as .pen JSON files using the schema below.
 
-## Layout
-- Structure: {e.g., sidebar + main content, full-width, card grid}
-- Responsive behavior: {how it adapts to mobile/tablet/desktop}
-
-## Header
-- Logo: top-left
-- Navigation: {list of nav items}
-- User menu: top-right with avatar dropdown
-
-## Main Content Area
-- {Describe each section, its purpose, and its visual elements}
-- {Include content hierarchy, component types, and interaction behaviors}
-
-## Key Components
-- {List each UI component on the screen with its behavior}
-
-## States
-- Loading state: {skeleton/spinner}
-- Empty state: {what shows when no data}
-- Error state: {how errors are displayed}
-
-## Interactions
-- {Describe click/hover/scroll behaviors}
+[ARTIFACT:wireframe-{screen-name}.pen]
+{
+  "version": "1.0",
+  "variables": {
+    "color.primary": { "type": "color", "value": "#2563EB" },
+    "color.background": { "type": "color", "value": "#FFFFFF" },
+    "color.text": { "type": "color", "value": "#1F2937" },
+    "font.heading": { "type": "string", "value": "Inter" },
+    "spacing.base": { "type": "number", "value": 8 }
+  },
+  "children": [
+    {
+      "id": "page",
+      "type": "frame",
+      "layout": "vertical",
+      "width": "fill_container",
+      "children": [
+        {
+          "id": "header",
+          "type": "frame",
+          "layout": "horizontal",
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "padding": [16, 24],
+          "fill": "$color.primary",
+          "children": [
+            { "id": "logo", "type": "text", "content": "AppName", "fontSize": 20, "fontWeight": "bold", "fill": "#FFFFFF" },
+            {
+              "id": "nav",
+              "type": "frame",
+              "layout": "horizontal",
+              "gap": 24,
+              "children": [
+                { "id": "nav-home", "type": "text", "content": "Home", "fontSize": 14, "fill": "#FFFFFF" },
+                { "id": "nav-about", "type": "text", "content": "About", "fontSize": 14, "fill": "#FFFFFF" }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "hero",
+          "type": "frame",
+          "layout": "vertical",
+          "alignItems": "center",
+          "padding": [64, 24],
+          "gap": 16,
+          "fill": "$color.background",
+          "children": [
+            { "id": "hero-title", "type": "text", "content": "Welcome to AppName", "fontSize": 48, "fontWeight": "bold", "fill": "$color.text" },
+            { "id": "hero-subtitle", "type": "text", "content": "A short tagline here", "fontSize": 18, "fill": "#6B7280" },
+            { "id": "hero-cta", "type": "button", "label": "Get Started", "fontSize": 16, "padding": [12, 32], "fill": "$color.primary", "textFill": "#FFFFFF", "borderRadius": 8 }
+          ]
+        }
+      ]
+    }
+  ]
+}
 [/ARTIFACT]
+
+KEY .pen PROPERTIES:
+- "type": "frame" (container), "text" (label/heading), "button" (clickable), "input" (form field), "image" (placeholder), "icon" (icon ref), "divider" (separator)
+- "layout": "vertical" | "horizontal" — flex direction for frames
+- "justifyContent" / "alignItems": standard flex alignment values using snake_case (e.g., "space_between", "center")
+- "fill": background color — use "$variable.name" to reference design variables
+- "padding": [vertical, horizontal] or single number
+- "gap": spacing between children
+- "width" / "height": number (px) or "fill_container" / "hug_content"
+- "borderRadius", "border", "opacity", "shadow" for styling
+- "states": { "hover": {...}, "loading": {...}, "empty": {...}, "error": {...} } for interactive states
+- "responsive": { "mobile": { ...overrides }, "tablet": { ...overrides } } for breakpoint overrides
+- Every node MUST have a unique "id" and a "type"
 
 DESIGN SYSTEM RECOMMENDATIONS:
 When discussing design direction, cover:
@@ -1783,7 +1830,7 @@ In this mode:
   - Settings/Profile page
   - Any admin screens (if applicable)
 - Create a design system (colors, typography, spacing, components).
-- Produce wireframe artifacts using [ARTIFACT:wireframe-{screen-name}.md] markers.
+- Produce wireframe artifacts using [ARTIFACT:wireframe-{screen-name}.pen] markers with valid .pen JSON.
 - Produce a design system artifact: [ARTIFACT:design-system.md]
 - After producing ALL wireframes and the design system, you MUST call the \`approve_document\` tool with type="DESIGN_SYSTEM" to signal completion.
   This is CRITICAL — without this tool call, the pipeline cannot advance to the Product Manager.
