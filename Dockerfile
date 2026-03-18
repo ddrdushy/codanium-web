@@ -94,6 +94,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
+# Create workspaces directory for project file operations
+RUN mkdir -p /app/workspaces && chown nextjs:nodejs /app/workspaces
+
 USER nextjs
 EXPOSE 3000
 
