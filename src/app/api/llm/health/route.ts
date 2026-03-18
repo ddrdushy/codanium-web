@@ -79,7 +79,11 @@ export async function GET() {
     // ── Provider-specific checks ──
 
     if (effectiveProvider === 'ollama') {
-      const ollamaUrl = effectiveBaseUrl || 'http://host.docker.internal:11434';
+      let ollamaUrl = effectiveBaseUrl || 'http://host.docker.internal:11434';
+      // Translate localhost/127.0.0.1 to Docker host gateway when inside Docker
+      ollamaUrl = ollamaUrl
+        .replace('://localhost:', '://host.docker.internal:')
+        .replace('://127.0.0.1:', '://host.docker.internal:');
       try {
         const res = await fetch(`${ollamaUrl}/api/tags`, {
           signal: AbortSignal.timeout(5000),
