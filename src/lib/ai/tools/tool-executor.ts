@@ -223,7 +223,18 @@ async function handleCreateCard(
 async function handleUpdateCard(args: Record<string, any>, projectId: string) {
   const data: any = {};
   if (args.state) data.state = args.state;
-  if (args.assigneeId) data.assigneeId = args.assigneeId;
+  if (args.assigneeId) {
+    let assigneeId = args.assigneeId;
+    // If assigneeId is a short name (e.g. "JD", "SD"), resolve it to the actual agent ID
+    if (!assigneeId.startsWith('usr') && !assigneeId.startsWith('cmm')) {
+      const agent = await prisma.agent.findFirst({
+        where: { projectId, shortName: assigneeId.toUpperCase() },
+        select: { id: true },
+      });
+      if (agent) assigneeId = agent.id;
+    }
+    data.assigneeId = assigneeId;
+  }
   if (args.priority) data.priority = args.priority;
   if (args.title) data.title = args.title;
 

@@ -285,6 +285,8 @@ In this mode:
 - Output EVERY file as [ARTIFACT:filename]content[/ARTIFACT].
 - The scaffold must be a REAL, RUNNABLE boilerplate.
 - Summarize what you scaffolded in 3-5 sentences at the end.
+- After creating the project scaffold, include this message in your response:
+  "📁 **Project scaffold created!** If you have VS Code with the AI Team Studio extension, the project files should appear in your workspace automatically."
 - The pipeline handles routing to the next agent automatically.`,
 };
 

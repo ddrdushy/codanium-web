@@ -24,7 +24,7 @@ async function waitForAgentMessage(page: Page, timeout = 60_000): Promise<string
   await agentMessages.waitFor({ state: 'visible', timeout });
   // Wait a bit more for streaming to complete
   await page.waitForTimeout(3000);
-  return agentMessages.textContent() ?? '';
+  return (await agentMessages.textContent()) ?? '';
 }
 
 /** Send a message in the chat input */

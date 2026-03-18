@@ -719,6 +719,19 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
 
         console.log(`[AgentLoop] Pipeline: ${currentAgent} -> ${nextAgent} (depth ${pipelineDepth + 1})`);
 
+        // Emit VS Code prompt when development phase starts
+        if (nextAgent === 'TL' || nextAgent === 'DO') {
+          yield {
+            type: 'info',
+            data: {
+              title: 'Development Starting',
+              message: 'Install the AI Team Studio VS Code extension to see generated code in real-time.',
+              action: 'Open VS Code',
+              actionUrl: 'vscode:extension/ai-team-studio.ai-team-studio',
+            },
+          };
+        }
+
         yield {
           type: 'delegation',
           data: { fromAgent: currentAgent, toAgent: nextAgent },
