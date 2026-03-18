@@ -65,7 +65,7 @@ export const updateCard: ToolDefinition = {
     properties: {
       cardId: { type: 'string', description: 'ID of the card to update' },
       state: { type: 'string', enum: ['PLANNED', 'IN_PROGRESS', 'REVIEW', 'DONE', 'BLOCKED'], description: 'New card state' },
-      assigneeId: { type: 'string', description: 'Agent ID to assign the card to' },
+      assigneeId: { type: 'string', description: 'Use "JD" for Junior Developer or "SD" for Senior Developer. Do NOT use system IDs.' },
       priority: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] },
       title: { type: 'string', description: 'Updated title' },
     },
