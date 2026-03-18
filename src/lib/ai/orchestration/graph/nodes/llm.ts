@@ -252,9 +252,18 @@ export async function llmNode(
     }
   }
 
+  // Preserve text from previous tool loop iterations.
+  // The first LLM call typically produces the user-facing text + a tool call.
+  // Subsequent calls (after tool execution) may produce only tool calls with empty text.
+  // We must keep the text from ALL iterations so parseAndExecute has the full response.
+  const previousContent = state.rawContent ?? '';
+  const combinedContent = previousContent && fullContent
+    ? `${previousContent}\n${fullContent}`  // Both have content — concatenate
+    : fullContent || previousContent;        // One or the other
+
   return {
-    rawContent: fullContent,
-    rawThinking: fullThinking,
+    rawContent: combinedContent,
+    rawThinking: fullThinking ? (state.rawThinking ?? '') + fullThinking : (state.rawThinking ?? ''),
     tokensUsed,
     toolCalls: collectedToolCalls,
     llmRetryCount,
