@@ -42,6 +42,29 @@ function resolveSecure(workspacePath: string, relativePath: string): string {
   return resolved;
 }
 
+/**
+ * Initialize a full workspace directory structure for a new project.
+ * Creates src/, docs/, artifacts/ subdirectories and a .gitkeep marker.
+ */
+export async function initializeWorkspace(projectId: string): Promise<string> {
+  const workspacePath = await getWorkspacePath(projectId);
+
+  const subdirs = ['src', 'docs', 'artifacts'];
+  for (const dir of subdirs) {
+    await fs.mkdir(path.join(workspacePath, dir), { recursive: true });
+  }
+
+  // Create .gitkeep so the workspace is trackable even when empty
+  const gitkeepPath = path.join(workspacePath, '.gitkeep');
+  try {
+    await fs.access(gitkeepPath);
+  } catch {
+    await fs.writeFile(gitkeepPath, '', 'utf-8');
+  }
+
+  return workspacePath;
+}
+
 // ─── Filesystem Operations ────────────────────────────────────────────────────
 
 export async function readFileInWorkspace(

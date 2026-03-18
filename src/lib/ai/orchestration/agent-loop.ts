@@ -50,6 +50,7 @@ import { saveAgentMessage, persistArtifact } from './engine';
 import { agentStateManager } from './state-manager';
 import { eventBus } from './event-bus';
 import { createTraceCollector, type TraceCollector } from './telemetry';
+import { prisma } from '@/lib/prisma';
 import type {
   LLMMessage,
   LLMToolCall,
@@ -150,6 +151,94 @@ function matchPipelineRule(
     if (matches) return rule;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// SDLC Stage Auto-Advance (ported from pipeline-router.ts)
+// ---------------------------------------------------------------------------
+
+const AGENT_STAGE_MAP: Record<string, string> = {
+  BA: 'Business Analysis',
+  SA: 'Architecture',
+  UX: 'UI/UX Design',
+  PM: 'Planning',
+  DO: 'Development',
+  TL: 'Development',
+  JD: 'Development',
+  SD: 'Development',
+  QA: 'Testing',
+  SEC: 'Code Review',
+};
+
+async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promise<void> {
+  const stageToAdvance = AGENT_STAGE_MAP[agentShortName];
+  if (!stageToAdvance) return;
+
+  try {
+    const stages = await prisma.sDLCStage.findMany({
+      where: { projectId },
+      orderBy: { order: 'asc' },
+    });
+    const targetStage = stages.find(s => s.name === stageToAdvance);
+    const activeStage = stages.find(s => s.status === 'ACTIVE');
+
+    if (targetStage && activeStage && targetStage.order >= activeStage.order && targetStage.status !== 'COMPLETED') {
+      // Complete all stages before target
+      for (const s of stages) {
+        if (s.order < targetStage.order && s.status !== 'COMPLETED') {
+          await prisma.sDLCStage.update({
+            where: { id: s.id },
+            data: { status: 'COMPLETED', gatePassed: true },
+          });
+        }
+      }
+      // Activate target stage
+      if (targetStage.status !== 'ACTIVE') {
+        await prisma.sDLCStage.update({
+          where: { id: targetStage.id },
+          data: { status: 'ACTIVE' },
+        });
+      }
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { currentStage: targetStage.name },
+      });
+      console.log(`[AgentLoop] Auto-advanced SDLC stage to: ${stageToAdvance}`);
+    }
+  } catch (e) {
+    console.warn(`[AgentLoop] SDLC auto-advance failed:`, e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Default Next Agent Map (fallback when no tool signals match)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_NEXT_AGENT: Record<string, { next: string; context: string; requiresApproval?: string }> = {
+  BA: { next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document in your context — it contains the full requirements. Produce a System Design Document (SDD).', requiresApproval: 'BRD' },
+  SA: { next: 'UX', context: 'Create wireframes and design system based on the BRD and SDD. Focus on user experience and interface design.', requiresApproval: 'SDD' },
+  UX: { next: 'PM', context: 'Break down the project into task cards on the work board. Read the BRD, SDD, and design documents. Create task cards for each feature.' },
+  PM: { next: 'DO', context: 'Scaffold the project structure based on the SDD tech stack. Generate boilerplate files, package.json, config files.' },
+  DO: { next: 'TL', context: 'Project scaffold is ready. Review the task cards and assign the first highest-priority task to a developer (JD or SD).' },
+  TL: { next: 'JD', context: 'Implement the assigned task. Read the relevant files, write code, run tests, and commit when complete.' },
+  JD: { next: 'QA', context: 'Review and test the implementation that was just completed. Run tests, validate code quality, and check for bugs.' },
+  SD: { next: 'QA', context: 'Review the senior developer implementation. Run quality checks and verify it meets standards.' },
+  QA: { next: 'SEC', context: 'Security review the tested implementation. Check for vulnerabilities and security best practices.' },
+  SEC: { next: 'PM', context: 'Provide a progress summary. Check if there are more PLANNED cards — if so, route to TL for the next task.' },
+};
+
+/**
+ * Check if a document of the given type is APPROVED for this project.
+ */
+async function isDocumentApproved(projectId: string, docType: string): Promise<boolean> {
+  try {
+    const doc = await prisma.document.findFirst({
+      where: { projectId, type: docType as any, status: 'APPROVED' },
+    });
+    return !!doc;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -588,21 +677,54 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
     }
 
     // ── 5. Pipeline Routing ──────────────────────────────────────────────
-    if (completedSignals.length > 0 && pipelineDepth < MAX_PIPELINE_DEPTH) {
-      const matchedRule = matchPipelineRule(currentAgent, completedSignals);
+    if (pipelineDepth < MAX_PIPELINE_DEPTH) {
+      let nextAgent: string | null = null;
+      let nextContext: string | null = null;
 
-      if (matchedRule) {
-        console.log(`[AgentLoop] Pipeline: ${currentAgent} -> ${matchedRule.next} (depth ${pipelineDepth + 1})`);
+      // 5a. Try signal-based routing first
+      if (completedSignals.length > 0) {
+        const matchedRule = matchPipelineRule(currentAgent, completedSignals);
+        if (matchedRule) {
+          nextAgent = matchedRule.next;
+          nextContext = matchedRule.context;
+        }
+      }
+
+      // 5b. Fallback: if no signal match but agent was pipeline-invoked, use default next agent
+      if (!nextAgent && input.isPipeline) {
+        const fallback = DEFAULT_NEXT_AGENT[currentAgent];
+        if (fallback) {
+          // Check approval gate if required (e.g., BA->SA only if BRD is APPROVED)
+          let gateOpen = true;
+          if (fallback.requiresApproval) {
+            gateOpen = await isDocumentApproved(input.projectId, fallback.requiresApproval);
+            if (!gateOpen) {
+              console.log(`[AgentLoop] Fallback blocked: ${fallback.requiresApproval} not yet APPROVED`);
+            }
+          }
+          if (gateOpen) {
+            nextAgent = fallback.next;
+            nextContext = fallback.context;
+            console.log(`[AgentLoop] Fallback routing: ${currentAgent} -> ${nextAgent} (no signal match, pipeline mode)`);
+          }
+        }
+      }
+
+      if (nextAgent && nextContext) {
+        // Auto-advance SDLC stages before delegating
+        await autoAdvanceSDLC(input.projectId, currentAgent);
+
+        console.log(`[AgentLoop] Pipeline: ${currentAgent} -> ${nextAgent} (depth ${pipelineDepth + 1})`);
 
         yield {
           type: 'delegation',
-          data: { fromAgent: currentAgent, toAgent: matchedRule.next },
+          data: { fromAgent: currentAgent, toAgent: nextAgent },
         };
         yield {
           type: 'pipeline_progress',
           data: {
             fromAgent: currentAgent,
-            toAgent: matchedRule.next,
+            toAgent: nextAgent,
             depth: pipelineDepth + 1,
             maxDepth: MAX_PIPELINE_DEPTH,
           },
@@ -612,8 +734,8 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         yield* agentLoop({
           projectId: input.projectId,
           userId: input.userId,
-          userMessage: matchedRule.context,
-          targetAgentShortName: matchedRule.next,
+          userMessage: nextContext,
+          targetAgentShortName: nextAgent,
           isPipeline: true,
           pipelineDepth: pipelineDepth + 1,
         });

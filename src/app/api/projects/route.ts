@@ -4,6 +4,7 @@ import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { seedProject, autoKickoffBA } from '@/lib/project-seed';
 import { validateBody } from '@/lib/validations/validate';
 import { createProjectSchema } from '@/lib/validations/schemas';
+import { initializeWorkspace } from '@/lib/ai/tools/workspace';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,6 +115,14 @@ export async function POST(request: NextRequest) {
       console.log(`[Project ${project.id}] Seeded ${seed.agentCount} agents, ${seed.stageCount} stages`);
     } catch (seedError) {
       console.error('Project seed failed (non-fatal):', seedError);
+    }
+
+    // Initialize workspace directory structure for the project
+    try {
+      await initializeWorkspace(project.id);
+      console.log(`[Project ${project.id}] Workspace initialized`);
+    } catch (workspaceError) {
+      console.error('Workspace initialization failed (non-fatal):', workspaceError);
     }
 
     // Auto-seed project memories from wizard data (structured for BA context)
