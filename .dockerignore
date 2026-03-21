@@ -41,3 +41,6 @@ LICENSE
 *.md
 coverage
 .claude
+
+# Agent-generated workspaces (synced via volume mount, not built)
+workspaces

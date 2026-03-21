@@ -67,6 +67,7 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
 
   const [loadingModels, setLoadingModels] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelAssessment, setModelAssessment] = useState<any | null>(null);
 
   // Budget & Preferences state
   const [monthlyBudget, setMonthlyBudget] = useState(500);
@@ -150,6 +151,7 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
   async function testConnection() {
     setTestStatus('testing');
     setTestMessage('');
+    setModelAssessment(null);
     try {
       const res = await fetch('/api/llm/test', {
         method: 'POST',
@@ -165,6 +167,7 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
       if (res.ok && data.success) {
         setTestStatus('success');
         setTestMessage(data.message || 'Connection successful!');
+        if (data.assessment) setModelAssessment(data.assessment);
       } else {
         setTestStatus('error');
         setTestMessage(data.message || data.error || 'Connection failed');
@@ -492,6 +495,47 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
                     </span>
                   )}
                 </div>
+
+                {/* ── Model Capability Assessment ──────────────── */}
+                {modelAssessment && testStatus === 'success' && (
+                  <div className={`p-3 rounded-lg border ${
+                    modelAssessment.overall === 'excellent' ? 'bg-emerald-500/5 border-emerald-500/15' :
+                    modelAssessment.overall === 'good' ? 'bg-blue-500/5 border-blue-500/15' :
+                    modelAssessment.overall === 'fair' ? 'bg-amber-500/5 border-amber-500/15' :
+                    'bg-red-500/5 border-red-500/15'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        modelAssessment.overall === 'excellent' ? 'bg-emerald-500/20 text-emerald-400' :
+                        modelAssessment.overall === 'good' ? 'bg-blue-500/20 text-blue-400' :
+                        modelAssessment.overall === 'fair' ? 'bg-amber-500/20 text-amber-400' :
+                        'bg-red-500/20 text-red-400'
+                      }`}>{modelAssessment.overall}</span>
+                      <span className="text-[11px] font-medium text-foreground">Model Compatibility</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mb-2.5 leading-relaxed">
+                      {modelAssessment.overallMessage}
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {modelAssessment.capabilities?.map((cap: any) => (
+                        <div key={cap.name} className="flex items-center gap-1.5" title={cap.description}>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            cap.rating === 'excellent' ? 'bg-emerald-400' :
+                            cap.rating === 'good' ? 'bg-blue-400' :
+                            cap.rating === 'fair' ? 'bg-amber-400' :
+                            'bg-red-400'
+                          }`} />
+                          <span className="text-[10px] text-muted-foreground truncate">{cap.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {modelAssessment.recommendation && (
+                      <p className="text-[10px] text-amber-400/80 mt-2 pt-2 border-t border-amber-500/10 leading-relaxed">
+                        {modelAssessment.recommendation}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/10">
                   <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />

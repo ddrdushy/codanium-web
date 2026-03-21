@@ -44,16 +44,10 @@ const PIPELINE_RULES: PipelineRule[] = [
   },
   {
     from: 'SA',
-    // ONLY approve_document triggers handoff — update/create are used during SA's work
+    // ONLY approve_document triggers handoff — SA → PM (UX is no longer mandatory sequential step)
     signals: ['approve_document(SDD)'],
-    next: 'UX',
-    context: 'Create wireframes and design system based on the BRD and SDD. Focus on user experience and interface design.',
-  },
-  {
-    from: 'UX',
-    signals: ['approve_document(DESIGN_SYSTEM)', 'task_progress()'],
     next: 'PM',
-    context: 'Break down the project into task cards on the work board. Read the BRD, SDD, and design documents. Create task cards for each feature.',
+    context: 'Organize the backlog. Read the BRD (including Content Inventory) and SDD. Create task cards for every feature. Include actual content in card descriptions.',
   },
   // TODO: Future enhancement — trigger cross-artifact consistency analysis
   // (run_analysis tool) before the PM→DO transition to catch coverage gaps,

@@ -124,10 +124,63 @@ async function executeToolInternal(
     // ── Filesystem ──────────────────────────────────────────
     case 'read_file':
       return readFileInWorkspace(projectId, args.path);
-    case 'write_file':
-      return writeFileInWorkspace(projectId, args.path, args.content);
-    case 'edit_file':
-      return editFileInWorkspace(projectId, args.path, args.old_string, args.new_string);
+    case 'write_file': {
+      const writeResult = await writeFileInWorkspace(projectId, args.path, args.content);
+      // Persist artifact record so the Generated Code page can display it
+      try {
+        const filePath = args.path as string;
+        const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+        const artifactType = ['json', 'yaml', 'yml', 'toml', 'env', 'gitignore', 'dockerignore']
+          .includes(ext) ? 'CONFIG'
+          : ['test', 'spec'].some(t => filePath.includes(`.${t}.`)) ? 'TEST'
+          : 'CODE';
+        const existing = await prisma.artifact.findFirst({
+          where: { projectId, name: filePath },
+        });
+        if (existing) {
+          await prisma.artifact.update({
+            where: { id: existing.id },
+            data: {
+              content: args.content,
+              ownerAgent: agentShortName ?? 'unknown',
+              version: existing.version + 1,
+            },
+          });
+        } else {
+          await prisma.artifact.create({
+            data: {
+              name: filePath,
+              type: artifactType as any,
+              content: args.content,
+              ownerAgent: agentShortName ?? 'unknown',
+              projectId,
+            },
+          });
+        }
+      } catch (e) {
+        console.warn('[write_file] Failed to persist artifact record:', e);
+      }
+      return writeResult;
+    }
+    case 'edit_file': {
+      const editResult = await editFileInWorkspace(projectId, args.path, args.old_string, args.new_string);
+      // Update artifact content after edit
+      try {
+        const updated = await readFileInWorkspace(projectId, args.path);
+        const existing = await prisma.artifact.findFirst({
+          where: { projectId, name: args.path },
+        });
+        if (existing) {
+          await prisma.artifact.update({
+            where: { id: existing.id },
+            data: { content: updated.content, version: existing.version + 1 },
+          });
+        }
+      } catch (e) {
+        // Non-fatal
+      }
+      return editResult;
+    }
     case 'list_directory':
       return listDirectoryInWorkspace(projectId, args.path || '.', args.recursive || false);
     case 'glob':
@@ -170,6 +223,16 @@ async function executeToolInternal(
     // ── Communication ──────────────────────────────────────
     case 'consult_agent':
       return handleConsultAgent(args, projectId, agentShortName);
+    case 'ask_user':
+      // Return a special marker that the agent loop will detect to pause the pipeline
+      // and show the question to the user via SSE
+      return {
+        __askUser: true,
+        question: args.question,
+        context: args.context,
+        options: args.options,
+        agentShortName: agentShortName ?? 'unknown',
+      };
 
     // ── Guardrails ──────────────────────────────────────────
     case 'validate_code':
@@ -188,6 +251,20 @@ async function executeToolInternal(
 
 // ─── Project Management Handlers ──────────────────────────────────────────────
 
+// Normalize free-form card type strings to valid CardType enum values
+const CARD_TYPE_MAP: Record<string, string> = {
+  epic: 'EPIC', feature: 'FEATURE', task: 'TASK', qa: 'QA',
+  bug: 'TASK', story: 'FEATURE', subtask: 'TASK',
+  decision_blocker: 'DECISION_BLOCKER', blocker: 'DECISION_BLOCKER',
+};
+
+function normalizeCardType(raw?: string): string {
+  if (!raw) return 'TASK';
+  const upper = raw.toUpperCase();
+  if (['EPIC', 'FEATURE', 'TASK', 'QA', 'DECISION_BLOCKER'].includes(upper)) return upper;
+  return CARD_TYPE_MAP[raw.toLowerCase()] ?? 'TASK';
+}
+
 async function handleCreateCard(
   args: Record<string, any>,
   projectId: string,
@@ -204,17 +281,39 @@ async function handleCreateCard(
     }
   }
 
+  // Normalize type to valid enum and clear empty parentId to avoid FK violation
+  const cardType = normalizeCardType(args.type);
+  const parentId = args.parentId && args.parentId.trim() ? args.parentId : undefined;
+
+  // Map priority to valid enum
+  const priorityMap: Record<string, string> = {
+    'low': 'LOW', 'medium': 'MEDIUM', 'high': 'HIGH', 'critical': 'CRITICAL',
+    'LOW': 'LOW', 'MEDIUM': 'MEDIUM', 'HIGH': 'HIGH', 'CRITICAL': 'CRITICAL',
+  };
+  const priority = priorityMap[args.priority] || (args.priority ? args.priority.toUpperCase() : 'MEDIUM');
+
+  // Resolve assigneeId shortname to agent DB ID
+  let ownerAgentId = agentId;
+  if (args.assigneeId) {
+    const shortName = args.assigneeId.toUpperCase();
+    const agent = await prisma.agent.findFirst({
+      where: { projectId, shortName },
+      select: { id: true },
+    });
+    if (agent) ownerAgentId = agent.id;
+  }
+
   const card = await prisma.card.create({
     data: {
       projectId,
       title: args.title,
       description,
-      type: args.type || 'TASK',
-      priority: args.priority || 'MEDIUM',
+      type: cardType as any,
+      priority,
       state: 'PLANNED',
-      ownerAgentId: agentId,
+      ownerAgentId,
       module: args.module,
-      parentId: args.parentId,
+      parentId,
     },
   });
   return { cardId: card.id, title: card.title, state: card.state, requirementIds };
@@ -222,27 +321,55 @@ async function handleCreateCard(
 
 async function handleUpdateCard(args: Record<string, any>, projectId: string) {
   const data: any = {};
-  if (args.state) data.state = args.state;
+
+  // Map state to valid Prisma CardState enum value
+  if (args.state) {
+    const stateMap: Record<string, string> = {
+      'PLANNED': 'PLANNED',
+      'TODO': 'PLANNED',
+      'IN_PROGRESS': 'IN_PROGRESS',
+      'REVIEW': 'UNDER_REVIEW',
+      'UNDER_REVIEW': 'UNDER_REVIEW',
+      'TESTING': 'TESTING',
+      'DONE': 'DONE',
+      'BLOCKED': 'BLOCKED',
+      'RELEASED': 'RELEASED',
+    };
+    data.state = stateMap[args.state.toUpperCase()] || args.state;
+  }
+
+  // Resolve assigneeId shortname to ownerAgentId (assigneeId FK points to User table,
+  // so we use ownerAgentId which points to Agent table)
   if (args.assigneeId) {
-    let assigneeId = args.assigneeId;
-    // If assigneeId is a short name (e.g. "JD", "SD"), resolve it to the actual agent ID
-    if (!assigneeId.startsWith('usr') && !assigneeId.startsWith('cmm')) {
+    let resolvedAgentId = args.assigneeId;
+    // If it's a short name (e.g. "JD", "SD", "UX", "DO"), resolve to agent DB ID
+    if (!resolvedAgentId.startsWith('usr') && !resolvedAgentId.startsWith('cmm')) {
       const agent = await prisma.agent.findFirst({
-        where: { projectId, shortName: assigneeId.toUpperCase() },
+        where: { projectId, shortName: resolvedAgentId.toUpperCase() },
         select: { id: true },
       });
-      if (agent) assigneeId = agent.id;
+      if (agent) resolvedAgentId = agent.id;
     }
-    data.assigneeId = assigneeId;
+    // Use ownerAgentId (references Agent table), NOT assigneeId (references User table)
+    data.ownerAgentId = resolvedAgentId;
   }
-  if (args.priority) data.priority = args.priority;
+
+  // Map priority to valid enum
+  if (args.priority) {
+    const priorityMap: Record<string, string> = {
+      'low': 'LOW', 'medium': 'MEDIUM', 'high': 'HIGH', 'critical': 'CRITICAL',
+      'LOW': 'LOW', 'MEDIUM': 'MEDIUM', 'HIGH': 'HIGH', 'CRITICAL': 'CRITICAL',
+    };
+    data.priority = priorityMap[args.priority] || args.priority.toUpperCase();
+  }
   if (args.title) data.title = args.title;
+  if (args.description) data.description = args.description;
 
   const card = await prisma.card.update({
     where: { id: args.cardId },
     data,
   });
-  return { cardId: card.id, title: card.title, state: card.state };
+  return { cardId: card.id, title: card.title, state: card.state, ownerAgentId: data.ownerAgentId };
 }
 
 async function handleCreateDocument(

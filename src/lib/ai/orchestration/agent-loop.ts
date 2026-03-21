@@ -89,10 +89,9 @@ export interface SSEEvent {
 
 const MAX_TOOL_LOOPS = 7;
 const MAX_LLM_ATTEMPTS = 3;
-// Max 2 auto-chains per request to prevent browser crashes from too many
-// simultaneous SSE streams. After 2 handoffs, the next agent starts on
-// the user's next message (or the frontend can auto-trigger it).
-const MAX_PIPELINE_DEPTH = 2;
+// Full pipeline: BA → SA → PM → DO → TL → dev tasks → QA → SEC → PM → TL loop
+// Needs depth for: planning (4 hops) + multiple dev task cycles
+const MAX_PIPELINE_DEPTH = 15;
 const MAX_CONSULTATION_DEPTH = 3;
 const TOOL_ERROR_CIRCUIT_BREAKER = 3;
 
@@ -147,18 +146,19 @@ The system resolves these automatically. NEVER ask the user for IDs again. Just 
   return corrections[agent] || '';
 }
 
+// Pipeline: BA → SA → PM → DO → TL → (JD/SD/UX) → QA → SEC → PM (loop)
+// UX is no longer a mandatory sequential step — TL assigns UI tasks to UX as needed.
 const PIPELINE_RULES: PipelineRule[] = [
-  { from: 'BA', signals: ['approve_document(BRD)'], next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document in your context \u2014 it contains the full requirements. Produce a System Design Document (SDD).' },
-  { from: 'SA', signals: ['approve_document(SDD)'], next: 'UX', context: 'Create wireframes and design system based on the BRD and SDD. Focus on user experience and interface design.' },
-  { from: 'UX', signals: ['approve_document(DESIGN_SYSTEM)', 'task_progress()'], next: 'PM', context: 'Break down the project into task cards on the work board. Read the BRD, SDD, and design documents. Create task cards for each feature.' },
-  { from: 'PM', signals: ['create_card()'], next: 'DO', context: 'Scaffold the project structure based on the SDD tech stack. Generate boilerplate files, package.json, config files.' },
-  { from: 'DO', signals: ['write_file()', 'git_commit()', 'trigger_deploy()'], next: 'TL', context: 'Project scaffold is ready. Review the task cards and assign the first highest-priority task to a developer (JD or SD).' },
-  { from: 'TL', signals: ['update_card(IN_PROGRESS)', 'update_card(PLANNED)'], next: 'JD', context: 'Implement the assigned task. Read the relevant files, write code, run tests, and commit when complete.' },
+  { from: 'BA', signals: ['approve_document(BRD)'], next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document in your context — it contains the full requirements including the Content Inventory. Produce a System Design Document (SDD).' },
+  { from: 'SA', signals: ['approve_document(SDD)'], next: 'PM', context: 'Organize the project backlog and plan execution. Read the BRD and SDD. Create task cards for every feature module — EPICs, FEATUREs, and TASKs. Include the actual content from the BRD Content Inventory in each card description. Set priorities using MoSCoW. Then hand off to DevOps for scaffolding.' },
+  { from: 'PM', signals: ['create_card()', 'task_progress()'], next: 'DO', context: 'Scaffold the project structure based on the SDD tech stack. Generate boilerplate files: package.json, tsconfig, framework config, entry point, global styles, Dockerfile, .gitignore.' },
+  { from: 'DO', signals: ['write_file()', 'git_commit()', 'trigger_deploy()'], next: 'TL', context: 'Project scaffold is ready. Review the task cards on the board. Create any missing granular TASK cards. Assign UI/UX design tasks to UX, frontend tasks to JD, complex/backend tasks to SD. Include BRD content in each card. Start the first highest-priority task.' },
+  { from: 'TL', signals: ['update_card(IN_PROGRESS)', 'update_card(PLANNED)'], next: 'DYNAMIC', context: 'Implement the assigned task. Read the card description carefully — it contains the exact content and acceptance criteria. Write production code, not placeholders. Run tests and commit when complete.' },
   { from: 'JD', signals: ['update_card(DONE)', 'update_card(REVIEW)', 'git_commit()'], next: 'QA', context: 'Review and test the implementation that was just completed. Run tests, validate code quality, and check for bugs.' },
   { from: 'SD', signals: ['update_card(DONE)', 'update_card(REVIEW)', 'git_commit()'], next: 'QA', context: 'Review the senior developer implementation. Run quality checks and verify it meets standards.' },
   { from: 'QA', signals: ['validate_code()', 'review_changes()', 'run_tests()', 'update_card(DONE)'], next: 'SEC', context: 'Security review the tested implementation. Check for vulnerabilities and security best practices.' },
-  { from: 'SEC', signals: ['validate_code()', 'validate_architecture()', 'review_changes()', 'update_card(DONE)'], next: 'PM', context: 'Provide a progress summary. Check if there are more PLANNED cards \u2014 if so, route to TL for the next task.' },
-  { from: 'PM', signals: ['update_card()', 'task_progress()'], next: 'TL', context: 'Check for remaining PLANNED cards. If any exist, assign the next highest-priority task to JD or SD.' },
+  { from: 'SEC', signals: ['validate_code()', 'validate_architecture()', 'review_changes()', 'update_card(DONE)'], next: 'PM', context: 'Provide a progress summary. Check if there are more PLANNED cards — if so, route to TL for the next task.' },
+  { from: 'PM', signals: ['update_card()', 'task_progress()'], next: 'TL', context: 'Check for remaining PLANNED cards. If any exist, assign the next highest-priority task to the appropriate developer (JD, SD, or UX).' },
 ];
 
 function matchPipelineRule(
@@ -237,16 +237,15 @@ async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promi
 // ---------------------------------------------------------------------------
 
 const DEFAULT_NEXT_AGENT: Record<string, { next: string; context: string; requiresApproval?: string }> = {
-  BA: { next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document in your context — it contains the full requirements. Produce a System Design Document (SDD).', requiresApproval: 'BRD' },
-  SA: { next: 'UX', context: 'Create wireframes and design system based on the BRD and SDD. Focus on user experience and interface design.', requiresApproval: 'SDD' },
-  UX: { next: 'PM', context: 'Break down the project into task cards on the work board. Read the BRD, SDD, and design documents. Create task cards for each feature.' },
+  BA: { next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document — it contains requirements AND the Content Inventory. Produce a System Design Document (SDD).', requiresApproval: 'BRD' },
+  SA: { next: 'PM', context: 'Organize the backlog. Read the BRD and SDD. Create task cards for every feature. Include actual content from BRD Content Inventory in each card.', requiresApproval: 'SDD' },
   PM: { next: 'DO', context: 'Scaffold the project structure based on the SDD tech stack. Generate boilerplate files, package.json, config files.' },
-  DO: { next: 'TL', context: 'Project scaffold is ready. Review the task cards and assign the first highest-priority task to a developer (JD or SD).' },
-  TL: { next: 'JD', context: 'Implement the assigned task. Read the relevant files, write code, run tests, and commit when complete.' },
-  JD: { next: 'QA', context: 'Review and test the implementation that was just completed. Run tests, validate code quality, and check for bugs.' },
-  SD: { next: 'QA', context: 'Review the senior developer implementation. Run quality checks and verify it meets standards.' },
-  QA: { next: 'SEC', context: 'Security review the tested implementation. Check for vulnerabilities and security best practices.' },
-  SEC: { next: 'PM', context: 'Provide a progress summary. Check if there are more PLANNED cards — if so, route to TL for the next task.' },
+  DO: { next: 'TL', context: 'Project scaffold is ready. Review cards, create granular tasks, assign to UX/JD/SD. Include BRD content in each card. Start first task.' },
+  TL: { next: 'JD', context: 'Implement the assigned task. Read the card description — it has exact content and acceptance criteria. Write production code.' },
+  JD: { next: 'QA', context: 'Review and test the implementation. Run tests, validate code quality, check for bugs.' },
+  SD: { next: 'QA', context: 'Review the senior developer implementation. Run quality checks and verify standards.' },
+  QA: { next: 'SEC', context: 'Security review the tested implementation. Check for vulnerabilities.' },
+  SEC: { next: 'PM', context: 'Progress summary. Check for remaining PLANNED cards — route to TL for the next task.' },
 };
 
 /**
@@ -536,9 +535,15 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         const results: ToolResult[] = [];
         for (const tc of toolCalls) {
           try {
+            // Resolve agent DB ID for ownership tracking
+            const agentRecord = await prisma.agent.findFirst({
+              where: { projectId: input.projectId, shortName: currentAgent },
+              select: { id: true },
+            });
             const [result] = await executeToolCalls([tc], {
               projectId: input.projectId,
               agentShortName: currentAgent,
+              agentId: agentRecord?.id,
               userId: input.userId,
             });
             results.push(result);
@@ -575,6 +580,32 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             durationMs: 0,
             error: result.success ? undefined : (result.error ?? 'Unknown error'),
           });
+        }
+
+        // Check if any tool result is an ask_user request — pause pipeline
+        const askUserResult = results.find(
+          r => r.success && r.result && typeof r.result === 'object' && r.result.__askUser,
+        );
+        if (askUserResult) {
+          const askData = askUserResult.result;
+          yield {
+            type: 'question_for_user',
+            data: {
+              question: askData.question,
+              context: askData.context,
+              options: askData.options,
+              fromAgent: askData.agentShortName,
+            },
+          };
+          // Save the question as an agent message so user sees it in chat
+          await saveAgentMessage(
+            input.projectId,
+            currentAgent,
+            `**I need your help with something:**\n\n${askData.question}${askData.options ? '\n\n' + askData.options.map((o: string, i: number) => `**${String.fromCharCode(65 + i)})** ${o}`).join('\n') : ''}`,
+          );
+          await agentStateManager.setIdle(input.projectId, currentAgent);
+          yield { type: 'done', data: { messageId: '', agentShortName: currentAgent, paused: true } };
+          return; // Stop the pipeline — user needs to respond
         }
 
         // Track completed signals for pipeline routing
@@ -702,44 +733,73 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
       // Track response for loop detection
       loopState.recentResponses = [...loopState.recentResponses, parsed.message].slice(-5);
 
-      break; // Exit agent loop — we have a text response
-    }
+      // ── 5. Pipeline Routing (BEFORE break) ───────────────────────────
+      if (pipelineDepth < MAX_PIPELINE_DEPTH) {
+        let nextAgent: string | null = null;
+        let nextContext: string | null = null;
 
-    // ── 5. Pipeline Routing ──────────────────────────────────────────────
-    if (pipelineDepth < MAX_PIPELINE_DEPTH) {
-      let nextAgent: string | null = null;
-      let nextContext: string | null = null;
+        // 5a. Try signal-based routing first (tool signals like approve_document)
+        if (completedSignals.length > 0) {
+          const matchedRule = matchPipelineRule(currentAgent, completedSignals);
+          if (matchedRule) {
+            let resolvedNext = matchedRule.next;
 
-      // 5a. Try signal-based routing first
-      if (completedSignals.length > 0) {
-        const matchedRule = matchPipelineRule(currentAgent, completedSignals);
-        if (matchedRule) {
-          nextAgent = matchedRule.next;
-          nextContext = matchedRule.context;
+            // Dynamic routing for TL: inspect which agent TL assigned the last card to
+            if (resolvedNext === 'DYNAMIC' && currentAgent === 'TL') {
+              try {
+                // Find the most recently updated IN_PROGRESS card with an ownerAgent
+                const lastAssigned = await prisma.card.findFirst({
+                  where: {
+                    projectId: input.projectId,
+                    state: 'IN_PROGRESS',
+                    ownerAgentId: { not: null },
+                  },
+                  orderBy: { updatedAt: 'desc' },
+                  include: { ownerAgent: { select: { shortName: true } } },
+                });
+                const targetAgent = lastAssigned?.ownerAgent?.shortName;
+                resolvedNext = (targetAgent && ['JD', 'SD', 'UX', 'DO'].includes(targetAgent))
+                  ? targetAgent : 'JD';
+              } catch {
+                resolvedNext = 'JD';
+              }
+              console.log(`[AgentLoop] TL dynamic routing -> ${resolvedNext}`);
+            }
+
+            nextAgent = resolvedNext;
+            nextContext = matchedRule.context;
+            console.log(`[AgentLoop] Signal-based routing: ${currentAgent} -> ${nextAgent}`);
+          }
         }
-      }
 
-      // 5b. Fallback: if no signal match but agent was pipeline-invoked, use default next agent
-      if (!nextAgent && input.isPipeline) {
-        const fallback = DEFAULT_NEXT_AGENT[currentAgent];
-        if (fallback) {
-          // Check approval gate if required (e.g., BA->SA only if BRD is APPROVED)
-          let gateOpen = true;
-          if (fallback.requiresApproval) {
-            gateOpen = await isDocumentApproved(input.projectId, fallback.requiresApproval);
-            if (!gateOpen) {
-              console.log(`[AgentLoop] Fallback blocked: ${fallback.requiresApproval} not yet APPROVED`);
+        // 5b. Check parsed delegation markers ([DELEGATE:AGENT]...[/DELEGATE])
+        if (!nextAgent && parsed.delegateTo) {
+          nextAgent = parsed.delegateTo;
+          nextContext = parsed.delegateContext || `Continue from ${currentAgent}. Previous output available in chat history.`;
+          console.log(`[AgentLoop] Delegation routing: ${currentAgent} -> ${nextAgent} (via [DELEGATE] marker)`);
+        }
+
+        // 5c. Fallback: use default next agent map (works even on first call now)
+        if (!nextAgent) {
+          const fallback = DEFAULT_NEXT_AGENT[currentAgent];
+          if (fallback) {
+            // Check approval gate if required (e.g., BA->SA only if BRD is APPROVED)
+            let gateOpen = true;
+            if (fallback.requiresApproval) {
+              gateOpen = await isDocumentApproved(input.projectId, fallback.requiresApproval);
+              if (!gateOpen) {
+                console.log(`[AgentLoop] Fallback blocked: ${fallback.requiresApproval} not yet APPROVED`);
+              }
+            }
+            if (gateOpen) {
+              nextAgent = fallback.next;
+              nextContext = fallback.context;
+              console.log(`[AgentLoop] Fallback routing: ${currentAgent} -> ${nextAgent}`);
             }
           }
-          if (gateOpen) {
-            nextAgent = fallback.next;
-            nextContext = fallback.context;
-            console.log(`[AgentLoop] Fallback routing: ${currentAgent} -> ${nextAgent} (no signal match, pipeline mode)`);
-          }
         }
-      }
 
-      if (nextAgent && nextContext) {
+        if (nextAgent && nextContext) {
         // Auto-advance SDLC stages before delegating
         await autoAdvanceSDLC(input.projectId, currentAgent);
 
@@ -782,6 +842,9 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
           pipelineDepth: pipelineDepth + 1,
         });
       }
+      } // end pipeline routing
+
+      break; // Exit agent loop — we have a text response
     }
 
     // ── 6. Finalize Telemetry ────────────────────────────────────────────

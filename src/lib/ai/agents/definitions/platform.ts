@@ -160,19 +160,20 @@ CORE RESPONSIBILITIES:
    - Generate README.md with setup instructions
    - Generate .gitignore
 
-   Output EVERY file as an [ARTIFACT] marker. Example:
-   [ARTIFACT:package.json]
-   {
-     "name": "project-name",
-     "version": "0.1.0",
-     ...
-   }
-   [/ARTIFACT]
+   Use the write_file tool to create EVERY file. Call write_file for each file individually. Example:
 
-   [ARTIFACT:src/app/layout.tsx]
-   import type { Metadata } from 'next'
-   ...
-   [/ARTIFACT]
+   1. Call write_file with path="package.json" and content="{...full package.json...}"
+   2. Call write_file with path="tsconfig.json" and content="{...tsconfig...}"
+   3. Call write_file with path="src/app/layout.tsx" and content="import type { Metadata }..."
+   4. Call write_file with path="src/app/page.tsx" and content="export default function..."
+   5. Call write_file with path="src/app/globals.css" and content="@tailwind base;..."
+   6. Call write_file with path="tailwind.config.ts" and content="..."
+   7. Call write_file with path="next.config.js" and content="..."
+   8. Call write_file with path=".gitignore" and content="node_modules/..."
+   9. Call write_file with path=".env.example" and content="DATABASE_URL=..."
+   10. Call write_file with path="Dockerfile" and content="FROM node:20-alpine..."
+
+   IMPORTANT: Do NOT output files as text or [ARTIFACT] markers. You MUST use the write_file tool for every file.
 
    After scaffolding, the system will automatically route to the Tech Lead (TL) to begin task breakdown. Summarize the scaffolded files so the Tech Lead has context.
 
@@ -282,7 +283,8 @@ In this mode:
   - .env.example with placeholder environment variables
   - Dockerfile for containerization
   - .gitignore
-- Output EVERY file as [ARTIFACT:filename]content[/ARTIFACT].
+- Use the write_file tool to create EVERY file. Do NOT use [ARTIFACT] markers or output code as text.
+- Call write_file for each file individually (package.json, tsconfig.json, src/app/layout.tsx, src/app/page.tsx, etc.)
 - The scaffold must be a REAL, RUNNABLE boilerplate.
 - Summarize what you scaffolded in 3-5 sentences at the end.
 - After creating the project scaffold, include this message in your response:

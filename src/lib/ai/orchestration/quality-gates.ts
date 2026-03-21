@@ -26,7 +26,7 @@ export interface GateResult {
 }
 
 interface GatePrerequisite {
-  type: 'document_approved' | 'wireframes_approved' | 'cards_exist' | 'scaffold_exists';
+  type: 'document_approved' | 'wireframes_approved' | 'cards_exist' | 'scaffold_exists' | 'code_exists';
   /** For document_approved: which document type (BRD, SDD, etc.) */
   docType?: string;
   /** Human-readable description of what's needed. */
@@ -59,16 +59,16 @@ const STAGE_COMPLETION_GATES: Record<string, GatePrerequisite[]> = {
       message: 'The System Design Document (SDD) must be approved before moving to UI/UX Design.',
     },
   ],
-  'UI/UX Design': [
-    {
-      type: 'wireframes_approved',
-      message: 'Wireframes must be approved before moving to Planning.',
-    },
-  ],
   'Planning': [
     {
       type: 'cards_exist',
       message: 'Task cards must exist on the board before moving to Development.',
+    },
+  ],
+  'Development': [
+    {
+      type: 'code_exists',
+      message: 'Code artifacts must exist before marking Development as completed.',
     },
   ],
 };
@@ -94,42 +94,28 @@ const DELEGATION_GATES: Record<string, GatePrerequisite[]> = {
       message: 'SDD must be approved before delegating to the Product Manager.',
     },
   ],
-  'SA→UX': [
+  'PM→DO': [
     {
-      type: 'document_approved',
-      docType: 'SDD',
-      message: 'SDD must be approved before delegating to the UI/UX Designer.',
-    },
-  ],
-  'UX→TL': [
-    {
-      type: 'wireframes_approved',
-      message: 'Wireframes must be approved before delegating to the Tech Lead.',
-    },
-  ],
-  'UX→PM': [
-    {
-      type: 'wireframes_approved',
-      message: 'Wireframes must be approved before delegating to the Product Manager.',
-    },
-  ],
-  'UX→DO': [
-    {
-      type: 'wireframes_approved',
-      message: 'Wireframes must be approved before scaffolding the project.',
+      type: 'cards_exist',
+      message: 'Task cards must exist before scaffolding the project.',
     },
   ],
   'DO→TL': [
     {
-      type: 'cards_exist',
-      message: 'Project scaffold must be created before task breakdown.',
+      type: 'scaffold_exists',
+      message: 'Project scaffold (package.json) must be created before assigning tasks.',
     },
   ],
-  'TL→QA': [
+  'JD→QA': [
     {
-      type: 'document_approved',
-      docType: 'SDD',
-      message: 'SDD must be approved before QA testing.',
+      type: 'code_exists',
+      message: 'Code must be written before QA review. The developer has not produced any code artifacts.',
+    },
+  ],
+  'SD→QA': [
+    {
+      type: 'code_exists',
+      message: 'Code must be written before QA review.',
     },
   ],
 };
@@ -180,6 +166,16 @@ async function checkScaffoldExists(projectId: string): Promise<boolean> {
   return !!scaffoldArtifact;
 }
 
+async function checkCodeExists(projectId: string): Promise<boolean> {
+  const codeArtifacts = await prisma.artifact.count({
+    where: {
+      projectId,
+      name: { startsWith: 'src/' },
+    },
+  });
+  return codeArtifacts > 0;
+}
+
 async function checkCardsExist(projectId: string): Promise<boolean> {
   const taskCount = await prisma.card.count({
     where: {
@@ -225,6 +221,14 @@ async function evaluatePrerequisite(
         passed,
         reason: passed ? undefined : prereq.message,
         blockedBy: passed ? undefined : 'Project scaffold (package.json)',
+      };
+    }
+    case 'code_exists': {
+      const passed = await checkCodeExists(projectId);
+      return {
+        passed,
+        reason: passed ? undefined : prereq.message,
+        blockedBy: passed ? undefined : 'Source code files (src/)',
       };
     }
     default:

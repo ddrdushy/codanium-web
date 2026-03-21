@@ -64,8 +64,9 @@ export const updateCard: ToolDefinition = {
     type: 'object',
     properties: {
       cardId: { type: 'string', description: 'ID of the card to update' },
-      state: { type: 'string', enum: ['PLANNED', 'IN_PROGRESS', 'REVIEW', 'DONE', 'BLOCKED'], description: 'New card state' },
-      assigneeId: { type: 'string', description: 'Use "JD" for Junior Developer or "SD" for Senior Developer. Do NOT use system IDs.' },
+      state: { type: 'string', enum: ['PLANNED', 'IN_PROGRESS', 'UNDER_REVIEW', 'REVIEW', 'TESTING', 'DONE', 'BLOCKED'], description: 'New card state. Use REVIEW or UNDER_REVIEW for code review.' },
+      assigneeId: { type: 'string', description: 'Agent short name: "JD" (Junior Developer), "SD" (Senior Developer), "UX" (UI/UX Designer), "DO" (DevOps). Do NOT use system IDs.' },
+      description: { type: 'string', description: 'Updated description' },
       priority: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] },
       title: { type: 'string', description: 'Updated title' },
     },
@@ -491,6 +492,27 @@ export const consultAgent: ToolDefinition = {
   },
 };
 
+// ─── G. Communication Tools ───────────────────────────────────────────────────
+
+export const askUser: ToolDefinition = {
+  name: 'ask_user',
+  description: 'Ask the user a question when you are missing critical information needed to complete your task. Use this ONLY when truly blocked — e.g., missing content text, API credentials, or brand assets that were not provided in the BRD. The pipeline will pause and wait for the user to respond.',
+  category: 'communication',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      question: { type: 'string', description: 'The question to ask the user' },
+      context: { type: 'string', description: 'Why you need this information (helps the user understand urgency)' },
+      options: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional clickable answer options (A, B, C style)',
+      },
+    },
+    required: ['question'],
+  },
+};
+
 // ─── Tool Registry ────────────────────────────────────────────────────────────
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -513,6 +535,7 @@ export const ALL_TOOLS: ToolDefinition[] = [
   runAnalysis,
   // Communication
   consultAgent,
+  askUser,
 ];
 
 /**

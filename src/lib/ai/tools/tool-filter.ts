@@ -29,7 +29,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'write_file', 'read_file', 'list_directory',
     'remember', 'task_progress',
     'web_search', 'web_fetch',
-    'consult_agent',
+    'consult_agent', 'ask_user',
   ],
   PM: [
     'create_card', 'update_card',
@@ -43,7 +43,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'read_file', 'list_directory', 'glob', 'grep',
     'git_branch', 'git_diff',
     'create_decision', 'remember', 'task_progress',
-    'consult_agent',
+    'consult_agent', 'ask_user',
   ],
 
   // ─── Engineering Agents ─────────────────────────────────
@@ -54,7 +54,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'git_commit', 'git_diff', 'create_pr',
     'update_card', 'task_progress',
     'web_search', 'web_fetch',
-    'consult_agent',
+    'consult_agent', 'ask_user',
   ],
   SD: [
     'read_file', 'write_file', 'edit_file',
@@ -63,7 +63,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'git_commit', 'git_diff', 'create_pr',
     'update_card', 'task_progress',
     'web_search', 'web_fetch',
-    'consult_agent',
+    'consult_agent', 'ask_user',
   ],
   QA: [
     'read_file', 'write_file', 'edit_file',
@@ -73,7 +73,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'update_card', 'create_card', 'task_progress',
     'validate_code', 'review_changes', 'check_dependencies',
     'run_analysis',
-    'consult_agent',
+    'consult_agent', 'ask_user',
   ],
   AT: [ // Automation Tester
     'read_file', 'write_file',
@@ -97,7 +97,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'git_commit', 'git_branch', 'git_diff',
     'trigger_deploy',
     'update_card', 'task_progress',
-    'consult_agent',
+    'consult_agent', 'ask_user',
   ],
   PE: [ // Platform Engineer
     'read_file', 'write_file', 'edit_file',

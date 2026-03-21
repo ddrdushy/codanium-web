@@ -46,6 +46,8 @@ services:
     restart: unless-stopped
     ports:
       - "14001:3000"
+    volumes:
+      - ./workspaces:/app/workspaces    # Sync generated files to local filesystem
     environment:
       DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
       REDIS_URL: redis://redis:6379
@@ -87,6 +89,7 @@ services:
       NODE_ENV: production
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker for code execution sandbox
+      - ./workspaces:/app/workspaces    # Sync generated files to local filesystem
     command: ["node", "worker.mjs"]
     depends_on:
       db:

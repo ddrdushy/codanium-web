@@ -48,3 +48,6 @@ next-env.d.ts
 /src/generated/prisma
 playwright-report/
 test-results/
+
+# AI-generated project workspaces (dynamic content)
+/workspaces/

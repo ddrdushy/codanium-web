@@ -14,7 +14,9 @@ import {
   Send, Bot, User, Sparkles, ChevronDown, Paperclip,
   Code2, FileText, CheckCircle2, AlertTriangle, Clock,
   MessageSquare, Zap, Eye, Terminal, Copy, ThumbsUp,
-  RotateCcw, ArrowRight, Loader2, Square, Settings, TestTube, X
+  RotateCcw, ArrowRight, Loader2, Square, Settings, TestTube, X,
+  Wrench, Pencil, FolderOpen, Play, Search, GitBranch,
+  Shield, Palette, LayoutList, ArrowRightLeft
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -172,6 +174,129 @@ const StreamingText = memo(function StreamingText({ content }: { content: string
   );
 });
 
+// ─── Tool Activity Icon/Label Map ──────────────────────────────────────────
+const TOOL_META: Record<string, { icon: React.ElementType; label: string; color: string }> = {
+  write_file:      { icon: Code2,        label: 'Writing file',         color: 'text-emerald-400' },
+  edit_file:       { icon: Pencil,       label: 'Editing file',         color: 'text-blue-400' },
+  read_file:       { icon: FileText,     label: 'Reading file',         color: 'text-zinc-400' },
+  list_directory:  { icon: FolderOpen,   label: 'Scanning directory',   color: 'text-zinc-400' },
+  glob:            { icon: Search,       label: 'Searching files',      color: 'text-zinc-400' },
+  run_build:       { icon: Play,         label: 'Running build',        color: 'text-amber' },
+  run_tests:       { icon: TestTube,     label: 'Running tests',        color: 'text-violet-400' },
+  create_card:     { icon: LayoutList,   label: 'Creating task card',   color: 'text-amber' },
+  update_card:     { icon: LayoutList,   label: 'Updating card',        color: 'text-amber' },
+  task_progress:   { icon: CheckCircle2, label: 'Updating progress',    color: 'text-emerald-400' },
+  delegate:        { icon: ArrowRightLeft, label: 'Delegating to agent', color: 'text-purple-400' },
+  ask_user:        { icon: MessageSquare, label: 'Asking user',         color: 'text-amber' },
+  create_decision: { icon: Zap,          label: 'Creating decision',    color: 'text-amber' },
+  security_scan:   { icon: Shield,       label: 'Security scan',        color: 'text-red-400' },
+  create_wireframe:{ icon: Palette,      label: 'Creating wireframe',   color: 'text-pink-400' },
+};
+
+function getToolMeta(name: string) {
+  return TOOL_META[name] || { icon: Wrench, label: name.replace(/_/g, ' '), color: 'text-muted-foreground' };
+}
+
+/**
+ * Live Activity Log — shows real-time tool calls during streaming.
+ * Appears below the streaming message bubble with animated entries.
+ */
+const LiveActivityLog = memo(function LiveActivityLog({
+  activities,
+  pipelineProgress
+}: {
+  activities: { name: string; arguments?: Record<string, unknown>; result?: string; success?: boolean; status: 'calling' | 'completed' | 'failed' }[];
+  pipelineProgress: { fromAgent: string; toAgent: string; depth: number; maxDepth: number } | null;
+}) {
+  if (activities.length === 0 && !pipelineProgress) return null;
+
+  // Show last 8 activities to avoid overwhelming the UI
+  const visible = activities.slice(-8);
+
+  return (
+    <div className="mt-2 space-y-1">
+      {/* Pipeline handoff indicator */}
+      {pipelineProgress && (
+        <motion.div
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-center gap-2 text-[10px] text-purple-400 bg-purple-500/[0.06] border border-purple-500/15 rounded-lg px-2.5 py-1.5"
+        >
+          <ArrowRightLeft className="w-3 h-3 shrink-0" />
+          <span className="font-medium">{pipelineProgress.fromAgent}</span>
+          <ArrowRight className="w-2.5 h-2.5" />
+          <span className="font-medium">{pipelineProgress.toAgent}</span>
+          <span className="text-purple-400/50 ml-auto">step {pipelineProgress.depth}/{pipelineProgress.maxDepth}</span>
+        </motion.div>
+      )}
+
+      {/* Tool activity entries */}
+      <AnimatePresence mode="popLayout">
+        {visible.map((activity, i) => {
+          const meta = getToolMeta(activity.name);
+          const Icon = meta.icon;
+          const isActive = activity.status === 'calling';
+          const isFailed = activity.status === 'failed';
+
+          // Extract filename from arguments for display
+          const fileName = activity.arguments?.path as string
+            || activity.arguments?.filePath as string
+            || activity.arguments?.file as string
+            || activity.arguments?.cardId as string
+            || '';
+          const shortFile = fileName ? fileName.split('/').pop() || fileName : '';
+
+          return (
+            <motion.div
+              key={`${activity.name}-${i}-${activities.length}`}
+              initial={{ opacity: 0, x: -10, height: 0 }}
+              animate={{ opacity: 1, x: 0, height: 'auto' }}
+              exit={{ opacity: 0, x: 10, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className={cn(
+                'flex items-center gap-2 text-[10px] rounded-md px-2 py-1 transition-colors',
+                isActive && 'bg-white/[0.03] text-foreground/70',
+                !isActive && !isFailed && 'text-muted-foreground/40',
+                isFailed && 'text-red-400/60'
+              )}
+            >
+              {isActive ? (
+                <Loader2 className={cn('w-3 h-3 animate-spin shrink-0', meta.color)} />
+              ) : isFailed ? (
+                <AlertTriangle className="w-3 h-3 shrink-0 text-red-400" />
+              ) : (
+                <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-500/50" />
+              )}
+              <span className={cn('font-medium', isActive && meta.color)}>
+                {meta.label}
+              </span>
+              {shortFile && (
+                <span className="font-mono text-[9px] text-muted-foreground/30 truncate max-w-[140px]">
+                  {shortFile}
+                </span>
+              )}
+              {isActive && (
+                <span className="ml-auto flex gap-0.5">
+                  <span className="w-1 h-1 rounded-full bg-amber animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1 h-1 rounded-full bg-amber animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1 h-1 rounded-full bg-amber animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+              )}
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
+
+      {/* Summary line when many activities */}
+      {activities.length > 8 && (
+        <div className="text-[9px] text-muted-foreground/30 pl-5">
+          {activities.filter(a => a.status === 'completed').length} completed · {activities.filter(a => a.status === 'calling').length} in progress
+        </div>
+      )}
+    </div>
+  );
+});
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'agent' | 'system';
@@ -223,9 +348,11 @@ export default function ChatPage() {
     streamContent,
     streamThinking,
     artifacts: streamArtifacts,
+    toolActivities,
     completedMessageId,
     usage,
     error: streamError,
+    pipelineProgress,
   } = useAgentStream();
 
   useEffect(() => {
@@ -786,10 +913,26 @@ export default function ChatPage() {
                     ) : (
                       <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
-                          <Loader2 className="w-3 h-3 animate-spin" /> Your AI team is working on it...
+                          <Loader2 className="w-3 h-3 animate-spin text-amber" />
+                          <span>
+                            {toolActivities.length > 0
+                              ? `Working... ${toolActivities.filter(t => t.status === 'completed').length} actions done`
+                              : 'Your AI team is working on it...'}
+                          </span>
                         </div>
+                        {/* Show activity log even when no text content yet */}
+                        <LiveActivityLog
+                          activities={toolActivities}
+                          pipelineProgress={pipelineProgress}
+                        />
                       </div>
                     )}
+
+                    {/* Live Activity Log — shows tool calls in real-time */}
+                    <LiveActivityLog
+                      activities={toolActivities}
+                      pipelineProgress={pipelineProgress}
+                    />
 
                     {streamArtifacts.length > 0 && (
                       <div className="flex flex-wrap gap-2">
@@ -802,14 +945,21 @@ export default function ChatPage() {
                       </div>
                     )}
 
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-[10px] text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10"
-                      onClick={streamStop}
-                    >
-                      <Square className="w-2.5 h-2.5 mr-1 fill-current" /> Stop generating
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-[10px] text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10"
+                        onClick={streamStop}
+                      >
+                        <Square className="w-2.5 h-2.5 mr-1 fill-current" /> Stop generating
+                      </Button>
+                      {toolActivities.length > 0 && (
+                        <span className="text-[9px] text-muted-foreground/30">
+                          {toolActivities.filter(t => t.status === 'completed').length} actions completed
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.div>

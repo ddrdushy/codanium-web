@@ -290,6 +290,25 @@ export class MessageRouter {
     const intent = this.classifyIntent(message);
     let agent = this.resolveAgent(intent);
 
+    // ── Priority 3.5: Smart code_generation routing ──────────────────
+    // If user wants to build but no cards exist yet, route to PM first
+    // so it can create the task backlog before TL tries to assign work.
+    if (intent === 'code_generation') {
+      try {
+        const cardCount = await prisma.card.count({
+          where: { projectId },
+        });
+        if (cardCount === 0) {
+          console.log(
+            `[MessageRouter] code_generation intent but 0 cards → routing to PM to create backlog`,
+          );
+          return 'PM';
+        }
+      } catch (e) {
+        console.warn('[MessageRouter] Card count check failed:', e);
+      }
+    }
+
     // ── Priority 4: Smarter fallback for 'general' intent ────────────
     // After BRD exists, short/generic messages should NOT default to BA.
     // Route to the last active agent or ORC instead.

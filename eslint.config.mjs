@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // AI-generated project workspaces (dynamic content, not platform code)
+    "workspaces/**",
   ]),
 ]);
 
