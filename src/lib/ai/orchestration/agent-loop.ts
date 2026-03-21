@@ -454,6 +454,27 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             if (chunk.content) {
               iterContent += chunk.content;
               yield { type: 'chunk', data: { content: chunk.content } };
+
+              // ── Repetition loop detector ────────────────────────────
+              // If the LLM starts repeating the same token/phrase (e.g. "[TL] [TL] [TL]...")
+              // abort early to avoid wasting tokens and showing garbage to the user.
+              if (iterContent.length > 200) {
+                const tail = iterContent.slice(-200);
+                // Check for any 3-15 char pattern repeated 8+ times
+                const repMatch = tail.match(/(.{3,15})\1{7,}/);
+                if (repMatch) {
+                  console.warn(`[AgentLoop] ⚠️ Repetition loop detected for ${currentAgent}: "${repMatch[1]}" repeated ${Math.floor(tail.split(repMatch[1]).length - 1)} times. Aborting.`);
+                  // Truncate to content before the repetition started
+                  const repStart = iterContent.lastIndexOf(repMatch[0]);
+                  if (repStart > 50) {
+                    iterContent = iterContent.slice(0, repStart).trim() + '\n\n*[Response truncated — repetition detected]*';
+                  } else {
+                    iterContent = `I encountered an issue processing this request. Let me try a different approach.\n\n*[Response reset — repetition loop detected]*`;
+                  }
+                  yield { type: 'chunk', data: { content: '\n\n*[Response truncated — repetition detected]*' } };
+                  break; // Exit the streaming loop
+                }
+              }
             }
             if (chunk.toolCalls && chunk.toolCalls.length > 0) {
               for (const tc of chunk.toolCalls) {

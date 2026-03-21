@@ -84,6 +84,10 @@ function stripAgentMarkers(content: string): string {
     .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/gi, '')
     // Strip agent name prefixes like "[BA]", "[SA]", "[DEC]", "[ORC]" at start of lines
     .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*/gm, '')
+    // Strip repetition loops — any short pattern repeated 5+ times (e.g. "[TL] [TL] [TL]...")
+    .replace(/(.{2,20})\1{4,}/g, '*[Repetitive content removed]*')
+    // Strip inline agent tags that aren't at start of line (e.g. "[TL] [TL] [TL]")
+    .replace(/(\[\s*(?:BA|SA|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*){3,}/gi, '')
     // Clean up whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -338,6 +342,7 @@ export default function ChatPage() {
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
   const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
+  const [showVSCodePrompt, setShowVSCodePrompt] = useState(false);
   const [llmError, setLlmError] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -531,6 +536,14 @@ export default function ChatPage() {
       setSelectedOptions([]);
     }
   }, [completedMessageId, showStreamBubble, projectId]);
+
+  // Show "Open in VS Code" prompt when DO finishes scaffolding and hands off to TL
+  useEffect(() => {
+    const pp = activePipelineProgress;
+    if (pp && pp.fromAgent === 'DO' && pp.toAgent === 'TL') {
+      setShowVSCodePrompt(true);
+    }
+  }, [activePipelineProgress]);
 
   const activeAgents = agents.filter(a => a.status === 'working' || a.status === 'waiting');
 
@@ -993,6 +1006,41 @@ export default function ChatPage() {
             {activeError && !showStreamBubble && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-xs text-red-400/70 bg-red-500/[0.06] border border-red-500/15 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-3 h-3 shrink-0" /> {activeError}
+              </motion.div>
+            )}
+
+            {/* VS Code handoff prompt — shown after DO scaffolds the project */}
+            {showVSCodePrompt && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-auto max-w-2xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-4 my-4"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+                    <Code2 className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold text-foreground mb-1">Project scaffold is ready!</h4>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Your project files have been generated. Open VS Code to see the code, run builds, and continue development with your AI team.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`vscode://aisensei.ai-team-studio/open?projectId=${projectId}`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-colors"
+                      >
+                        <Code2 className="w-3 h-3" /> Open in VS Code
+                      </a>
+                      <button
+                        onClick={() => setShowVSCodePrompt(false)}
+                        className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             )}
 
