@@ -157,14 +157,7 @@ const MemoizedMarkdown = memo(function MemoizedMarkdown({ content }: { content: 
  */
 const StreamingText = memo(function StreamingText({ content }: { content: string }) {
   // Strip agent markers and option lines (lightweight vs full markdown parse)
-  const cleaned = content
-    .replace(/\*{0,2}\[\s*ACTION\s*:\s*\w+\s*\]\*{0,2}[\s\S]*?\*{0,2}\[\s*\/\s*ACTION\s*\]\*{0,2}/gi, '')
-    .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\][\s\S]*?\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gi, '')
-    .replace(/\[\s*ARTIFACT\s*:[^\]]*\][\s\S]*?\[\s*\/\s*ARTIFACT\s*\]/gi, '')
-    .replace(/\*{0,2}\[\s*ACTION\s*:\s*\w+\s*\]\*{0,2}[^[\n]*$/gm, '')
-    .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  const cleaned = stripAgentMarkers(content);
   // Render bold text minimally: **text** → <strong>text</strong>
   const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
   return (

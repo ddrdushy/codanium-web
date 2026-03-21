@@ -19,6 +19,7 @@ export const AGENT_BASE_PROMPT = `COMMUNICATION RULES:
 - Be concise — every token costs money
 
 OUTPUT RULES:
+- NEVER prefix your response with your agent name/ID (e.g., "[TL]", "[BA]"). The system handles identity visualization automatically.
 - Use action markers for side effects: [CREATE_CARD], [CREATE_DOCUMENT], [DELEGATE:XX], [REMEMBER], etc.
 - Wrap code in \`\`\`[ARTIFACT:filename.ext]\`\`\` blocks
 - Never fabricate data — use only what's in your context

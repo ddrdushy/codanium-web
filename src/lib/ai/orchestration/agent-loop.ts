@@ -459,13 +459,19 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
               // If the LLM starts repeating the same token/phrase (e.g. "[TL] [TL] [TL]...")
               // abort early to avoid wasting tokens and showing garbage to the user.
               if (iterContent.length > 200) {
-                const tail = iterContent.slice(-200);
-                // Check for any 3-15 char pattern repeated 8+ times
+                const tail = iterContent.slice(-300);
+                // Check for generic repeating patterns
                 const repMatch = tail.match(/(.{3,15})\1{7,}/);
-                if (repMatch) {
-                  console.warn(`[AgentLoop] ⚠️ Repetition loop detected for ${currentAgent}: "${repMatch[1]}" repeated ${Math.floor(tail.split(repMatch[1]).length - 1)} times. Aborting.`);
+                // Check for LLM attention collapse spamming agent tags like "[TL] [TL] [TL]"
+                const tagSpamMatch = tail.match(/(\[\s*[A-Z]{2,3}\s*\]\s*){8,}/);
+                
+                if (repMatch || tagSpamMatch) {
+                  console.warn(`[AgentLoop] ⚠️ Repetition loop detected for ${currentAgent}. Aborting.`);
                   // Truncate to content before the repetition started
-                  const repStart = iterContent.lastIndexOf(repMatch[0]);
+                  let repStart = -1;
+                  if (repMatch) repStart = iterContent.lastIndexOf(repMatch[0]);
+                  else if (tagSpamMatch) repStart = iterContent.lastIndexOf(tagSpamMatch[0]);
+
                   if (repStart > 50) {
                     iterContent = iterContent.slice(0, repStart).trim() + '\n\n*[Response truncated — repetition detected]*';
                   } else {
