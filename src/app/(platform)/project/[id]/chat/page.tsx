@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { fetchAgents, checkLLMHealth } from '@/lib/api';
 
 import { useAgentStream } from '@/lib/hooks/use-agent-stream';
+import { useProjectStream } from '@/lib/hooks/use-project-stream';
 import { Agent } from '@/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -355,6 +356,27 @@ export default function ChatPage() {
     pipelineProgress,
   } = useAgentStream();
 
+  const {
+    isBackgroundStreaming,
+    backgroundAgent,
+    backgroundContent,
+    backgroundThinking,
+    backgroundArtifacts,
+    backgroundToolActivities,
+    backgroundPipelineProgress,
+    backgroundError,
+  } = useProjectStream(projectId);
+
+  // Compute effective stream properties (Interactive stream takes precedence)
+  const showStreamBubble = isStreaming || isBackgroundStreaming;
+  const activeAgent = isStreaming ? currentAgent : backgroundAgent;
+  const activeContent = isStreaming ? streamContent : backgroundContent;
+  const activeThinking = isStreaming ? streamThinking : backgroundThinking;
+  const activeArtifacts = isStreaming ? streamArtifacts : backgroundArtifacts;
+  const activeToolActivities = isStreaming ? toolActivities : backgroundToolActivities;
+  const activePipelineProgress = isStreaming ? pipelineProgress : backgroundPipelineProgress;
+  const activeError = isStreaming ? streamError : backgroundError;
+
   useEffect(() => {
     if (!projectId) return;
 
@@ -471,7 +493,7 @@ export default function ChatPage() {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       scrollThrottleRef.current = null;
     }, 200);
-  }, [messages, isStreaming]);
+  }, [messages, showStreamBubble]);
 
   // When the stream completes, refetch ALL messages from DB.
   // This correctly handles delegation chains (BA → SA → PE etc.)
@@ -508,7 +530,7 @@ export default function ChatPage() {
         .catch(() => {});
       setSelectedOptions([]);
     }
-  }, [completedMessageId, isStreaming, projectId]);
+  }, [completedMessageId, showStreamBubble, projectId]);
 
   const activeAgents = agents.filter(a => a.status === 'working' || a.status === 'waiting');
 
@@ -779,7 +801,7 @@ export default function ChatPage() {
         )}
       </motion.div>
     ));
-  }, [messages, visibleCount, selectedOptions, showThinking, isStreaming]);
+  }, [messages, visibleCount, selectedOptions, showThinking, showStreamBubble]);
 
   return (
     <ChatErrorBoundary>
@@ -856,13 +878,13 @@ export default function ChatPage() {
             )}
             {renderedMessages}
 
-            {isStreaming && (
+            {showStreamBubble && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 <div className="flex items-start gap-3">
                   <div className="relative shrink-0">
                     <div className="w-8 h-8 rounded-full bg-[var(--surface)] border border-border flex items-center justify-center text-base">
-                      {currentAgent
-                        ? (agents.find(a => a.shortName === currentAgent.shortName)?.avatar || '🤖')
+                      {activeAgent
+                        ? (agents.find(a => a.shortName === activeAgent.shortName)?.avatar || '🤖')
                         : '🤖'}
                     </div>
                     <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber border-2 border-background animate-pulse" />
@@ -870,13 +892,14 @@ export default function ChatPage() {
                   <div className="max-w-[85%] space-y-2 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-semibold text-foreground">
-                        {currentAgent?.name ?? 'AI Team'}
+                        {activeAgent?.name ?? 'AI Team'}
+                        {!isStreaming && <span className="ml-2 text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">Background Task</span>}
                       </span>
                       <Loader2 className="w-3 h-3 animate-spin text-amber" />
                       <span className="text-[10px] text-muted-foreground/40">streaming...</span>
                     </div>
 
-                    {streamThinking && (
+                    {activeThinking && (
                       <>
                         <button
                           onClick={() => setShowStreamThinking(!showStreamThinking)}
@@ -895,7 +918,7 @@ export default function ChatPage() {
                             >
                               <div className="bg-violet-500/[0.06] border border-violet-500/15 rounded-lg px-3 py-2 text-[11px] text-muted-foreground/70 italic">
                                 <span className="text-violet-400 font-semibold not-italic text-[10px] uppercase tracking-wider">Reasoning</span>
-                                <p className="mt-1 whitespace-pre-wrap">{streamThinking}</p>
+                                <p className="mt-1 whitespace-pre-wrap">{activeThinking}</p>
                               </div>
                             </motion.div>
                           )}
@@ -903,10 +926,10 @@ export default function ChatPage() {
                       </>
                     )}
 
-                    {streamContent ? (
+                    {activeContent ? (
                       <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
                         <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
-                          <StreamingText content={streamContent} />
+                          <StreamingText content={activeContent} />
                           <span className="inline-block w-1.5 h-4 bg-amber/60 animate-pulse ml-0.5 -mb-0.5 rounded-sm" />
                         </div>
                       </div>
@@ -915,28 +938,28 @@ export default function ChatPage() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
                           <Loader2 className="w-3 h-3 animate-spin text-amber" />
                           <span>
-                            {toolActivities.length > 0
-                              ? `Working... ${toolActivities.filter(t => t.status === 'completed').length} actions done`
+                            {activeToolActivities.length > 0
+                              ? `Working... ${activeToolActivities.filter(t => t.status === 'completed').length} actions done`
                               : 'Your AI team is working on it...'}
                           </span>
                         </div>
                         {/* Show activity log even when no text content yet */}
                         <LiveActivityLog
-                          activities={toolActivities}
-                          pipelineProgress={pipelineProgress}
+                          activities={activeToolActivities}
+                          pipelineProgress={activePipelineProgress}
                         />
                       </div>
                     )}
 
                     {/* Live Activity Log — shows tool calls in real-time */}
                     <LiveActivityLog
-                      activities={toolActivities}
-                      pipelineProgress={pipelineProgress}
+                      activities={activeToolActivities}
+                      pipelineProgress={activePipelineProgress}
                     />
 
-                    {streamArtifacts.length > 0 && (
+                    {activeArtifacts.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {streamArtifacts.map((art, j) => (
+                        {activeArtifacts.map((art, j) => (
                           <Badge key={j} variant="outline" className="text-[10px] bg-white/[0.03] animate-in fade-in">
                             {art.type === 'code' ? <Code2 className="w-2.5 h-2.5 mr-1 text-emerald-400" /> : <FileText className="w-2.5 h-2.5 mr-1 text-blue-400" />}
                             {art.name}
@@ -946,17 +969,19 @@ export default function ChatPage() {
                     )}
 
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-[10px] text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10"
-                        onClick={streamStop}
-                      >
-                        <Square className="w-2.5 h-2.5 mr-1 fill-current" /> Stop generating
-                      </Button>
-                      {toolActivities.length > 0 && (
+                      {isStreaming && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10"
+                          onClick={streamStop}
+                        >
+                          <Square className="w-2.5 h-2.5 mr-1 fill-current" /> Stop generating
+                        </Button>
+                      )}
+                      {activeToolActivities.length > 0 && (
                         <span className="text-[9px] text-muted-foreground/30">
-                          {toolActivities.filter(t => t.status === 'completed').length} actions completed
+                          {activeToolActivities.filter(t => t.status === 'completed').length} actions completed
                         </span>
                       )}
                     </div>
@@ -965,9 +990,9 @@ export default function ChatPage() {
               </motion.div>
             )}
 
-            {streamError && !isStreaming && (
+            {activeError && !showStreamBubble && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-xs text-red-400/70 bg-red-500/[0.06] border border-red-500/15 rounded-lg px-3 py-2">
-                <AlertTriangle className="w-3 h-3 shrink-0" /> {streamError}
+                <AlertTriangle className="w-3 h-3 shrink-0" /> {activeError}
               </motion.div>
             )}
 

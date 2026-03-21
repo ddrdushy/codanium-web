@@ -18,9 +18,14 @@ export class TaskProcessor {
         isPipeline: true,
       });
 
-      // Drain the generator silently — no SSE streaming in background mode
+      // Broadcast the generator events over EventBus so connected clients can watch the stream
       for await (const _event of events) {
-        // Events are discarded in background mode
+        await eventBus.emit({
+          type: 'project.stream',
+          actor: task.routedTo,
+          projectId: task.projectId,
+          payload: _event as unknown as Record<string, unknown>,
+        });
       }
 
       await taskQueue.complete(task.id, {

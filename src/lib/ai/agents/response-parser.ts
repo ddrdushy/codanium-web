@@ -9,8 +9,8 @@
 // The parser is intentionally lenient — malformed JSON in action markers is
 // skipped with a warning rather than crashing the pipeline.
 // =============================================================================
-
 import { AgentAction } from './types';
+import { LLMToolCall } from '../providers/types';
 
 // ─── Public Interface ────────────────────────────────────────────────────────
 
@@ -51,7 +51,7 @@ const DELEGATE_REGEX = /\[\s*DELEGATE\s*:\s*(\w+)\s*\]([\s\S]*?)\[\s*\/\s*DELEGA
 // Handles two formats:
 //   [UPDATE_DOCUMENT]{ "type": "BRD", ... }    (bracket then JSON)
 //   [REMEMBER {"key":"x","value":"y"}]          (JSON inside brackets)
-const TEXT_TOOL_CALL_REGEX = /\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/gi;
+const TEXT_TOOL_CALL_REGEX = /\[\s*(UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*(?:(\{[\s\S]*?\})\s*\]|\]\s*(\{[\s\S]*?\}))\s*/gi;
 
 // ─── File Extension to Type Mapping ──────────────────────────────────────────
 
@@ -308,7 +308,7 @@ function parseAction(actionType: string, rawJson: string): AgentAction | null {
  * Extracts all [ACTION], [ARTIFACT], and [DELEGATE] markers, then strips them
  * from the message text to produce a clean human-readable response.
  */
-export function parseAgentResponse(rawContent: string): ParsedResponse {
+export function parseAgentResponse(rawContent: string, nativeToolCalls?: LLMToolCall[]): ParsedResponse {
   const actions: AgentAction[] = [];
   const artifacts: ParsedResponse['artifacts'] = [];
   let delegateTo: string | undefined;
@@ -358,6 +358,34 @@ export function parseAgentResponse(rawContent: string): ParsedResponse {
     const action = parseAction(actionType, actionBody);
     if (action) {
       actions.push(action);
+    }
+  }
+
+  // ── Extract Text Tool Calls (fallback for hallucinated tool formats) ─────
+  
+  TEXT_TOOL_CALL_REGEX.lastIndex = 0;
+  while ((match = TEXT_TOOL_CALL_REGEX.exec(ownContent)) !== null) {
+    const actionType = match[1].toLowerCase();
+    const actionBody = match[2] || match[3] || '{}';
+    const action = parseAction(actionType, actionBody);
+    if (action) {
+      actions.push(action);
+    }
+  }
+
+  // ── Process Native Tool Calls ──────────────────────────────────────────────
+  
+  if (nativeToolCalls) {
+    for (const tc of nativeToolCalls) {
+      try {
+        const actionBody = typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments);
+        const action = parseAction(tc.name, actionBody);
+        if (action) {
+          actions.push(action);
+        }
+      } catch (err) {
+        console.warn(`[ResponseParser] Failed to parse native tool call: ${tc.name}`);
+      }
     }
   }
 

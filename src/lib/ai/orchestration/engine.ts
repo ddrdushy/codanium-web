@@ -38,6 +38,7 @@ import { delegationHandler, DelegationChainEntry } from './delegation';
 import { validateStageGate, validateDelegationGate } from './quality-gates';
 import { validateCardTransition, CardState as LifecycleCardState, CardType as LifecycleCardType } from './card-lifecycle';
 import { filterAuthorizedActions } from './authority-guard';
+import { getToolsForAgent } from '@/lib/ai/tools/tool-filter';
 import { invalidateProjectCache } from '@/lib/ai/context/context-cache';
 
 // ---------------------------------------------------------------------------
@@ -223,6 +224,8 @@ export class OrchestrationEngine {
       let fullContent = '';
       let fullThinking = '';
       let lastTokensUsed: { prompt: number; completion: number; total: number } | undefined;
+      const accumulatedToolCalls: any[] = [];
+      const toolDefs = getToolsForAgent(targetShortName);
 
       for await (const chunk of llmGateway.stream({
         messages,
@@ -230,6 +233,7 @@ export class OrchestrationEngine {
         agentId: targetShortName,
         projectId,
         metadata: { userId },
+        tools: toolDefs.length > 0 ? toolDefs : undefined,
       })) {
         if (chunk.thinking) {
           fullThinking += chunk.thinking;
@@ -241,6 +245,10 @@ export class OrchestrationEngine {
           yield { type: 'chunk', data: { content: chunk.content } };
         }
 
+        if (chunk.toolCalls && chunk.toolCalls.length > 0) {
+          accumulatedToolCalls.push(...chunk.toolCalls);
+        }
+
         if (chunk.done && chunk.tokensUsed) {
           lastTokensUsed = chunk.tokensUsed;
           yield { type: 'usage', data: { tokensUsed: chunk.tokensUsed } };
@@ -248,7 +256,10 @@ export class OrchestrationEngine {
       }
 
       // ── Step 6: Parse response ────────────────────────────────────────
-      const parsed = parseAgentResponse(fullContent);
+      const parsed = parseAgentResponse(
+        fullContent, 
+        accumulatedToolCalls.length > 0 ? accumulatedToolCalls : undefined
+      );
 
       // Yield artifacts
       for (const artifact of parsed.artifacts) {
@@ -568,6 +579,8 @@ export class OrchestrationEngine {
         { role: 'user', content: message },
       ];
 
+      const toolDefs = getToolsForAgent(shortName);
+
       // Call LLM via gateway
       const llmResponse = await llmGateway.complete({
         messages: llmMessages,
@@ -575,10 +588,11 @@ export class OrchestrationEngine {
         agentId: shortName,
         projectId,
         metadata: { userId },
+        tools: toolDefs.length > 0 ? toolDefs : undefined,
       });
 
       // Parse response
-      const parsed = parseAgentResponse(llmResponse.content);
+      const parsed = parseAgentResponse(llmResponse.content, llmResponse.toolCalls);
 
       // Authority guard + Execute side effects
       const { allowed: authorizedActions } = filterAuthorizedActions(agentDef, parsed.actions);
