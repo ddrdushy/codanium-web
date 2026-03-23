@@ -26,6 +26,11 @@ import {
   gitDiffInWorkspace,
 } from './workspace';
 import { prisma } from '@/lib/prisma';
+import {
+  validateCardTransition,
+  CardState as LifecycleCardState,
+  CardType as LifecycleCardType,
+} from '../orchestration/card-lifecycle';
 
 interface ExecuteOptions {
   projectId: string;
@@ -365,6 +370,33 @@ async function handleUpdateCard(args: Record<string, any>, projectId: string) {
   if (args.title) data.title = args.title;
   if (args.description) data.description = args.description;
 
+  // ── Validate state transitions (same as API route) ──────────────────────
+  if (data.state) {
+    const existing = await prisma.card.findUnique({
+      where: { id: args.cardId },
+      select: { state: true, type: true, projectId: true },
+    });
+    if (!existing) {
+      return { success: false, error: `Card ${args.cardId} not found` };
+    }
+    if (data.state !== existing.state) {
+      const transitionResult = await validateCardTransition(
+        args.cardId,
+        projectId,
+        existing.state as LifecycleCardState,
+        data.state as LifecycleCardState,
+        existing.type as LifecycleCardType,
+      );
+      if (!transitionResult.allowed) {
+        return {
+          success: false,
+          error: `State transition from ${existing.state} to ${data.state} is not allowed: ${transitionResult.reason}`,
+          requirements: transitionResult.requirements,
+        };
+      }
+    }
+  }
+
   const card = await prisma.card.update({
     where: { id: args.cardId },
     data,
@@ -377,16 +409,45 @@ async function handleCreateDocument(
   projectId: string,
   agentId?: string,
 ) {
+  const content = args.content || '';
+  const title = args.title || `${args.type || 'Document'} - Draft`;
+
+  if (!args.type) {
+    return { error: 'Document type is required (e.g., BRD, SDD)' };
+  }
+
+  // Upsert: if a document of this type already exists for this project, update it instead of creating a duplicate
+  const existing = await prisma.document.findFirst({
+    where: { projectId, type: args.type },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (existing) {
+    console.log(`[ToolExecutor] Updating existing ${args.type} document (${existing.id}) instead of creating duplicate`);
+    const newContent = content || existing.content;
+    const doc = await prisma.document.update({
+      where: { id: existing.id },
+      data: {
+        title: title || existing.title,
+        content: newContent,
+        owner: agentId || existing.owner,
+        wordCount: newContent.split(/\s+/).length,
+        sections: (newContent.match(/^#{1,3}\s/gm) || []).length,
+      },
+    });
+    return { documentId: doc.id, type: doc.type, title: doc.title, status: doc.status, updated: true };
+  }
+
   const doc = await prisma.document.create({
     data: {
       projectId,
       type: args.type,
-      title: args.title,
-      content: args.content,
+      title,
+      content,
       status: 'DRAFT',
       owner: agentId || 'system',
-      wordCount: args.content.split(/\s+/).length,
-      sections: (args.content.match(/^#{1,3}\s/gm) || []).length,
+      wordCount: content.split(/\s+/).length,
+      sections: (content.match(/^#{1,3}\s/gm) || []).length,
     },
   });
   return { documentId: doc.id, type: doc.type, title: doc.title, status: doc.status };

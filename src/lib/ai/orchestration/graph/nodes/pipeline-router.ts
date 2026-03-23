@@ -206,16 +206,21 @@ export async function pipelineRouterNode(
 // ─── SDLC Stage Auto-Advance ──────────────────────────────────────────────────
 
 const AGENT_STAGE_MAP: Record<string, string> = {
-  BA: 'Business Analysis',
-  SA: 'Architecture',
-  UX: 'UI/UX Design',
-  PM: 'Planning',
-  DO: 'Development',
+  PM: 'Idea & Planning',
+  BA: 'Requirement Gathering',
+  SA: 'Solution Design',
+  UX: 'UX/UI Design',
   TL: 'Development',
   JD: 'Development',
   SD: 'Development',
+  DO: 'Development',
   QA: 'Testing',
-  SEC: 'Code Review',
+  AT: 'Testing',
+  PF: 'Testing',
+  SEC: 'Testing',
+  PE: 'Deployment',
+  SR: 'Deployment',
+  CM: 'Maintenance & Improvement',
 };
 
 async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promise<void> {

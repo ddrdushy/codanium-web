@@ -1,5 +1,7 @@
 'use client';
 
+import { useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'framer-motion';
 import { useParams, useRouter } from 'next/navigation';
 import { Card } from '@/types';
@@ -7,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import {
   Layers, Box, Wrench, FlaskConical, AlertOctagon,
-  Clock, AlertTriangle, Flame, ChevronRight, MessageSquare
+  Clock, AlertTriangle, Flame, ChevronRight, MessageSquare, GripVertical
 } from 'lucide-react';
 
 const typeConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
@@ -34,10 +36,21 @@ export function BoardCard({ card, index }: { card: Card; index: number }) {
   const params = useParams();
   const projectId = params.id as string;
 
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: card.card_id,
+    data: { card },
+  });
+
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform) }
+    : undefined;
+
   return (
     <motion.div
+      ref={setNodeRef}
+      style={style}
       initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
       transition={{ delay: index * 0.03, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
       <div
@@ -46,14 +59,25 @@ export function BoardCard({ card, index }: { card: Card; index: number }) {
           'hover:border-white/10 transition-all duration-200',
           card.type === 'DecisionBlocker' && 'border-amber/20 bg-amber/[0.03]',
           card.type === 'Epic' && 'border-violet-500/15',
+          isDragging && 'shadow-xl ring-2 ring-amber/30',
         )}
       >
-        {/* Top: Type badge + Priority */}
+        {/* Top: Drag handle + Type badge + Priority */}
         <div className="flex items-center justify-between mb-2">
-          <Badge variant="outline" className={cn('text-[10px] font-semibold px-1.5 py-0 h-5 gap-1 border', typeInfo.bg, typeInfo.color)}>
-            <TypeIcon className="w-2.5 h-2.5" />
-            {card.type === 'DecisionBlocker' ? 'Blocker' : card.type}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            <button
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing p-0.5 -ml-1 rounded hover:bg-foreground/[0.06] text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+              title="Drag to move"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </button>
+            <Badge variant="outline" className={cn('text-[10px] font-semibold px-1.5 py-0 h-5 gap-1 border', typeInfo.bg, typeInfo.color)}>
+              <TypeIcon className="w-2.5 h-2.5" />
+              {card.type === 'DecisionBlocker' ? 'Blocker' : card.type}
+            </Badge>
+          </div>
           <div className="flex items-center gap-1">
             <PriorityIcon className={cn('w-3 h-3', priorityInfo.color)} />
           </div>

@@ -1,9 +1,11 @@
 'use client';
 
+import { useDroppable } from '@dnd-kit/core';
 import { CardState, Card } from '@/types';
 import { cn } from '@/lib/utils';
 import { BoardCard } from './board-card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Plus } from 'lucide-react';
 
 const stateConfig: Record<CardState, { color: string; dot: string; glow?: string }> = {
   'Planned':      { color: 'text-zinc-400',     dot: 'bg-zinc-500' },
@@ -15,14 +17,24 @@ const stateConfig: Record<CardState, { color: string; dot: string; glow?: string
   'Released':     { color: 'text-amber',        dot: 'bg-amber',        glow: 'shadow-[0_0_8px_rgba(245,158,11,0.3)]' },
 };
 
-export function BoardColumn({ state, cards }: { state: CardState; cards: Card[] }) {
+interface BoardColumnProps {
+  state: CardState;
+  cards: Card[];
+  onAddCard?: (state: CardState) => void;
+}
+
+export function BoardColumn({ state, cards, onAddCard }: BoardColumnProps) {
   const config = stateConfig[state];
+  const { setNodeRef, isOver } = useDroppable({ id: state });
 
   return (
     <div
+      ref={setNodeRef}
       className={cn(
         'kanban-column flex flex-col min-w-[280px] max-w-[320px] w-full rounded-xl border bg-[var(--surface)]/50 transition-all duration-200',
-        'border-border'
+        isOver
+          ? 'border-amber/40 bg-amber/[0.04] ring-1 ring-amber/20'
+          : 'border-border'
       )}
     >
       {/* Column Header */}
@@ -36,12 +48,28 @@ export function BoardColumn({ state, cards }: { state: CardState; cards: Card[] 
             {cards.length}
           </span>
         </div>
+        {onAddCard && (
+          <button
+            onClick={() => onAddCard(state)}
+            className="p-1 rounded-md hover:bg-foreground/[0.06] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+            title={`Add card to ${state}`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
+
+      {/* Drop indicator */}
+      {isOver && (
+        <div className="mx-2 mt-2 py-2 border-2 border-dashed border-amber/30 rounded-lg flex items-center justify-center">
+          <span className="text-[10px] text-amber/60 font-medium">Drop here</span>
+        </div>
+      )}
 
       {/* Cards */}
       <ScrollArea className="flex-1 max-h-[calc(100vh-12rem)]">
         <div className="p-2 space-y-2">
-          {cards.length === 0 ? (
+          {cards.length === 0 && !isOver ? (
             <div className="flex items-center justify-center py-8 text-xs border border-dashed rounded-lg text-muted-foreground/40 border-border">
               No cards
             </div>

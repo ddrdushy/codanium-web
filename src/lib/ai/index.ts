@@ -9,7 +9,7 @@
 export * from './providers/types';
 export { MockProvider } from './providers/mock-provider';
 
-// LLM Gateway (BYOM router)
+// LLM Gateway (provider router)
 export { llmGateway, LLMGateway } from './gateway';
 
 // Agent system

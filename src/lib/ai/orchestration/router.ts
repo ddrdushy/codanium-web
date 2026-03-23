@@ -17,6 +17,11 @@
 
 import { UserIntent } from './types';
 import { prisma } from '@/lib/prisma';
+import { DEV_AGENTS } from './agent-loop';
+import { isVSCodeConnected } from '@/lib/vscode-bridge';
+
+/** Sentinel returned when a dev agent is requested but VS Code is not connected. */
+export const VSCODE_REQUIRED_SENTINEL = '__VSCODE_REQUIRED__';
 
 // ---------------------------------------------------------------------------
 // Intent Patterns
@@ -53,15 +58,21 @@ const INTENT_PATTERNS: Array<{ intent: UserIntent; patterns: RegExp[] }> = [
     ],
   },
   {
-    intent: 'ui_feedback',
+    intent: 'approval',
     patterns: [
-      /\b(design|look|layout|color|ui|ux|screen|mockup|wireframe|font|spacing|responsive)\b/,
+      /\b(brd\s+(is\s+)?approv|approv.{0,10}brd|proceed\s+to\s+(solution|architecture|design phase)|move\s+to\s+(next|architecture|solution)|advance\s+(the\s+)?phase|phase\s+(complet|done|approv))\b/i,
     ],
   },
   {
     intent: 'architecture',
     patterns: [
-      /\b(architecture|database|api|structure|tech stack|framework|schema|microservice|scalab|infra)\b/,
+      /\b(architecture|database|api|structure|tech stack|framework|schema|microservice|scalab|infra|solution design|system design|sdd|hld)\b/,
+    ],
+  },
+  {
+    intent: 'ui_feedback',
+    patterns: [
+      /\b(look and feel|layout|color|ui\b|ux\b|screen|mockup|wireframe|font|spacing|responsive|visual design)\b/,
     ],
   },
   {
@@ -98,7 +109,7 @@ const INTENT_PATTERNS: Array<{ intent: UserIntent; patterns: RegExp[] }> = [
  */
 const ROUTING_TABLE: Record<UserIntent, string> = {
   new_requirement: 'BA',   // Business Analyst — requirements gathering
-  approval:        'DEC',  // Decision Coordinator — only via delegation now
+  approval:        'BA',   // Business Analyst — handles phase transitions and doc approvals
   status_query:    'ORC',  // Orchestrator — project-wide awareness
   bug_report:      'QA',   // QA Engineer — bug triage and tracking
   ui_feedback:     'UX',   // UX Designer — design feedback
@@ -148,6 +159,16 @@ function messageAsksQuestion(content: string): boolean {
  * (short message, or matches an option text pattern).
  * Long messages with explicit intent keywords should use keyword routing.
  */
+/**
+ * Detect if the user's message indicates pipeline advancement — approval,
+ * "proceed", "next phase", "create tasks/cards", "start building".
+ * These should override conversation continuity so the pipeline can advance.
+ */
+function isPipelineAdvancement(message: string): boolean {
+  const lower = message.toLowerCase();
+  return /\b(proceed|approv|next phase|next step|move forward|go ahead|create.*card|create.*task|generate.*task|generate.*card|start (build|develop|implement|cod)|begin (develop|build|implement)|kick off|let'?s (build|go|start|move))\b/i.test(lower);
+}
+
 function isLikelyReply(message: string): boolean {
   const trimmed = message.trim();
 
@@ -239,6 +260,28 @@ export class MessageRouter {
    * @returns Agent shortName (e.g. "BA", "SA", "QA").
    */
   async route(message: string, projectId: string): Promise<string> {
+    const agent = await this.resolveRoute(message, projectId);
+
+    // ── VS Code Gate ─────────────────────────────────────────────────
+    // Development agents require VS Code. If VS Code isn't connected,
+    // return a sentinel so the caller can prompt the user.
+    if (DEV_AGENTS.has(agent)) {
+      const vsConnected = await isVSCodeConnected(projectId);
+      if (!vsConnected) {
+        console.log(
+          `[MessageRouter] ⏸ VS Code not connected — blocking dev agent ${agent}`,
+        );
+        return VSCODE_REQUIRED_SENTINEL;
+      }
+    }
+
+    return agent;
+  }
+
+  /**
+   * Internal routing logic — resolves the target agent WITHOUT gating.
+   */
+  private async resolveRoute(message: string, projectId: string): Promise<string> {
     // ── Priority 1: Explicit topic switch ─────────────────────────────
     const explicitSwitch = isExplicitTopicSwitch(message);
     if (explicitSwitch) {
@@ -275,6 +318,15 @@ export class MessageRouter {
       if (lastContext.agentShortName === 'ORC' && !isLikelyReply(message)) {
         console.log(
           `[MessageRouter] ORC continuity OVERRIDDEN → user has substantive request, falling through to keyword routing`,
+        );
+        // Fall through to keyword routing below
+      }
+      // Guard: If the user's reply indicates pipeline advancement (approval,
+      // proceed, next phase, create tasks/cards), override continuity and
+      // let keyword routing pick the correct pipeline agent.
+      else if (isPipelineAdvancement(message)) {
+        console.log(
+          `[MessageRouter] Continuity OVERRIDDEN → user wants to advance pipeline, falling through to keyword routing`,
         );
         // Fall through to keyword routing below
       } else {
@@ -370,7 +422,7 @@ export class MessageRouter {
 
   /**
    * Check if BA should be bypassed because BRD already exists and
-   * the project has advanced past the Business Analysis stage.
+   * the project has advanced past the Requirement Gathering phase.
    * When development is ongoing, task-related messages should go to TL, not BA.
    */
   private async shouldRedirectFromBA(projectId: string): Promise<boolean> {
@@ -382,14 +434,15 @@ export class MessageRouter {
       });
       if (!brd) return false; // No BRD yet — BA should continue
 
-      // Check if Business Analysis stage is completed OR if task cards exist
-      const baStage = await prisma.sDLCStage.findFirst({
-        where: { projectId, name: 'Business Analysis' },
+      // Check if Requirement Gathering phase is completed OR if task cards exist
+      const reqGatheringStage = await prisma.sDLCStage.findFirst({
+        where: { projectId, name: { in: ['Requirement Gathering', 'Business Analysis'] } },
         select: { status: true },
       });
 
-      // If BA stage is completed, definitely redirect
-      if (baStage?.status === 'COMPLETED') return true;
+      // If Requirement Gathering is completed, definitely redirect
+      // (also handles legacy 'Business Analysis' stage name)
+      if (reqGatheringStage?.status === 'COMPLETED') return true;
 
       // Also redirect if task cards already exist (SA already ran)
       const taskCount = await prisma.card.count({

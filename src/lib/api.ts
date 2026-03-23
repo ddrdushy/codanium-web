@@ -31,6 +31,14 @@ export const mapCardState = (s: string): Card['state'] => {
   return map[s] ?? 'Planned';
 };
 
+export const cardStateToDb = (s: Card['state']): string => {
+  const map: Record<Card['state'], string> = {
+    'Planned': 'PLANNED', 'In Progress': 'IN_PROGRESS', 'Under Review': 'UNDER_REVIEW',
+    'Testing': 'TESTING', 'Blocked': 'BLOCKED', 'Done': 'DONE', 'Released': 'RELEASED',
+  };
+  return map[s] ?? 'PLANNED';
+};
+
 export const mapPriority = (p: string): Card['priority'] =>
   p.toLowerCase() as Card['priority'];
 
@@ -153,6 +161,18 @@ export async function fetchCards(projectId: string): Promise<Card[]> {
     updated_at: c.updatedAt,
     linked_decision_id: c.linkedDecisionId ?? undefined,
   }));
+}
+
+export async function updateCardState(projectId: string, cardId: string, newState: Card['state']): Promise<void> {
+  const res = await fetch(`/api/projects/${projectId}/cards/${cardId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state: cardStateToDb(newState) }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to update card (${res.status})`);
+  }
 }
 
 // ─── Agents ──────────────────────────────────────────────────────────────────

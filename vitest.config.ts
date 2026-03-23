@@ -13,7 +13,6 @@ export default defineConfig({
       exclude: [
         'src/lib/prisma.ts',
         'src/lib/auth.ts',
-        'src/lib/ai/orchestration/**',
         'src/generated/**',
       ],
     },

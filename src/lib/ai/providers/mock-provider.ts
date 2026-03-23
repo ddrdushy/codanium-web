@@ -700,7 +700,7 @@ const pmGenerator: AgentGenerator = (msg) => {
         '**Q2 — Collaboration**\n' +
         '- Multi-agent conversation UI\n' +
         '- Real-time collaboration features\n' +
-        '- BYOM provider integration\n\n' +
+        '- Multi-provider LLM support\n\n' +
         '**Q3 — Scale**\n' +
         '- Enterprise SSO\n' +
         '- Usage analytics and billing\n' +

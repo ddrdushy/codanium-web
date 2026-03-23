@@ -147,25 +147,23 @@ function BoardMockup() {
 /* ─── Pipeline Mockup ─── */
 function PipelineMockup() {
   const stages = [
-    'Business Analysis',
-    'System Architecture',
-    'UX Design',
-    'Frontend Dev',
-    'Backend Dev',
-    'Database',
-    'QA Testing',
-    'Security',
+    'Idea & Planning',
+    'Requirements',
+    'Solution Design',
+    'UX/UI Design',
+    'Development',
+    'Testing',
     'Deployment',
-    'Monitoring',
+    'Maintenance',
   ];
 
   return (
     <div className="p-4">
       <div className="flex items-center gap-1">
         {stages.map((stage, idx) => {
-          const isComplete = idx < 5;
-          const isActive = idx === 5;
-          const isPending = idx > 5;
+          const isComplete = idx < 4;
+          const isActive = idx === 4;
+          const isPending = idx > 4;
 
           return (
             <div key={stage} className="flex-1 flex flex-col items-center">
@@ -195,11 +193,11 @@ function PipelineMockup() {
       </div>
       {/* Progress bar */}
       <div className="mt-4 h-1.5 w-full rounded-full bg-[var(--surface-overlay)]">
-        <div className="h-1.5 w-[55%] rounded-full bg-gradient-to-r from-emerald-500 via-amber-500 to-amber-500" />
+        <div className="h-1.5 w-[50%] rounded-full bg-gradient-to-r from-emerald-500 via-amber-500 to-amber-500" />
       </div>
       <div className="mt-2 flex items-center justify-between text-[8px] text-muted-foreground">
-        <span>5 of 10 stages complete</span>
-        <span className="text-amber font-semibold">Database — Active</span>
+        <span>4 of 8 phases complete</span>
+        <span className="text-amber font-semibold">Development — Active</span>
       </div>
     </div>
   );

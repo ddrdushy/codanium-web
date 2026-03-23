@@ -20,29 +20,25 @@ import {
 // ─── SDLC Stage Metadata ────────────────────────────────────────────
 
 const stageIcons: Record<string, string> = {
-  'Business Analysis': '\u{1F4CB}',
-  'Architecture': '\u{1F3D7}\uFE0F',
-  'UI/UX Design': '\u{1F3A8}',
-  'Planning': '\u{1F4CA}',
-  'Development': '\u{1F4BB}',
-  'Code Review': '\u{1F50D}',
+  'Idea & Planning': '\u{1F7E2}',
+  'Requirement Gathering': '\u{1F7E1}',
+  'Solution Design': '\u{1F535}',
+  'UX/UI Design': '\u{1F7E3}',
+  'Development': '\u{1F534}',
   'Testing': '\u{1F9EA}',
-  'Release': '\u{1F680}',
-  'Monitoring': '\u{1F4E1}',
-  'Iteration': '\u{1F504}',
+  'Deployment': '\u{1F680}',
+  'Maintenance & Improvement': '\u{1F504}',
 };
 
 const gateDescriptions: Record<string, string> = {
-  'Business Analysis': 'Requirements confirmed and approved',
-  'Architecture': 'Technical design reviewed and approved',
-  'UI/UX Design': 'Wireframes approved',
-  'Planning': 'Work plan created and ready',
-  'Development': 'Development complete for each task',
-  'Code Review': 'Code reviewed and quality verified',
-  'Testing': 'All test scenarios pass',
-  'Release': 'Ready for launch, safety net in place',
-  'Monitoring': 'System running smoothly, no issues',
-  'Iteration': 'Ready for next round of improvements',
+  'Idea & Planning': 'Vision document or BRD must exist',
+  'Requirement Gathering': 'BRD must be approved by stakeholder',
+  'Solution Design': 'System Design Document (SDD/HLD) must be approved',
+  'UX/UI Design': 'Wireframes or UI designs must be approved',
+  'Development': 'Task cards must exist on the board',
+  'Testing': 'Code artifacts must exist for testing',
+  'Deployment': 'All tests must pass and release approved',
+  'Maintenance & Improvement': 'System deployed and running in production',
 };
 
 // ─── Deploy Stage Steps ─────────────────────────────────────────────

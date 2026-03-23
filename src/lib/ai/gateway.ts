@@ -2,15 +2,14 @@
 // AI Team Studio — LLM Gateway
 // =============================================================================
 // Central singleton that routes every LLM request to the correct provider.
-// Handles BYOM (Bring Your Own Model) config resolution, provider dispatch,
-// latency measurement, and usage logging.
+// Handles provider config resolution, dispatch, latency measurement, and
+// usage logging.
 //
-// Resolution priority (BYOM — each user brings their own model):
-//   1. Agent-level DB config (per-agent override)
-//   2. Project-level DB config
-//   3. User-level DB config  ← main BYOM path (Platform Settings drawer)
-//   4. Admin settings (DB global default)
-//   5. Error (no config found — user must set up BYOM provider)
+// Resolution priority (admin-managed):
+//   1. Agent-level DB config (admin per-agent override)
+//   2. Project-level DB config (admin per-project override)
+//   3. Admin settings (platform-wide default) ← main path
+//   4. Error (no config — admin must configure LLM provider)
 // =============================================================================
 
 import {
@@ -47,21 +46,20 @@ export class LLMGateway {
   /**
    * Resolve which provider + config to use for a given request scope.
    *
-   * BYOM resolution (each user configures their own provider):
-   *   1. Agent-level DB config (per-agent override)
-   *   2. Project-level DB config
-   *   3. User-level DB config  ← main BYOM path
-   *   4. Admin settings (DB global default)
-   *   5. Error (no config found — user must set up BYOM provider)
+   * Resolution priority (admin-managed):
+   *   1. Agent-level DB config (admin per-agent override)
+   *   2. Project-level DB config (admin per-project override)
+   *   3. Admin settings (platform-wide default)
+   *   4. Error (no config — admin must configure LLM provider)
    */
   async resolve(
     projectId?: string,
     agentId?: string,
-    userId?: string,
+    _userId?: string,
   ): Promise<{ provider: LLMProvider; config: ProviderConfig; isMock: boolean }> {
-    console.log(`[LLMGateway] resolve() called — project=${projectId}, agent=${agentId}, userId=${userId}`);
+    console.log(`[LLMGateway] resolve() called — project=${projectId}, agent=${agentId}`);
 
-    // ── 1. Agent-level DB config ──
+    // ── 1. Agent-level DB config (admin override per agent) ──
     if (projectId && agentId) {
       try {
         const agentConfig = await prisma.lLMProviderConfig.findFirst({
@@ -77,7 +75,7 @@ export class LLMGateway {
       }
     }
 
-    // ── 2. Project-level DB config ──
+    // ── 2. Project-level DB config (admin override per project) ──
     if (projectId) {
       try {
         const projectConfig = await prisma.lLMProviderConfig.findFirst({
@@ -93,27 +91,7 @@ export class LLMGateway {
       }
     }
 
-    // ── 3. User-level DB config (main BYOM path) ──
-    if (userId) {
-      try {
-        // Most recently updated non-mock config wins
-        const userConfig = await prisma.lLMProviderConfig.findFirst({
-          where: { userId, scope: 'USER', isActive: true, provider: { not: 'mock' } },
-          orderBy: { updatedAt: 'desc' },
-        });
-        if (userConfig) {
-          console.log(`[LLMGateway] ✓ Resolved via USER config: provider=${userConfig.provider}, model=${userConfig.defaultModel}, baseUrl=${userConfig.baseUrl}, userId=${userId}`);
-          return this.resolveConfig(userConfig);
-        }
-        console.log(`[LLMGateway] — No USER config found for userId=${userId}`);
-      } catch (err) {
-        console.warn('[LLMGateway] ✗ User-level config query failed:', err);
-      }
-    } else {
-      console.warn('[LLMGateway] ⚠ userId is empty/undefined — cannot look up user BYOM config');
-    }
-
-    // ── 4. Admin settings (DB global default) ──
+    // ── 3. Admin settings (platform-wide default) ──
     try {
       const adminSettings = await prisma.adminSetting.findMany({
         where: { key: { in: ['llm.defaultProvider', 'llm.defaultModel', 'llm.baseUrl', 'llm.apiKey'] } },
@@ -129,9 +107,14 @@ export class LLMGateway {
       }
       const adminProvider = adminMap['llm.defaultProvider'];
       if (adminProvider && adminProvider !== 'mock' && this.providers.has(adminProvider)) {
+        // Decrypt admin API key if encrypted
+        let apiKey = adminMap['llm.apiKey'] || undefined;
+        if (apiKey && isEncrypted(apiKey)) {
+          try { apiKey = decrypt(apiKey); } catch { apiKey = undefined; }
+        }
         const config: ProviderConfig = {
           provider: adminProvider,
-          apiKey: adminMap['llm.apiKey'] || undefined,
+          apiKey,
           baseUrl: adminMap['llm.baseUrl'] || undefined,
           defaultModel: adminMap['llm.defaultModel'] || 'llama3',
         };
@@ -142,8 +125,8 @@ export class LLMGateway {
       console.warn('[LLMGateway] ✗ Admin settings query failed:', err);
     }
 
-    // ── 5. No config found — error ──
-    const errMsg = `No LLM provider configured. Please set up your provider in Platform Settings. (userId=${userId})`;
+    // ── 4. No config found — admin must configure ──
+    const errMsg = 'LLM provider not configured. Please contact your administrator to set up the AI provider in Admin Settings.';
     console.error(`[LLMGateway] ✗ ${errMsg}`);
     throw new Error(errMsg);
   }

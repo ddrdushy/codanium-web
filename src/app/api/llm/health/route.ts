@@ -38,41 +38,18 @@ export async function GET() {
       }
     }
 
-    // Also check for user-level BYOM configs (any active non-mock config)
-    const userConfig = await prisma.lLMProviderConfig.findFirst({
-      where: { isActive: true, provider: { not: 'mock' } },
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    // Determine effective provider — prefer user config, fall back to admin
-    let effectiveProvider = provider;
-    let effectiveModel = model;
-    let effectiveBaseUrl = baseUrl;
-    let effectiveApiKey = apiKey;
-
-    if (userConfig) {
-      effectiveProvider = userConfig.provider;
-      effectiveModel = userConfig.defaultModel;
-      effectiveBaseUrl = userConfig.baseUrl || '';
-      if (userConfig.apiKeyEncrypted) {
-        try {
-          effectiveApiKey = isEncrypted(userConfig.apiKeyEncrypted)
-            ? decrypt(userConfig.apiKeyEncrypted)
-            : userConfig.apiKeyEncrypted;
-        } catch {
-          effectiveApiKey = '';
-        }
-      } else {
-        effectiveApiKey = '';
-      }
-    }
+    // Admin-only config — no user-level BYOM
+    const effectiveProvider = provider;
+    const effectiveModel = model;
+    const effectiveBaseUrl = baseUrl;
+    const effectiveApiKey = apiKey;
 
     if (!effectiveProvider || effectiveProvider === 'mock') {
       return NextResponse.json({
         configured: false,
         provider: effectiveProvider || 'none',
         model: effectiveModel || '',
-        error: 'No LLM provider configured. Please set up a provider (OpenAI, Anthropic, or Ollama) in Settings.',
+        error: 'No LLM provider configured. Please ask your administrator to set up a provider in Admin Settings.',
       });
     }
 

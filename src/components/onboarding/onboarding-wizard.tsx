@@ -6,29 +6,19 @@ import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { StepIndicator } from './step-indicator';
 import {
-  Sparkles, Zap, DollarSign, CheckCircle2, ArrowRight, ArrowLeft,
-  Loader2, Eye, EyeOff, Server, Wrench, AlertTriangle, Info,
+  Sparkles, DollarSign, CheckCircle2, ArrowRight, ArrowLeft,
+  Loader2, AlertTriangle,
   Settings, Bell, MessageSquare, Shield,
 } from 'lucide-react';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
-const STEP_LABELS = ['Welcome', 'AI Provider', 'Preferences', 'Done'];
-
-const PROVIDER_OPTIONS = [
-  { id: 'openai', label: 'OpenAI', icon: Zap, description: 'GPT-4o, GPT-4, GPT-3.5 Turbo', defaultModel: 'gpt-4o' },
-  { id: 'anthropic', label: 'Anthropic', icon: Sparkles, description: 'Claude Sonnet, Claude Haiku', defaultModel: 'claude-sonnet-4-20250514' },
-  { id: 'ollama', label: 'Ollama', icon: Server, description: 'Run models locally — free', defaultModel: 'llama3' },
-  { id: 'custom', label: 'Custom', icon: Wrench, description: 'Any OpenAI-compatible endpoint', defaultModel: '' },
-] as const;
-
-type ProviderType = typeof PROVIDER_OPTIONS[number]['id'];
+const STEP_LABELS = ['Welcome', 'Preferences', 'Done'];
 
 const APPROVAL_OPTIONS = [
   { id: 'everything', label: 'Approve everything', description: 'Your AI team will ask before every major decision', badge: 'Most control' },
@@ -76,16 +66,7 @@ export function OnboardingWizard() {
   const [direction, setDirection] = useState(1);
   const [error, setError] = useState('');
 
-  // LLM Provider state (Step 2)
-  const [selectedProvider, setSelectedProvider] = useState<ProviderType>('openai');
-  const [apiKey, setApiKey] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [defaultModel, setDefaultModel] = useState('gpt-4o');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [testMessage, setTestMessage] = useState('');
-
-  // Budget & Preferences state (Step 3)
+  // Budget & Preferences state (Step 2)
   const [monthlyBudget, setMonthlyBudget] = useState(500);
   const [alertThreshold, setAlertThreshold] = useState(75);
   const [approvalLevel, setApprovalLevel] = useState('big-stuff');
@@ -102,81 +83,18 @@ export function OnboardingWizard() {
     fetch('/api/onboarding/status')
       .then(r => r.json())
       .then(data => {
-        if (data.step && data.step > 0 && data.step < 4) {
+        if (data.step && data.step > 0 && data.step < 3) {
           setStep(data.step + 1);
         }
       })
       .catch(() => {});
   }, []);
 
-  // Update default model when provider changes
-  useEffect(() => {
-    const provider = PROVIDER_OPTIONS.find(p => p.id === selectedProvider);
-    if (provider) {
-      setDefaultModel(provider.defaultModel);
-    }
-    setTestStatus('idle');
-    setTestMessage('');
-    setApiKey('');
-    setBaseUrl('');
-  }, [selectedProvider]);
-
   // ─── Handlers ──────────────────────────────────────────────────────────
-
-  async function testConnection() {
-    setTestStatus('testing');
-    setTestMessage('');
-    try {
-      const res = await fetch('/api/llm/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: selectedProvider,
-          apiKey,
-          baseUrl: baseUrl || undefined,
-          model: defaultModel,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTestStatus('success');
-        setTestMessage(data.message || 'Connection successful!');
-      } else {
-        setTestStatus('error');
-        setTestMessage(data.error || 'Connection failed');
-      }
-    } catch {
-      setTestStatus('error');
-      setTestMessage('Network error — could not reach test endpoint');
-    }
-  }
-
-  async function saveLLMConfig() {
-    if (!apiKey.trim() && selectedProvider !== 'ollama') return;
-    try {
-      await fetch('/api/llm/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: selectedProvider,
-          apiKey: apiKey.trim() || undefined,
-          baseUrl: baseUrl.trim() || undefined,
-          defaultModel: defaultModel.trim(),
-        }),
-      });
-    } catch {
-      // Non-blocking — user can configure later
-    }
-  }
 
   async function goNext() {
     setError('');
     setDirection(1);
-
-    // Save LLM config when leaving step 2
-    if (step === 2) {
-      await saveLLMConfig();
-    }
 
     // Persist step progress
     try {
@@ -272,14 +190,13 @@ export function OnboardingWizard() {
             Welcome, {userName}!
           </h1>
           <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-            Let&apos;s set up your platform so your AI team can start building. This takes about 2 minutes.
+            Let&apos;s set up your preferences so your AI team can start building. This takes about a minute.
           </p>
         </div>
 
         {/* What we'll configure */}
         <div className="grid gap-3 text-left max-w-md mx-auto">
           {[
-            { icon: Zap, label: 'AI Provider', desc: 'Connect your preferred LLM (OpenAI, Anthropic, etc.)' },
             { icon: DollarSign, label: 'Budget & Limits', desc: 'Set monthly spending limits and alerts' },
             { icon: Settings, label: 'Preferences', desc: 'Communication style, approval workflow, notifications' },
           ].map(({ icon: Icon, label, desc }) => (
@@ -319,133 +236,6 @@ export function OnboardingWizard() {
   }
 
   function renderStep2() {
-    return (
-      <div className="space-y-6">
-        <div className="text-center">
-          <h2 className="text-xl font-bold tracking-tight">Connect Your AI Provider</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Choose how your AI team will be powered. You can always change this later in Settings.
-          </p>
-        </div>
-
-        {/* Provider selection grid */}
-        <div className="grid grid-cols-2 gap-3">
-          {PROVIDER_OPTIONS.map(({ id, label, icon: Icon, description }) => (
-            <button
-              key={id}
-              onClick={() => setSelectedProvider(id)}
-              className={cn(
-                'flex flex-col items-start gap-2 p-4 rounded-xl border text-left transition-all duration-200',
-                selectedProvider === id
-                  ? 'border-amber bg-amber/10 shadow-sm shadow-amber/10'
-                  : 'border-border bg-surface-raised hover:border-amber/30',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <Icon className={cn('w-4.5 h-4.5', selectedProvider === id ? 'text-amber' : 'text-muted-foreground')} />
-                <span className={cn('text-sm font-semibold', selectedProvider === id ? 'text-amber' : '')}>{label}</span>
-              </div>
-              <span className="text-xs text-muted-foreground">{description}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* API Key input */}
-        {selectedProvider !== 'ollama' && (
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">API Key</label>
-            <div className="relative">
-              <Input
-                type={showApiKey ? 'text' : 'password'}
-                placeholder={
-                  selectedProvider === 'openai' ? 'sk-...' :
-                  selectedProvider === 'anthropic' ? 'sk-ant-...' :
-                  'Enter your API key'
-                }
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="pr-10 h-10 bg-foreground/[0.03] border-border focus:border-amber/30"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-              >
-                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-[10px] text-muted-foreground/50">
-              Your key is encrypted with AES-256-GCM and never stored in plain text.
-            </p>
-          </div>
-        )}
-
-        {/* Base URL (for Ollama / Custom) */}
-        {(selectedProvider === 'ollama' || selectedProvider === 'custom') && (
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              Base URL {selectedProvider === 'ollama' && '(default: http://localhost:11434)'}
-            </label>
-            <Input
-              type="url"
-              placeholder={selectedProvider === 'ollama' ? 'http://localhost:11434' : 'https://your-endpoint.com/v1'}
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              className="h-10 bg-foreground/[0.03] border-border focus:border-amber/30"
-            />
-          </div>
-        )}
-
-        {/* Model selector */}
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Model</label>
-          <Input
-            placeholder="e.g. gpt-4o"
-            value={defaultModel}
-            onChange={(e) => setDefaultModel(e.target.value)}
-            className="h-10 bg-foreground/[0.03] border-border focus:border-amber/30"
-          />
-        </div>
-
-        {/* Test connection */}
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={testConnection}
-            disabled={testStatus === 'testing' || (!apiKey.trim() && selectedProvider !== 'ollama')}
-            variant="outline"
-            className="h-9"
-          >
-            {testStatus === 'testing' ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Testing...</>
-            ) : (
-              'Test Connection'
-            )}
-          </Button>
-          {testStatus === 'success' && (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-500">
-              <CheckCircle2 className="w-3.5 h-3.5" /> {testMessage}
-            </span>
-          )}
-          {testStatus === 'error' && (
-            <span className="flex items-center gap-1.5 text-xs text-red-400">
-              <AlertTriangle className="w-3.5 h-3.5" /> {testMessage}
-            </span>
-          )}
-        </div>
-
-        {/* BYOM setup info */}
-        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
-          <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-amber-400">Bring Your Own Model:</span>{' '}
-            Connect your preferred LLM provider (OpenAI, Anthropic, or Ollama) to power your AI team. You can configure this anytime from Platform Settings.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  function renderStep3() {
     return (
       <div className="space-y-6">
         <div className="text-center">
@@ -585,9 +375,7 @@ export function OnboardingWizard() {
     );
   }
 
-  function renderStep4() {
-    const providerLabel = PROVIDER_OPTIONS.find(p => p.id === selectedProvider)?.label || selectedProvider;
-    const hasApiKey = apiKey.trim().length > 0 || selectedProvider === 'ollama';
+  function renderStep3() {
     const approvalLabel = APPROVAL_OPTIONS.find(a => a.id === approvalLevel)?.label || approvalLevel;
     const commLabel = COMMUNICATION_OPTIONS.find(c => c.id === commStyle)?.label || commStyle;
 
@@ -613,21 +401,6 @@ export function OnboardingWizard() {
         {/* Summary card */}
         <div className="text-left space-y-3 max-w-md mx-auto">
           <div className="p-4 rounded-xl bg-surface-raised border border-border space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">AI Provider</span>
-              <span className="text-sm font-medium">
-                {hasApiKey ? providerLabel : (
-                  <span className="text-amber">Demo Mode</span>
-                )}
-              </span>
-            </div>
-            {hasApiKey && (
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">Model</span>
-                <span className="text-sm font-medium">{defaultModel}</span>
-              </div>
-            )}
-            <div className="border-t border-border" />
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">Monthly Budget</span>
               <span className="text-sm font-medium">${monthlyBudget}</span>
@@ -681,7 +454,6 @@ export function OnboardingWizard() {
     1: renderStep1,
     2: renderStep2,
     3: renderStep3,
-    4: renderStep4,
   };
 
   return (
@@ -710,21 +482,21 @@ export function OnboardingWizard() {
         </AnimatePresence>
       </div>
 
-      {/* Navigation buttons (steps 2 & 3 only) */}
-      {step > 1 && step < TOTAL_STEPS && (
+      {/* Navigation buttons (step 2 only) */}
+      {step === 2 && (
         <div className="flex items-center justify-between max-w-md mx-auto">
           <Button variant="ghost" onClick={goBack} className="gap-2">
             <ArrowLeft className="w-4 h-4" />
             Back
           </Button>
           <Button onClick={goNext} className="gap-2 bg-amber text-background hover:bg-amber/90">
-            {step === 3 ? 'Review' : 'Next'}
+            Review
             <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
       )}
 
-      {/* Back button on step 4 */}
+      {/* Back button on step 3 */}
       {step === TOTAL_STEPS && (
         <div className="flex justify-center">
           <Button variant="ghost" onClick={goBack} className="gap-2 text-muted-foreground">

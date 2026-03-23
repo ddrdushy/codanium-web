@@ -2,10 +2,22 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { fetchCards } from '@/lib/api';
+import { fetchCards, updateCardState } from '@/lib/api';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+  type DragOverEvent,
+  closestCenter,
+} from '@dnd-kit/core';
 
 import { Card, CardState, CardType } from '@/types';
 import { BoardColumn } from './board-column';
+import { BoardCard } from './board-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -13,7 +25,7 @@ import { ColumnSkeleton } from '@/components/ui/skeleton';
 import {
   Filter, SlidersHorizontal, Layers, Box, Wrench,
   FlaskConical, AlertOctagon, LayoutGrid, BarChart3,
-  CheckCircle2, Circle, Minus, AlertTriangle, Bot, Plus,
+  CheckCircle2, Circle, Minus, AlertTriangle, Bot, Plus, GripVertical,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CreateCardModal } from '@/components/modals/create-card-modal';
@@ -32,9 +44,7 @@ const typeFilters: { type: CardType | 'All'; icon: React.ElementType; label: str
 // ─── Milestone definitions ───
 interface MilestonePhase {
   name: string;
-  /** CardState values that belong to this phase */
   states: CardState[];
-  /** Ordinal index (0-based) for cumulative progress */
   order: number;
 }
 
@@ -46,7 +56,6 @@ const MILESTONES: MilestonePhase[] = [
   { name: 'Completed', states: ['Done', 'Released'], order: 4 },
 ];
 
-// ─── View toggle options ───
 const viewModes = [
   { key: 'board' as const, label: 'Board', icon: LayoutGrid },
   { key: 'milestones' as const, label: 'Milestones', icon: BarChart3 },
@@ -94,7 +103,6 @@ function MilestoneCard({
         'hover:border-amber/20 transition-colors duration-200',
       )}
     >
-      {/* Top row: status icon + name + task count */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
           <StatusIcon className={cn('w-4.5 h-4.5', statusColor)} />
@@ -105,7 +113,6 @@ function MilestoneCard({
         </span>
       </div>
 
-      {/* Progress bar */}
       <div className="relative h-2 rounded-full bg-foreground/[0.06] overflow-hidden">
         <motion.div
           className={cn(
@@ -122,7 +129,6 @@ function MilestoneCard({
         />
       </div>
 
-      {/* Percentage label */}
       <div className="flex items-center justify-end mt-1.5">
         <span className={cn(
           'text-[11px] font-medium tabular-nums',
@@ -178,17 +184,7 @@ function MilestonesView({ cards }: { cards: Card[] }) {
   const blockedCards = useMemo(() => cards.filter(c => c.state === 'Blocked'), [cards]);
   const totalNonBlocked = nonBlockedCards.length;
 
-  /**
-   * Cumulative progress: for each milestone at order N, "done" means
-   * all tasks in phases with order <= N that have already moved PAST
-   * that phase (i.e. they are in a later phase or are Done/Released).
-   *
-   * Simplified approach: for phase at index i, cumulative done = tasks
-   * whose state belongs to phases with order > i (they've passed this
-   * phase), and cumulative total = all non-blocked tasks.
-   */
   const milestoneData = useMemo(() => {
-    // Build a lookup: CardState -> phase order
     const stateOrder: Record<string, number> = {};
     MILESTONES.forEach(m => {
       m.states.forEach(s => { stateOrder[s] = m.order; });
@@ -196,13 +192,11 @@ function MilestonesView({ cards }: { cards: Card[] }) {
 
     return MILESTONES.map((phase) => {
       const phaseTasks = nonBlockedCards.filter(c => phase.states.includes(c.state));
-      // Tasks that have progressed past this phase
       const cumulativeDone = nonBlockedCards.filter(c => {
         const cardOrder = stateOrder[c.state];
         return cardOrder !== undefined && cardOrder > phase.order;
       }).length;
 
-      // For the final phase ("Completed"), done = tasks actually in Done/Released
       const adjustedDone = phase.order === MILESTONES.length - 1
         ? nonBlockedCards.filter(c => phase.states.includes(c.state)).length
         : cumulativeDone;
@@ -234,7 +228,6 @@ function MilestonesView({ cards }: { cards: Card[] }) {
           ))}
         </div>
 
-        {/* Summary footer */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -264,6 +257,13 @@ export function BoardView() {
   const [createCardOpen, setCreateCardOpen] = useState(false);
   const [createCardState, setCreateCardState] = useState<CardState>('Planned');
   const [viewMode, setViewMode] = useState<'board' | 'milestones'>('board');
+  const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  // DnD sensors — require 8px movement before drag starts (avoids accidental drags)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
 
   useEffect(() => {
     if (projectId) {
@@ -275,6 +275,55 @@ export function BoardView() {
       setLoading(false);
     }
   }, [projectId]);
+
+  // ─── Drag handlers ───
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const card = event.active.data?.current?.card as Card | undefined;
+    if (card) setActiveCard(card);
+    setMoveError(null);
+  }, []);
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveCard(null);
+
+    if (!over) return;
+
+    const cardId = active.id as string;
+    const newState = over.id as CardState;
+
+    // Find the card
+    const card = cards.find(c => c.card_id === cardId);
+    if (!card || card.state === newState) return;
+
+    // Optimistically update UI
+    const previousCards = [...cards];
+    setCards(prev =>
+      prev.map(c => c.card_id === cardId ? { ...c, state: newState } : c)
+    );
+
+    // Persist to API
+    try {
+      await updateCardState(projectId, cardId, newState);
+      setMoveError(null);
+    } catch (err: any) {
+      // Revert on failure
+      setCards(previousCards);
+      const message = err?.message || 'Failed to move card. The transition may not be allowed.';
+      setMoveError(`Cannot move "${card.title}" to ${newState}: ${message}`);
+      // Auto-clear error after 5s
+      setTimeout(() => setMoveError(null), 5000);
+    }
+  }, [cards, projectId]);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveCard(null);
+  }, []);
+
+  const handleAddCard = useCallback((state: CardState) => {
+    setCreateCardState(state);
+    setCreateCardOpen(true);
+  }, []);
 
   const filteredCards = activeFilter === 'All'
     ? cards
@@ -299,6 +348,11 @@ export function BoardView() {
             <p className="text-xs text-muted-foreground mt-0.5">
               {totalCards} tasks · {blockedCount > 0 && <span className="text-red-400">{blockedCount} blocked</span>}
               {blockedCount > 0 && ' · '}{doneCount} completed
+              <span className="ml-2 text-muted-foreground/40">·</span>
+              <span className="ml-2 text-muted-foreground/50">
+                <GripVertical className="w-3 h-3 inline-block mr-0.5 -mt-0.5" />
+                Drag cards to update status
+              </span>
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -359,6 +413,21 @@ export function BoardView() {
         )}
       </div>
 
+      {/* Error toast for invalid moves */}
+      <AnimatePresence>
+        {moveError && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="mx-6 mt-3 px-4 py-3 rounded-lg border border-red-500/30 bg-red-500/[0.08] text-sm text-red-300 flex items-start gap-2"
+          >
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
+            <span>{moveError}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* View content */}
       <AnimatePresence mode="wait">
         {viewMode === 'board' ? (
@@ -370,30 +439,41 @@ export function BoardView() {
             transition={{ duration: 0.2 }}
             className="flex-1 overflow-x-auto overflow-y-hidden"
           >
-            {/* Kanban Columns */}
-            {/* Agent-managed info banner */}
-            <div className="flex items-center gap-1.5 px-4 pt-3 pb-0">
-              <Bot className="w-3 h-3 text-amber/60" />
-              <span className="text-[10px] text-muted-foreground/60">Agents manage card states automatically</span>
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              {loading ? (
+                <div className="flex gap-3 p-4 h-full min-w-max">
+                  {STATES.slice(0, 5).map(state => (
+                    <ColumnSkeleton key={state} />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex gap-3 p-4 h-full min-w-max">
+                  {STATES.map(state => (
+                    <BoardColumn
+                      key={state}
+                      state={state}
+                      cards={cardsByState[state] || []}
+                      onAddCard={handleAddCard}
+                    />
+                  ))}
+                </div>
+              )}
 
-            {loading ? (
-              <div className="flex gap-3 p-4 h-full min-w-max">
-                {STATES.slice(0, 5).map(state => (
-                  <ColumnSkeleton key={state} />
-                ))}
-              </div>
-            ) : (
-              <div className="flex gap-3 p-4 h-full min-w-max">
-                {STATES.map(state => (
-                  <BoardColumn
-                    key={state}
-                    state={state}
-                    cards={cardsByState[state] || []}
-                  />
-                ))}
-              </div>
-            )}
+              {/* Drag overlay — ghost card that follows the cursor */}
+              <DragOverlay dropAnimation={null}>
+                {activeCard ? (
+                  <div className="w-[280px] opacity-90 rotate-2 scale-105">
+                    <BoardCard card={activeCard} index={0} />
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </motion.div>
         ) : (
           <motion.div

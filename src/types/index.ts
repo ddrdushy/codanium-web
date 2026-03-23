@@ -62,7 +62,7 @@ export interface Agent {
 }
 
 // ─── SDLC Types ───
-export type SDLCStage = 'Business Analysis' | 'Architecture' | 'UI/UX Design' | 'Planning' | 'Development' | 'Code Review' | 'Testing' | 'Release' | 'Monitoring' | 'Iteration';
+export type SDLCStage = 'Idea & Planning' | 'Requirement Gathering' | 'Solution Design' | 'UX/UI Design' | 'Development' | 'Testing' | 'Deployment' | 'Maintenance & Improvement';
 
 export interface SDLCProgress {
   stage: SDLCStage;

@@ -63,9 +63,27 @@ function headers(config: ProviderConfig): Record<string, string> {
  * Assistant messages with tool calls include the tool_calls array.
  */
 function formatMessages(messages: LLMMessage[]): Array<Record<string, unknown>> {
-  const systemMsgs = messages.filter((m) => m.role === 'system');
-  const otherMsgs = messages.filter((m) => m.role !== 'system');
-  const ordered = [...systemMsgs, ...otherMsgs];
+  // Collect system messages that appear BEFORE any non-system message (true system prompts)
+  const leadingSystemMsgs: LLMMessage[] = [];
+  let foundNonSystem = false;
+  const rest: LLMMessage[] = [];
+
+  for (const msg of messages) {
+    if (!foundNonSystem && msg.role === 'system') {
+      leadingSystemMsgs.push(msg);
+    } else {
+      foundNonSystem = true;
+      if (msg.role === 'system') {
+        // Mid-conversation system message (e.g., loop warning) — convert to user message
+        // so it doesn't break APIs that require system messages only at the start
+        rest.push({ ...msg, role: 'user', content: `[System Note] ${msg.content}` });
+      } else {
+        rest.push(msg);
+      }
+    }
+  }
+
+  const ordered = [...leadingSystemMsgs, ...rest];
 
   return ordered.map((msg) => {
     if (msg.role === 'tool') {

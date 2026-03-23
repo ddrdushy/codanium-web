@@ -5,24 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
 import {
-  Settings, DollarSign, Bell, Sparkles, CheckCircle2, Info,
+  Settings, DollarSign, Bell, CheckCircle2, Info,
   Key, Trash2, Plus, Copy, Check as CheckIcon2,
-  Zap, Wrench, Eye, EyeOff, Loader2, AlertTriangle, Server,
-  Shield, MessageSquare, Save, X,
+  Loader2, Shield, MessageSquare, Save, X,
 } from 'lucide-react';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
-
-const PROVIDER_OPTIONS = [
-  { id: 'openai', label: 'OpenAI', icon: Zap, description: 'GPT-4o, GPT-4, GPT-3.5 Turbo', defaultModel: 'gpt-4o' },
-  { id: 'anthropic', label: 'Anthropic', icon: Sparkles, description: 'Claude Sonnet, Claude Haiku', defaultModel: 'claude-sonnet-4-20250514' },
-  { id: 'ollama', label: 'Ollama', icon: Server, description: 'Run models locally — free', defaultModel: 'llama3' },
-  { id: 'custom', label: 'Custom', icon: Wrench, description: 'Any OpenAI-compatible endpoint', defaultModel: '' },
-] as const;
-
-type ProviderType = typeof PROVIDER_OPTIONS[number]['id'];
 
 const APPROVAL_OPTIONS = [
   { id: 'everything', label: 'Approve everything', description: 'Your AI team asks before every major decision', badge: 'Most control' },
@@ -53,22 +42,6 @@ interface PlatformSettingsDrawerProps {
 }
 
 export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsDrawerProps) {
-  // AI Provider state
-  const [selectedProvider, setSelectedProvider] = useState<ProviderType>('openai');
-  const [apiKey, setApiKey] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [defaultModel, setDefaultModel] = useState('gpt-4o');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [testMessage, setTestMessage] = useState('');
-  const [existingConfig, setExistingConfig] = useState<any | null>(null);
-  const [savingProvider, setSavingProvider] = useState(false);
-  const [savedProvider, setSavedProvider] = useState(false);
-
-  const [loadingModels, setLoadingModels] = useState(false);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [modelAssessment, setModelAssessment] = useState<any | null>(null);
-
   // Budget & Preferences state
   const [monthlyBudget, setMonthlyBudget] = useState(500);
   const [alertThreshold, setAlertThreshold] = useState(75);
@@ -103,19 +76,6 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
       })
       .catch(() => {});
 
-    fetch('/api/llm/config')
-      .then(r => r.json())
-      .then(configs => {
-        if (Array.isArray(configs) && configs.length > 0) {
-          const config = configs[0];
-          setExistingConfig(config);
-          setSelectedProvider(config.provider as ProviderType);
-          setDefaultModel(config.defaultModel);
-          setBaseUrl(config.baseUrl || '');
-        }
-      })
-      .catch(() => {});
-
     fetch('/api/user/preferences')
       .then(r => r.json())
       .then(prefs => {
@@ -136,76 +96,7 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
       .catch(() => {});
   }, [open]);
 
-  useEffect(() => {
-    if (!existingConfig || selectedProvider !== existingConfig.provider) {
-      const provider = PROVIDER_OPTIONS.find(p => p.id === selectedProvider);
-      if (provider) setDefaultModel(provider.defaultModel);
-      setTestStatus('idle');
-      setTestMessage('');
-      setAvailableModels([]);
-    }
-  }, [selectedProvider, existingConfig]);
-
   // ─── Handlers ──────────────────────────────────────────────────────────
-
-  async function testConnection() {
-    setTestStatus('testing');
-    setTestMessage('');
-    setModelAssessment(null);
-    try {
-      const res = await fetch('/api/llm/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: selectedProvider,
-          apiKey: apiKey || undefined,
-          baseUrl: baseUrl || undefined,
-          defaultModel,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTestStatus('success');
-        setTestMessage(data.message || 'Connection successful!');
-        if (data.assessment) setModelAssessment(data.assessment);
-      } else {
-        setTestStatus('error');
-        setTestMessage(data.message || data.error || 'Connection failed');
-      }
-    } catch {
-      setTestStatus('error');
-      setTestMessage('Network error');
-    }
-  }
-
-  async function saveProvider() {
-    setSavingProvider(true);
-    setSavedProvider(false);
-    try {
-      if (existingConfig?.id) {
-        await fetch(`/api/llm/config?id=${existingConfig.id}`, { method: 'DELETE' });
-      }
-      const res = await fetch('/api/llm/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: selectedProvider,
-          apiKey: apiKey.trim() || undefined,
-          baseUrl: baseUrl.trim() || undefined,
-          defaultModel: defaultModel.trim(),
-        }),
-      });
-      if (res.ok) {
-        const newConfig = await res.json();
-        setExistingConfig(newConfig);
-        setSavedProvider(true);
-        setApiKey('');
-        setTimeout(() => setSavedProvider(false), 3000);
-      }
-    } catch {} finally {
-      setSavingProvider(false);
-    }
-  }
 
   async function savePreferences() {
     setSavingPrefs(true);
@@ -314,239 +205,6 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
 
             {/* Content (scrollable) */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-7">
-
-              {/* ─── AI Provider ──────────────────────────────────────────── */}
-              <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber" />
-                    <h3 className="text-sm font-semibold">AI Provider</h3>
-                    {existingConfig && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-medium">
-                        {existingConfig.provider}
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    onClick={saveProvider}
-                    disabled={savingProvider}
-                    size="sm"
-                    className="gap-1.5 h-7 text-xs bg-amber text-background hover:bg-amber/90"
-                  >
-                    {savingProvider ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : savedProvider ? (
-                      <><CheckCircle2 className="w-3 h-3" /> Saved</>
-                    ) : (
-                      <><Save className="w-3 h-3" /> Save</>
-                    )}
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  {PROVIDER_OPTIONS.map(({ id, label, icon: Icon, description }) => (
-                    <button
-                      key={id}
-                      onClick={() => setSelectedProvider(id)}
-                      className={cn(
-                        'flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all',
-                        selectedProvider === id
-                          ? 'border-amber bg-amber/10 shadow-sm shadow-amber/10'
-                          : 'border-border bg-[var(--surface)] hover:border-amber/30',
-                      )}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <Icon className={cn('w-4 h-4', selectedProvider === id ? 'text-amber' : 'text-muted-foreground')} />
-                        <span className={cn('text-xs font-semibold', selectedProvider === id ? 'text-amber' : '')}>{label}</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground leading-tight">{description}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {selectedProvider !== 'ollama' && (
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-muted-foreground">API Key</label>
-                    <div className="relative">
-                      <Input
-                        type={showApiKey ? 'text' : 'password'}
-                        placeholder={
-                          existingConfig?.apiKey ? existingConfig.apiKey
-                          : selectedProvider === 'openai' ? 'sk-...'
-                          : selectedProvider === 'anthropic' ? 'sk-ant-...'
-                          : 'Enter your API key'
-                        }
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        className="pr-10 h-9 text-xs bg-foreground/[0.03] border-border focus:border-amber/30"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-                      >
-                        {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                    <p className="text-[9px] text-muted-foreground/50">Encrypted with AES-256-GCM at rest.</p>
-                  </div>
-                )}
-
-                {(selectedProvider === 'ollama' || selectedProvider === 'custom') && (
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-muted-foreground">Base URL</label>
-                    <Input
-                      type="url"
-                      placeholder={selectedProvider === 'ollama' ? 'http://localhost:11434' : 'https://your-endpoint.com/v1'}
-                      value={baseUrl}
-                      onChange={(e) => setBaseUrl(e.target.value)}
-                      className="h-9 text-xs bg-foreground/[0.03] border-border focus:border-amber/30"
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-muted-foreground">Model</label>
-                  <div className="flex items-center gap-2">
-                    {availableModels.length > 0 ? (
-                      <select
-                        value={defaultModel}
-                        onChange={(e) => setDefaultModel(e.target.value)}
-                        className="flex-1 h-9 px-3 text-xs rounded-md border border-border bg-foreground/[0.03] text-foreground focus:border-amber/30 focus:outline-none cursor-pointer"
-                      >
-                        <option value="">Select a model...</option>
-                        {availableModels.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="flex-1 h-9 flex items-center px-3 text-xs text-muted-foreground/50 rounded-md border border-border bg-foreground/[0.03] italic">
-                        {defaultModel || 'Click Load Models →'}
-                      </span>
-                    )}
-                    <Button
-                      onClick={async () => {
-                        setLoadingModels(true);
-                        setAvailableModels([]);
-                        try {
-                          const res = await fetch('/api/llm/test', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              provider: selectedProvider,
-                              apiKey: apiKey || undefined,
-                              baseUrl: baseUrl || undefined,
-                            }),
-                          });
-                          const data = await res.json();
-                          if (res.ok && data.success && data.models?.length) {
-                            setAvailableModels(data.models);
-                            if (!defaultModel || !data.models.includes(defaultModel)) {
-                              setDefaultModel(data.models[0]);
-                            }
-                            setTestStatus('success');
-                            setTestMessage(`${data.models.length} model(s) loaded`);
-                          } else {
-                            setTestStatus('error');
-                            setTestMessage(data.message || 'Could not load models');
-                          }
-                        } catch {
-                          setTestStatus('error');
-                          setTestMessage('Network error');
-                        }
-                        setLoadingModels(false);
-                      }}
-                      disabled={loadingModels || (!apiKey.trim() && selectedProvider !== 'ollama')}
-                      variant="outline"
-                      size="sm"
-                      className="h-9 text-xs shrink-0 gap-1.5"
-                    >
-                      {loadingModels ? (
-                        <><Loader2 className="w-3 h-3 animate-spin" /> Loading...</>
-                      ) : (
-                        <><Server className="w-3 h-3" /> Load Models</>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={testConnection}
-                    disabled={testStatus === 'testing' || (!apiKey.trim() && selectedProvider !== 'ollama')}
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                  >
-                    {testStatus === 'testing' ? (
-                      <><Loader2 className="w-3 h-3 animate-spin mr-1.5" /> Testing...</>
-                    ) : (
-                      'Test Connection'
-                    )}
-                  </Button>
-                  {testStatus === 'success' && (
-                    <span className="flex items-center gap-1 text-[11px] text-emerald-500">
-                      <CheckCircle2 className="w-3 h-3" /> {testMessage}
-                    </span>
-                  )}
-                  {testStatus === 'error' && (
-                    <span className="flex items-center gap-1 text-[11px] text-red-400">
-                      <AlertTriangle className="w-3 h-3" /> {testMessage}
-                    </span>
-                  )}
-                </div>
-
-                {/* ── Model Capability Assessment ──────────────── */}
-                {modelAssessment && testStatus === 'success' && (
-                  <div className={`p-3 rounded-lg border ${
-                    modelAssessment.overall === 'excellent' ? 'bg-emerald-500/5 border-emerald-500/15' :
-                    modelAssessment.overall === 'good' ? 'bg-blue-500/5 border-blue-500/15' :
-                    modelAssessment.overall === 'fair' ? 'bg-amber-500/5 border-amber-500/15' :
-                    'bg-red-500/5 border-red-500/15'
-                  }`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                        modelAssessment.overall === 'excellent' ? 'bg-emerald-500/20 text-emerald-400' :
-                        modelAssessment.overall === 'good' ? 'bg-blue-500/20 text-blue-400' :
-                        modelAssessment.overall === 'fair' ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-red-500/20 text-red-400'
-                      }`}>{modelAssessment.overall}</span>
-                      <span className="text-[11px] font-medium text-foreground">Model Compatibility</span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mb-2.5 leading-relaxed">
-                      {modelAssessment.overallMessage}
-                    </p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {modelAssessment.capabilities?.map((cap: any) => (
-                        <div key={cap.name} className="flex items-center gap-1.5" title={cap.description}>
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            cap.rating === 'excellent' ? 'bg-emerald-400' :
-                            cap.rating === 'good' ? 'bg-blue-400' :
-                            cap.rating === 'fair' ? 'bg-amber-400' :
-                            'bg-red-400'
-                          }`} />
-                          <span className="text-[10px] text-muted-foreground truncate">{cap.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {modelAssessment.recommendation && (
-                      <p className="text-[10px] text-amber-400/80 mt-2 pt-2 border-t border-amber-500/10 leading-relaxed">
-                        {modelAssessment.recommendation}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/10">
-                  <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    <span className="font-medium text-amber-400">BYOM:</span>{' '}
-                    Configure your own LLM provider to power your AI team. Supports OpenAI, Anthropic, and Ollama.
-                  </p>
-                </div>
-              </section>
-
-              <div className="border-t border-border" />
 
               {/* ─── Budget ───────────────────────────────────────────────── */}
               <section className="space-y-4">

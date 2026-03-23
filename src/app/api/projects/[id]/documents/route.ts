@@ -131,3 +131,36 @@ export async function PATCH(
     return NextResponse.json({ error: 'Failed to update document' }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/projects/[id]/documents?id=xxx
+ * Delete a document by id.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: projectId } = await params;
+    const docId = new URL(request.url).searchParams.get('id');
+
+    if (!docId) {
+      return NextResponse.json({ error: 'Document id is required (query param ?id=)' }, { status: 400 });
+    }
+
+    const doc = await prisma.document.findFirst({
+      where: { id: docId, projectId },
+    });
+
+    if (!doc) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+    }
+
+    await prisma.document.delete({ where: { id: docId } });
+
+    return NextResponse.json({ success: true, id: docId });
+  } catch (error) {
+    console.error('DELETE /api/projects/[id]/documents error:', error);
+    return NextResponse.json({ error: 'Failed to delete document' }, { status: 500 });
+  }
+}

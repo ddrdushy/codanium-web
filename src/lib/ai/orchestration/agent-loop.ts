@@ -39,7 +39,7 @@
 // =============================================================================
 
 import { runInputGuardrails } from './graph/guardrails';
-import { messageRouter } from './router';
+import { messageRouter, VSCODE_REQUIRED_SENTINEL } from './router';
 import { contextBuilder } from '@/lib/ai/context/context-builder';
 import { getAgentDefinition } from '@/lib/ai/agents/registry';
 import { llmGateway } from '@/lib/ai/gateway';
@@ -51,6 +51,7 @@ import { agentStateManager } from './state-manager';
 import { eventBus } from './event-bus';
 import { createTraceCollector, type TraceCollector } from './telemetry';
 import { prisma } from '@/lib/prisma';
+import { isVSCodeConnected } from '@/lib/vscode-bridge';
 import type {
   LLMMessage,
   LLMToolCall,
@@ -94,6 +95,23 @@ const MAX_LLM_ATTEMPTS = 3;
 const MAX_PIPELINE_DEPTH = 15;
 const MAX_CONSULTATION_DEPTH = 3;
 const TOOL_ERROR_CIRCUIT_BREAKER = 3;
+
+// ---------------------------------------------------------------------------
+// Development Agent Gate — VS Code Required
+// ---------------------------------------------------------------------------
+
+/**
+ * Agents that execute code generation, file writing, deployment, or infrastructure.
+ * These MUST run from VS Code, not from the web browser.
+ *
+ * Web-only agents (NOT gated): BA, SA, PM, UX, DEC, ORC, CA, AUD, PRE, LLM, STC
+ */
+export const DEV_AGENTS = new Set([
+  'TL', 'JD', 'SD',              // Engineering — code generation & review
+  'QA', 'AT', 'PF',              // Testing & Performance
+  'DO', 'PE', 'IE', 'SM', 'SR', 'SEC',  // Platform, DevOps & Security
+  'UX',                           // UX — when generating code artifacts (not design docs)
+]);
 
 // ---------------------------------------------------------------------------
 // Model Downgrade Map
@@ -180,16 +198,22 @@ function matchPipelineRule(
 // ---------------------------------------------------------------------------
 
 const AGENT_STAGE_MAP: Record<string, string> = {
-  BA: 'Business Analysis',
-  SA: 'Architecture',
-  UX: 'UI/UX Design',
-  PM: 'Planning',
-  DO: 'Development',
+  PM: 'Idea & Planning',
+  BA: 'Requirement Gathering',
+  SA: 'Solution Design',
+  UX: 'UX/UI Design',
   TL: 'Development',
   JD: 'Development',
   SD: 'Development',
+  DO: 'Development',
   QA: 'Testing',
-  SEC: 'Code Review',
+  AT: 'Testing',
+  PF: 'Testing',
+  SEC: 'Testing',
+  PE: 'Deployment',
+  SR: 'Deployment',
+  // Maintenance — all agents can contribute
+  CM: 'Maintenance & Improvement',
 };
 
 async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promise<void> {
@@ -300,8 +324,38 @@ function extractTextToolCalls(content: string): LLMToolCall[] {
   const toolCalls: LLMToolCall[] = [];
   for (const toolName of TEXT_TOOL_NAMES) {
     const upper = toolName.toUpperCase();
+    // Pattern 1: [CREATE_CARD] { json }
     const re1 = new RegExp(`\\[\\s*${upper}\\s*\\]\\s*\\{([\\s\\S]*?)\\}`, 'gi');
+    // Pattern 2: [CREATE_CARD { json }]
     const re2 = new RegExp(`\\[\\s*${upper}\\s+\\{([\\s\\S]*?)\\}\\s*\\]`, 'gi');
+    // Pattern 3: [CREATE_DOCUMENT] <parameter=type> SDD </parameter> <parameter=content> ... </parameter>
+    // Capture everything from the first <parameter until the last </parameter> or end-of-block marker
+    const re3 = new RegExp(`\\[\\s*${upper}\\s*\\]\\s*(<parameter[\\s\\S]*</parameter>)`, 'gi');
+    let m3;
+    while ((m3 = re3.exec(content)) !== null) {
+      try {
+        const xmlBlock = m3[1];
+        const args: Record<string, string> = {};
+        // Match all <parameter=key>value</parameter> pairs — use greedy match for content
+        const paramRegex = /<parameter(?:=|\s+name=")([^">]+)"?\s*>([\s\S]*?)<\/parameter>/gi;
+        let pm;
+        while ((pm = paramRegex.exec(xmlBlock)) !== null) {
+          const key = pm[1].trim();
+          const val = pm[2].trim();
+          // For 'content' param, keep full value even if it's long
+          args[key] = val;
+        }
+        if (Object.keys(args).length > 0) {
+          toolCalls.push({
+            id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name: toolName,
+            arguments: args,
+          });
+          console.log(`[AgentLoop] Extracted XML tool call: ${toolName}(${Object.keys(args).join(', ')})`);
+        }
+      } catch { /* skip malformed XML */ }
+    }
+
     for (const re of [re1, re2]) {
       let m;
       while ((m = re.exec(content)) !== null) {
@@ -363,6 +417,36 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
 
     console.log(`[AgentLoop] Routed to: ${currentAgent} (depth: ${pipelineDepth})`);
 
+    // ── VS Code Gate ─────────────────────────────────────────────────────
+    // Development agents require VS Code. This catches two cases:
+    // (a) Router already detected VS Code is missing and returned the sentinel
+    // (b) Agent was explicitly targeted (bypassed router) but VS Code is down
+    let vsCodeBlocked = currentAgent === VSCODE_REQUIRED_SENTINEL;
+
+    if (!vsCodeBlocked && DEV_AGENTS.has(currentAgent)) {
+      const connected = await isVSCodeConnected(input.projectId);
+      if (!connected) vsCodeBlocked = true;
+    }
+
+    if (vsCodeBlocked) {
+      const agentLabel = currentAgent === VSCODE_REQUIRED_SENTINEL
+        ? 'Development' : currentAgent;
+
+      console.log(`[AgentLoop] ⏸ VS Code not connected. Gating ${agentLabel} — emitting vscode_required.`);
+      yield {
+        type: 'vscode_required',
+        data: {
+          agent: agentLabel,
+          message: `Development requires VS Code. Please open VS Code with the AI Team Studio extension connected to this project, then try again.`,
+          deepLink: `vscode://ai-team-studio/resume?projectId=${input.projectId}`,
+        },
+      };
+      if (currentAgent !== VSCODE_REQUIRED_SENTINEL) {
+        await agentStateManager.setIdle(input.projectId, currentAgent);
+      }
+      return; // Halt — do not run the agent
+    }
+
     const agentDef = getAgentDefinition(currentAgent);
 
     // ── 3. Build Context ─────────────────────────────────────────────────
@@ -375,11 +459,16 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
       ? `[PIPELINE] ${sanitizedMessage}\n\nYou are in PIPELINE MODE. Work autonomously — do NOT ask the user questions. Read the project documents in your context and produce your deliverables.`
       : sanitizedMessage;
 
+    // Consolidate all system content into ONE system message at the start
+    // (NVIDIA and some providers reject multiple system messages)
+    const correction = buildContextCorrection(currentAgent);
+    const fullSystemMessage = correction
+      ? `${context.systemMessage}\n\n${correction}`
+      : context.systemMessage;
+
     const messages: LLMMessage[] = [
-      { role: 'system', content: context.systemMessage },
+      { role: 'system', content: fullSystemMessage },
       ...context.recentHistory,
-      // Inject context correction AFTER history — overrides any bad patterns in previous messages
-      { role: 'system', content: buildContextCorrection(currentAgent) },
       { role: 'user', content: userContent },
     ];
 
@@ -416,12 +505,31 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
       recentResponses: [],
     };
 
+    let consecutiveLoopWarnings = 0;
+
     for (let iteration = 0; iteration < MAX_TOOL_LOOPS; iteration++) {
       // ── Loop detection ───────────────────────────────────────────────
       const loopWarning = checkLoops(loopState);
       if (loopWarning) {
-        console.warn(`[AgentLoop] Loop detected (${loopWarning.type})`);
+        consecutiveLoopWarnings++;
+        console.warn(`[AgentLoop] Loop detected (${loopWarning.type}), warning #${consecutiveLoopWarnings}`);
+
+        // Hard stop: if we've warned 2+ times and the agent keeps looping, break
+        if (consecutiveLoopWarnings >= 2) {
+          console.error(`[AgentLoop] ⛔ Hard stop: ${consecutiveLoopWarnings} consecutive loop warnings for ${currentAgent}. Aborting.`);
+          yield {
+            type: 'chunk',
+            data: {
+              content: '\n\nI encountered a repeated issue and stopped to avoid going in circles. ' +
+                'The operation may require manual intervention or different conditions to proceed.',
+            },
+          };
+          break;
+        }
+
         messages.push({ role: 'system', content: loopWarning.message });
+      } else {
+        consecutiveLoopWarnings = 0;
       }
 
       // ── Stream LLM (with retry + model downgrade) ────────────────────
@@ -458,14 +566,16 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
               // ── Repetition loop detector ────────────────────────────
               // If the LLM starts repeating the same token/phrase (e.g. "[TL] [TL] [TL]...")
               // abort early to avoid wasting tokens and showing garbage to the user.
-              if (iterContent.length > 200) {
-                const tail = iterContent.slice(-300);
-                // Check for generic repeating patterns
-                const repMatch = tail.match(/(.{3,15})\1{7,}/);
+              if (iterContent.length > 400) {
+                const tail = iterContent.slice(-400);
+                // Check for generic repeating patterns (but ignore table/diagram separators)
+                const repMatch = tail.match(/(.{5,15})\1{9,}/);
+                // Exclude table/diagram patterns from repetition detection
+                const isTableOrDiagram = repMatch && /^[-|+= ┌─┐└┘├┤┬┴┼\s]+$/.test(repMatch[1]);
                 // Check for LLM attention collapse spamming agent tags like "[TL] [TL] [TL]"
                 const tagSpamMatch = tail.match(/(\[\s*[A-Z]{2,3}\s*\]\s*){8,}/);
                 
-                if (repMatch || tagSpamMatch) {
+                if ((repMatch && !isTableOrDiagram) || tagSpamMatch) {
                   console.warn(`[AgentLoop] ⚠️ Repetition loop detected for ${currentAgent}. Aborting.`);
                   // Truncate to content before the repetition started
                   let repStart = -1;
@@ -801,9 +911,14 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
 
         // 5b. Check parsed delegation markers ([DELEGATE:AGENT]...[/DELEGATE])
         if (!nextAgent && parsed.delegateTo) {
-          nextAgent = parsed.delegateTo;
-          nextContext = parsed.delegateContext || `Continue from ${currentAgent}. Previous output available in chat history.`;
-          console.log(`[AgentLoop] Delegation routing: ${currentAgent} -> ${nextAgent} (via [DELEGATE] marker)`);
+          // Block self-delegation (agent delegating to itself is a no-op)
+          if (parsed.delegateTo === currentAgent) {
+            console.log(`[AgentLoop] Blocked self-delegation: ${currentAgent} -> ${currentAgent} (no-op)`);
+          } else {
+            nextAgent = parsed.delegateTo;
+            nextContext = parsed.delegateContext || `Continue from ${currentAgent}. Previous output available in chat history.`;
+            console.log(`[AgentLoop] Delegation routing: ${currentAgent} -> ${nextAgent} (via [DELEGATE] marker)`);
+          }
         }
 
         // 5c. Fallback: use default next agent map (works even on first call now)
@@ -815,7 +930,9 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             if (fallback.requiresApproval) {
               gateOpen = await isDocumentApproved(input.projectId, fallback.requiresApproval);
               if (!gateOpen) {
-                console.log(`[AgentLoop] Fallback blocked: ${fallback.requiresApproval} not yet APPROVED`);
+                // Gate not open — agent stays in current phase (e.g., BA keeps asking questions)
+                // This is normal during requirement gathering before BRD is approved
+                console.log(`[AgentLoop] Fallback gate not open: ${fallback.requiresApproval} not yet APPROVED — ${currentAgent} stays in current phase`);
               }
             }
             if (gateOpen) {

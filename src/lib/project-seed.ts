@@ -6,16 +6,14 @@ import { initializeRepo } from '@/lib/git/repo-manager';
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const SDLC_STAGES = [
-  'Business Analysis',
-  'Architecture',
-  'UI/UX Design',
-  'Planning',
+  'Idea & Planning',
+  'Requirement Gathering',
+  'Solution Design',
+  'UX/UI Design',
   'Development',
-  'Code Review',
   'Testing',
-  'Release',
-  'Monitoring',
-  'Iteration',
+  'Deployment',
+  'Maintenance & Improvement',
 ] as const;
 
 const AGENT_AVATARS: Record<string, string> = {

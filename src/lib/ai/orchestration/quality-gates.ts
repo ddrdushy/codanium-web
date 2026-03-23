@@ -26,7 +26,7 @@ export interface GateResult {
 }
 
 interface GatePrerequisite {
-  type: 'document_approved' | 'wireframes_approved' | 'cards_exist' | 'scaffold_exists' | 'code_exists';
+  type: 'document_approved' | 'wireframes_approved' | 'cards_exist' | 'scaffold_exists' | 'code_exists' | 'tests_pass' | 'deployment_exists';
   /** For document_approved: which document type (BRD, SDD, etc.) */
   docType?: string;
   /** Human-readable description of what's needed. */
@@ -45,30 +45,55 @@ interface GatePrerequisite {
  * Value = list of prerequisites that must pass.
  */
 const STAGE_COMPLETION_GATES: Record<string, GatePrerequisite[]> = {
-  'Business Analysis': [
+  'Idea & Planning': [
     {
       type: 'document_approved',
       docType: 'BRD',
-      message: 'The Business Requirements Document (BRD) must be approved before moving to Architecture.',
+      message: 'A project vision or BRD document must exist before moving to Requirement Gathering.',
     },
   ],
-  'Architecture': [
+  'Requirement Gathering': [
+    {
+      type: 'document_approved',
+      docType: 'BRD',
+      message: 'The Business Requirements Document (BRD) must be approved before moving to Solution Design.',
+    },
+  ],
+  'Solution Design': [
     {
       type: 'document_approved',
       docType: 'SDD',
-      message: 'The System Design Document (SDD) must be approved before moving to UI/UX Design.',
+      message: 'The System Design Document (SDD/HLD) must be approved before moving to UX/UI Design.',
     },
   ],
-  'Planning': [
+  'UX/UI Design': [
     {
-      type: 'cards_exist',
-      message: 'Task cards must exist on the board before moving to Development.',
+      type: 'wireframes_approved',
+      message: 'Wireframes or UI designs must exist before moving to Development.',
     },
   ],
   'Development': [
     {
+      type: 'cards_exist',
+      message: 'Task cards must exist on the board before starting Development.',
+    },
+  ],
+  'Testing': [
+    {
       type: 'code_exists',
-      message: 'Code artifacts must exist before marking Development as completed.',
+      message: 'Code artifacts must exist before starting Testing.',
+    },
+  ],
+  'Deployment': [
+    {
+      type: 'tests_pass',
+      message: 'All tests must pass before Deployment.',
+    },
+  ],
+  'Maintenance & Improvement': [
+    {
+      type: 'deployment_exists',
+      message: 'System must be deployed before entering Maintenance.',
     },
   ],
 };
@@ -229,6 +254,32 @@ async function evaluatePrerequisite(
         passed,
         reason: passed ? undefined : prereq.message,
         blockedBy: passed ? undefined : 'Source code files (src/)',
+      };
+    }
+    case 'tests_pass': {
+      // For now, check that Testing stage is completed or QA cards are done
+      const testingStage = await prisma.sDLCStage.findFirst({
+        where: { projectId, name: 'Testing' },
+        select: { status: true },
+      });
+      const passed = testingStage?.status === 'COMPLETED';
+      return {
+        passed,
+        reason: passed ? undefined : prereq.message,
+        blockedBy: passed ? undefined : 'Testing phase completion',
+      };
+    }
+    case 'deployment_exists': {
+      // Check that Deployment stage is completed
+      const deployStage = await prisma.sDLCStage.findFirst({
+        where: { projectId, name: 'Deployment' },
+        select: { status: true },
+      });
+      const passed = deployStage?.status === 'COMPLETED';
+      return {
+        passed,
+        reason: passed ? undefined : prereq.message,
+        blockedBy: passed ? undefined : 'Deployment phase completion',
       };
     }
     default:

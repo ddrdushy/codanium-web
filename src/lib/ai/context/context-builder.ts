@@ -439,7 +439,9 @@ END PROJECT CONSTITUTION
         return { role: 'user', content: msg.content };
       }
       if (msg.role === 'SYSTEM') {
-        return { role: 'system', content: msg.content };
+        // Convert chat history system messages to user messages to avoid
+        // breaking APIs that require system messages only at the beginning
+        return { role: 'user', content: `[System] ${msg.content}` };
       }
       // AGENT messages become assistant messages, prefixed with agent identity
       const prefix = msg.agent ? `[${msg.agent.shortName}] ` : '';
@@ -501,10 +503,14 @@ function formatSDLCStages(data: unknown): string {
 
   // Gate requirements for each stage (what's needed to advance past it)
   const gateReqs: Record<string, string> = {
-    'Business Analysis': 'Gate: BRD must be APPROVED by user before advancing',
-    'Architecture': 'Gate: SDD must be APPROVED by user before advancing',
-    'UI/UX Design': 'Gate: Wireframes must be APPROVED by user before advancing',
-    'Planning': 'Gate: Task cards must exist on the board before advancing',
+    'Idea & Planning': 'Gate: Vision/BRD document must exist before advancing',
+    'Requirement Gathering': 'Gate: BRD must be APPROVED by user before advancing',
+    'Solution Design': 'Gate: SDD/HLD must be APPROVED by user before advancing',
+    'UX/UI Design': 'Gate: Wireframes must be APPROVED by user before advancing',
+    'Development': 'Gate: Task cards must exist on the board before advancing',
+    'Testing': 'Gate: Code artifacts must exist before advancing',
+    'Deployment': 'Gate: All tests must pass before deploying',
+    'Maintenance & Improvement': 'Gate: System must be deployed before maintenance',
   };
 
   const lines = stages.map((s) => {

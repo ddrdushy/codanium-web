@@ -155,7 +155,7 @@ model Project {
   name         String
   description  String        @default("")
   status       ProjectStatus @default(ACTIVE)
-  currentStage String        @default("Business Analysis")
+  currentStage String        @default("Idea & Planning")
   completion   Int           @default(0) // 0-100
   color        String        @default("#f59e0b")
 
@@ -755,7 +755,6 @@ model LLMProviderConfig {
 }
 
 enum ConfigScope {
-  USER
   PROJECT
   AGENT
 }

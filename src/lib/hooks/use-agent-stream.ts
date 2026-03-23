@@ -44,6 +44,12 @@ export interface ErrorData {
   message: string;
 }
 
+export interface VSCodeRequiredData {
+  agent: string;
+  message: string;
+  deepLink: string;
+}
+
 export interface ToolCallData {
   name: string;
   arguments: Record<string, unknown>;
@@ -81,6 +87,7 @@ export interface StreamCallbacks {
   onToolResult?: (data: ToolResultData) => void;
   onPipelineProgress?: (data: PipelineProgressData) => void;
   onInfo?: (data: InfoData) => void;
+  onVSCodeRequired?: (data: VSCodeRequiredData) => void;
 }
 
 // ─── SSE Parser ─────────────────────────────────────────────────────────────
@@ -199,6 +206,9 @@ function dispatchSSEEvent(
       break;
     case 'info':
       callbacks.onInfo?.(parsed as InfoData);
+      break;
+    case 'vscode_required':
+      callbacks.onVSCodeRequired?.(parsed as VSCodeRequiredData);
       break;
     default:
       // Unknown event types are silently ignored per SSE spec
@@ -355,6 +365,8 @@ export interface AgentStreamState {
   error: string | null;
   /** Pipeline progress info */
   pipelineProgress: PipelineProgressData | null;
+  /** VS Code gate: set when a dev agent requires VS Code to run */
+  vscodeRequired: { agent: string; message: string; deepLink: string } | null;
 }
 
 /**
@@ -382,6 +394,7 @@ export function useAgentStream(): AgentStreamState {
   const [usage, setUsage] = useState<UsageData['tokensUsed'] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pipelineProgress, setPipelineProgress] = useState<PipelineProgressData | null>(null);
+  const [vscodeRequired, setVscodeRequired] = useState<{ agent: string; message: string; deepLink: string } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   // Batching refs — accumulate tokens and flush at ~30fps instead of per-token
@@ -425,6 +438,7 @@ export function useAgentStream(): AgentStreamState {
       setUsage(null);
       setError(null);
       setPipelineProgress(null);
+      setVscodeRequired(null);
 
       try {
         await streamChat(
@@ -517,6 +531,10 @@ export function useAgentStream(): AgentStreamState {
             onInfo: () => {
               // Info events are logged but not displayed to user
             },
+            onVSCodeRequired: (data) => {
+              setVscodeRequired(data);
+              setIsStreaming(false);
+            },
           },
           controller.signal,
           cardId,
@@ -565,5 +583,6 @@ export function useAgentStream(): AgentStreamState {
     usage,
     error,
     pipelineProgress,
+    vscodeRequired,
   };
 }

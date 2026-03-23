@@ -85,6 +85,8 @@ export default function SettingsPage() {
   const [defaultProvider, setDefaultProvider] = useState('anthropic');
   const [defaultModel, setDefaultModel] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
+  const [llmApiKey, setLlmApiKey] = useState('');
+  const [showLlmApiKey, setShowLlmApiKey] = useState(false);
   const [maxTokens, setMaxTokens] = useState('4096');
   const [temperature, setTemperature] = useState('0.7');
   const [testingLlm, setTestingLlm] = useState(false);
@@ -95,12 +97,12 @@ export default function SettingsPage() {
 
   // ─── Feature Flags state ───
   const [featureFlags, setFeatureFlags] = useState({
-    autoScaling: true,
-    multiProject: true,
-    realTimeCollab: true,
-    advancedAnalytics: false,
-    customTraining: false,
-    apiAccess: true,
+    agentChat: true,
+    boardDragDrop: true,
+    decisionApprovals: true,
+    vsCodeIntegration: true,
+    gitIntegration: false,
+    webhooks: false,
   });
 
   // ─── Email Configuration state ───
@@ -150,15 +152,19 @@ export default function SettingsPage() {
         if (settings['llm.baseUrl']) {
           setBaseUrl(settings['llm.baseUrl']);
         }
+        if (settings['llm.apiKey']) {
+          // Show masked version — actual key is encrypted in DB
+          setLlmApiKey(settings['llm.apiKey']);
+        }
         if (settings['featureFlags']) {
           const ff = settings['featureFlags'];
           setFeatureFlags((prev) => ({
-            autoScaling: ff.autoScaling ?? prev.autoScaling,
-            multiProject: ff.multiProject ?? prev.multiProject,
-            realTimeCollab: ff.realTimeCollab ?? prev.realTimeCollab,
-            advancedAnalytics: ff.advancedAnalytics ?? prev.advancedAnalytics,
-            customTraining: ff.customTraining ?? prev.customTraining,
-            apiAccess: ff.apiAccess ?? prev.apiAccess,
+            agentChat: ff.agentChat ?? prev.agentChat,
+            boardDragDrop: ff.boardDragDrop ?? prev.boardDragDrop,
+            decisionApprovals: ff.decisionApprovals ?? prev.decisionApprovals,
+            vsCodeIntegration: ff.vsCodeIntegration ?? prev.vsCodeIntegration,
+            gitIntegration: ff.gitIntegration ?? prev.gitIntegration,
+            webhooks: ff.webhooks ?? prev.webhooks,
           }));
         }
         // Email settings
@@ -219,6 +225,7 @@ export default function SettingsPage() {
         'llm.defaultProvider': defaultProvider,
         'llm.defaultModel': defaultModel,
         'llm.baseUrl': baseUrl,
+        'llm.apiKey': llmApiKey,
         'llm.maxTokens': Number(maxTokens),
         'llm.temperature': Number(temperature),
         featureFlags,
@@ -301,6 +308,25 @@ export default function SettingsPage() {
               />
             </SettingField>
           )}
+          {defaultProvider !== 'ollama' && (
+            <SettingField label="API Key">
+              <div className="flex items-center gap-2">
+                <input
+                  type={showLlmApiKey ? 'text' : 'password'}
+                  value={llmApiKey}
+                  onChange={(e) => setLlmApiKey(e.target.value)}
+                  placeholder={defaultProvider === 'openai' ? 'sk-...' : defaultProvider === 'anthropic' ? 'sk-ant-...' : 'API key'}
+                  className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 font-mono"
+                />
+                <button
+                  onClick={() => setShowLlmApiKey(!showLlmApiKey)}
+                  className="h-8 px-2 rounded-md border border-border bg-background text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showLlmApiKey ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </SettingField>
+          )}
           <SettingField label="Default Model">
             <div className="flex items-center gap-2">
               {availableModels.length > 0 ? (
@@ -332,6 +358,7 @@ export default function SettingsPage() {
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         provider: defaultProvider,
+                        apiKey: llmApiKey || undefined,
                         baseUrl: baseUrl || undefined,
                       }),
                     });
@@ -399,6 +426,7 @@ export default function SettingsPage() {
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         provider: defaultProvider,
+                        apiKey: llmApiKey || undefined,
                         baseUrl: baseUrl || undefined,
                         defaultModel: defaultModel.trim(),
                       }),
@@ -444,31 +472,31 @@ export default function SettingsPage() {
         </div>
       </motion.div>
 
-      {/* Rate Limits */}
+      {/* Usage Limits */}
       <motion.div
         variants={itemVariants}
         className="glass-card rounded-xl border border-border/50 p-6"
       >
         <SectionHeader
           icon={<Zap className="w-4 h-4" />}
-          title="Rate Limits"
-          subtitle="Request throttling per plan tier"
+          title="Usage Limits"
+          subtitle="Platform-wide resource limits"
           color="#3b82f6"
         />
         <div className="space-y-0">
-          <SettingField label="Starter">
+          <SettingField label="Max Projects per User">
             <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
-              60 RPM
+              10
             </span>
           </SettingField>
-          <SettingField label="Pro">
+          <SettingField label="Max Agents per Project">
             <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
-              300 RPM
+              23
             </span>
           </SettingField>
-          <SettingField label="Enterprise">
+          <SettingField label="Max API Keys per User">
             <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
-              Unlimited
+              2
             </span>
           </SettingField>
         </div>
@@ -840,12 +868,12 @@ export default function SettingsPage() {
         />
         <div className="space-y-4">
           {([
-            { key: 'autoScaling' as const, label: 'Agent Auto-scaling' },
-            { key: 'multiProject' as const, label: 'Multi-project Support' },
-            { key: 'realTimeCollab' as const, label: 'Real-time Collaboration' },
-            { key: 'advancedAnalytics' as const, label: 'Advanced Analytics' },
-            { key: 'customTraining' as const, label: 'Custom Agent Training' },
-            { key: 'apiAccess' as const, label: 'API Access' },
+            { key: 'agentChat' as const, label: 'Agent Chat (AI conversations)' },
+            { key: 'boardDragDrop' as const, label: 'Board Card Management (drag & drop)' },
+            { key: 'decisionApprovals' as const, label: 'Decision Approvals' },
+            { key: 'vsCodeIntegration' as const, label: 'VS Code Integration' },
+            { key: 'gitIntegration' as const, label: 'Git Integration (branches, PRs)' },
+            { key: 'webhooks' as const, label: 'Webhooks (external notifications)' },
           ]).map((feature) => (
             <div
               key={feature.key}

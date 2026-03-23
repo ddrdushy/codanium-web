@@ -154,7 +154,7 @@ function checkToolLoop(recentToolCalls: TrackedToolCall[]): LoopWarning | null {
     return null;
   }
 
-  // Count occurrences of each (name, args) pair
+  // Count occurrences of each (name, args) pair — exact match
   const callCounts = new Map<string, number>();
   for (const tc of windowCalls) {
     const key = `${tc.name}::${tc.args}`;
@@ -170,9 +170,50 @@ function checkToolLoop(recentToolCalls: TrackedToolCall[]): LoopWarning | null {
       return {
         type: 'tool_loop',
         message:
-          'WARNING: You are calling the same tool repeatedly with identical arguments. ' +
-          'This suggests you are stuck in a loop. Try a different approach or skip this action.',
+          'STOP: You are calling the same tool repeatedly with identical arguments. ' +
+          'This means the operation is failing or not achieving the desired result. ' +
+          'Do NOT retry. Instead, inform the user what happened and what they can do.',
       };
+    }
+  }
+
+  // Count occurrences of the same tool name (regardless of args) — catches
+  // loops where the agent slightly varies arguments each iteration
+  const nameOnlyCounts = new Map<string, number>();
+  for (const tc of windowCalls) {
+    nameOnlyCounts.set(tc.name, (nameOnlyCounts.get(tc.name) ?? 0) + 1);
+  }
+
+  for (const [toolName, count] of nameOnlyCounts) {
+    if (count >= 3) {
+      // Check similarity between args of these calls
+      const argsForTool = windowCalls
+        .filter(tc => tc.name === toolName)
+        .map(tc => normalizeText(tc.args));
+
+      let similarPairs = 0;
+      let totalPairs = 0;
+      for (let i = 0; i < argsForTool.length; i++) {
+        for (let j = i + 1; j < argsForTool.length; j++) {
+          totalPairs++;
+          if (computeSimilarity(argsForTool[i], argsForTool[j]) > 0.6) {
+            similarPairs++;
+          }
+        }
+      }
+
+      if (totalPairs > 0 && similarPairs / totalPairs >= 0.5) {
+        console.warn(
+          `[LoopDetector] Fuzzy tool loop detected: "${toolName}" called ${count} times with similar args`,
+        );
+        return {
+          type: 'tool_loop',
+          message:
+            'STOP: You are calling the same tool repeatedly with similar arguments. ' +
+            'This means the operation is not working as expected. ' +
+            'Do NOT retry. Summarize the problem for the user and stop.',
+        };
+      }
     }
   }
 

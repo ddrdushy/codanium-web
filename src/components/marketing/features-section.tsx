@@ -25,7 +25,7 @@ const features = [
     icon: Workflow,
     title: 'End-to-End Delivery',
     description:
-      'Your project moves through 10 stages from requirements to launch, with quality checks at every step.',
+      'Your project moves through 8 phases from idea to launch, with quality checks at every step.',
     color: 'text-amber-400',
     bg: 'bg-amber-400/10',
     border: 'border-amber-400/20',

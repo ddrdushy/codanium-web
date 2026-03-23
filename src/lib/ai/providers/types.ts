@@ -1,8 +1,8 @@
 // =============================================================================
-// AI Team Studio — BYOM Provider Type System
+// AI Team Studio — LLM Provider Type System
 // =============================================================================
-// Core interfaces for the Bring-Your-Own-Model provider architecture.
-// Every LLM adapter (OpenAI, Anthropic, Gemini, local, mock, etc.)
+// Core interfaces for the multi-provider LLM architecture.
+// Every LLM adapter (OpenAI, Anthropic, Ollama, mock, etc.)
 // implements these contracts so the rest of the platform stays provider-agnostic.
 // =============================================================================
 

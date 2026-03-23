@@ -92,7 +92,7 @@ const mockWireframes: Wireframe[] = [
   { id: 'wf-003', title: 'Agent Chat Interface', screen: 'chat', status: 'review', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '6h ago', components: 18, version: 2 },
   { id: 'wf-004', title: 'Decision Panel', screen: 'decisions', status: 'approved', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '4d ago', components: 16, version: 4 },
   { id: 'wf-005', title: 'Mobile Login (.pen)', screen: 'login', status: 'draft', device: 'mobile', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '1h ago', components: 8, version: 1, penData: samplePenDoc },
-  { id: 'wf-006', title: 'Settings - LLM Config', screen: 'settings', status: 'draft', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '2h ago', components: 12, version: 1 },
+  { id: 'wf-006', title: 'Settings & Preferences', screen: 'settings', status: 'draft', device: 'desktop', owner: 'UI/UX Designer', ownerAvatar: '🎨', lastUpdated: '2h ago', components: 12, version: 1 },
 ];
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
