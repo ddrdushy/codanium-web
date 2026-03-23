@@ -275,6 +275,10 @@ async function handleCreateCard(
   projectId: string,
   agentId?: string,
 ) {
+  if (!args.title || typeof args.title !== 'string' || !args.title.trim()) {
+    return { success: false, error: 'Card title is required. Provide a clear, descriptive title.' };
+  }
+
   // Append requirement IDs to description for traceability
   let description = args.description || '';
   const requirementIds: string[] = args.requirementIds || [];

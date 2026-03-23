@@ -91,6 +91,7 @@ export type UserIntent =
   | 'testing'
   | 'architecture'
   | 'code_generation'
+  | 'card_management'
   | 'general';
 
 // ---------------------------------------------------------------------------

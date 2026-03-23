@@ -878,6 +878,13 @@ export default function ChatPage() {
             )}
             {renderedMessages}
 
+            {isStreaming && !activeContent && (
+              <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+                <span className="w-2 h-2 rounded-full bg-amber" style={{ animation: 'pulse-dot 1.4s ease-in-out infinite' }} />
+                <span>{activeAgent?.name || 'Agent'} is working...</span>
+              </div>
+            )}
+
             {showStreamBubble && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 <div className="flex items-start gap-3">

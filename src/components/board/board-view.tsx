@@ -276,6 +276,15 @@ export function BoardView() {
     }
   }, [projectId]);
 
+  // ─── Poll for card updates every 5 seconds ───
+  useEffect(() => {
+    if (!projectId) return;
+    const interval = setInterval(() => {
+      fetchCards(projectId).then(setCards).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [projectId]);
+
   // ─── Drag handlers ───
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const card = event.active.data?.current?.card as Card | undefined;

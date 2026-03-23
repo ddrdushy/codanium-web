@@ -130,14 +130,25 @@ export function CreateProjectModal({ open, onOpenChange }: CreateProjectModalPro
   }, []);
 
   // Navigation helpers
+  const [advancing, setAdvancing] = useState(false);
+
   const goNext = () => {
+    if (advancing) return; // Prevent rapid double-clicks from skipping steps
+
     if (step === 1 && !name.trim()) {
       setError('Project name is required');
       return;
     }
+    if (step === 2 && !audience.trim()) {
+      setError('Please describe your target audience');
+      return;
+    }
     setError('');
     setDirection(1);
+    setAdvancing(true);
     setStep((s) => Math.min(s + 1, TOTAL_STEPS));
+    // Small delay to ensure step state is committed before allowing next advance
+    setTimeout(() => setAdvancing(false), 300);
   };
 
   const goBack = () => {

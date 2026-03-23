@@ -244,6 +244,148 @@ describe('OrchestrationService', () => {
 };
 
 // ---------------------------------------------------------------------------
+// File tree builder
+// ---------------------------------------------------------------------------
+
+interface FileTreeNode {
+  name: string;
+  type: 'file' | 'dir';
+  children: FileTreeNode[];
+  agent?: string;
+  artifactId?: string;
+  artifactType?: ArtifactType;
+}
+
+function buildFileTree(artifacts: Artifact[]): FileTreeNode[] {
+  const root: FileTreeNode = { name: '/', type: 'dir', children: [] };
+  for (const art of artifacts) {
+    const parts = art.name.split('/');
+    let current = root;
+    for (let i = 0; i < parts.length; i++) {
+      const name = parts[i];
+      const isFile = i === parts.length - 1;
+      let child = current.children.find((c) => c.name === name && c.type === (isFile ? 'file' : 'dir'));
+      if (!child) {
+        child = {
+          name,
+          type: isFile ? 'file' : 'dir',
+          children: [],
+          agent: isFile ? art.ownerAgent : undefined,
+          artifactId: isFile ? art.id : undefined,
+          artifactType: isFile ? art.type : undefined,
+        };
+        current.children.push(child);
+      }
+      current = child;
+    }
+  }
+  // Sort: directories first, then alphabetical
+  const sortTree = (nodes: FileTreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    nodes.forEach((n) => { if (n.children.length) sortTree(n.children); });
+  };
+  sortTree(root.children);
+  return root.children;
+}
+
+// ---------------------------------------------------------------------------
+// Recursive tree node component
+// ---------------------------------------------------------------------------
+
+function FileTreeNodeRow({
+  node,
+  depth,
+  selectedId,
+  onSelect,
+  expandedDirs,
+  onToggleDir,
+}: {
+  node: FileTreeNode;
+  depth: number;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  expandedDirs: Set<string>;
+  onToggleDir: (path: string) => void;
+}) {
+  const nodePath = node.name; // For top-level; parent will pass full path via key
+  const isDir = node.type === 'dir';
+  const isExpanded = expandedDirs.has(nodePath);
+  const isSelected = node.artifactId === selectedId;
+  const conf = node.artifactType ? typeConfig[node.artifactType] : null;
+
+  if (isDir) {
+    return (
+      <div>
+        <button
+          onClick={() => onToggleDir(nodePath)}
+          className="w-full flex items-center gap-1.5 py-1.5 hover:bg-white/[0.03] transition-colors text-left"
+          style={{ paddingLeft: `${depth * 16 + 12}px`, paddingRight: '12px' }}
+        >
+          {isExpanded ? (
+            <ChevronDown className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+          ) : (
+            <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+          )}
+          <span className="shrink-0">📁</span>
+          <span className="text-[12px] font-mono text-muted-foreground/70 truncate">{node.name}</span>
+        </button>
+        <AnimatePresence initial={false}>
+          {isExpanded && node.children.map((child) => (
+            <motion.div
+              key={`${nodePath}/${child.name}`}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <FileTreeNodeRow
+                node={child}
+                depth={depth + 1}
+                selectedId={selectedId}
+                onSelect={onSelect}
+                expandedDirs={expandedDirs}
+                onToggleDir={onToggleDir}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  // File node
+  return (
+    <button
+      onClick={() => node.artifactId && onSelect(node.artifactId)}
+      className={cn(
+        'w-full flex items-center gap-1.5 py-1.5 transition-all text-left',
+        isSelected
+          ? 'bg-white/[0.05] border-l-2 border-l-amber'
+          : 'hover:bg-[var(--sidebar-accent)] border-l-2 border-l-transparent'
+      )}
+      style={{ paddingLeft: `${depth * 16 + 12}px`, paddingRight: '12px' }}
+    >
+      <span className="w-3 shrink-0" /> {/* Spacer to align with dir chevrons */}
+      <span className="shrink-0">📄</span>
+      <span className={cn('text-[12px] font-mono truncate flex-1', isSelected ? 'text-foreground' : 'text-foreground/80')}>
+        {node.name}
+      </span>
+      {node.agent && (
+        <Badge variant="outline" className={cn(
+          'text-[8px] h-3.5 px-1 shrink-0',
+          conf ? `${conf.bg} ${conf.color}` : 'bg-white/[0.03] text-muted-foreground/40',
+        )}>
+          {node.agent}
+        </Badge>
+      )}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -299,6 +441,7 @@ export default function CodePage() {
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<ArtifactType>>(new Set());
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
 
   // Code execution state
   const [execution, setExecution] = useState<CodeExecution | null>(null);
@@ -407,6 +550,35 @@ export default function CodePage() {
       const next = new Set(prev);
       if (next.has(type)) next.delete(type);
       else next.add(type);
+      return next;
+    });
+  };
+
+  // Build directory tree from filtered artifacts
+  const fileTree = useMemo(() => buildFileTree(filteredArtifacts), [filteredArtifacts]);
+
+  // Auto-expand all directories on first load
+  useEffect(() => {
+    if (fileTree.length > 0 && expandedDirs.size === 0) {
+      const allDirs = new Set<string>();
+      const collect = (nodes: FileTreeNode[]) => {
+        for (const n of nodes) {
+          if (n.type === 'dir') {
+            allDirs.add(n.name);
+            collect(n.children);
+          }
+        }
+      };
+      collect(fileTree);
+      setExpandedDirs(allDirs);
+    }
+  }, [fileTree]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleDir = (path: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   };
@@ -616,69 +788,25 @@ export default function CodePage() {
           </div>
         </div>
 
-        {/* File list */}
-        <div className="flex-1 overflow-y-auto">
-          {(Object.entries(groupedArtifacts) as [ArtifactType, Artifact[]][])
-            .filter(([, items]) => items.length > 0)
-            .map(([type, items]) => {
-              const conf = typeConfig[type];
-              const GroupIcon = conf.icon;
-              const isCollapsed = collapsedGroups.has(type);
-
-              return (
-                <div key={type}>
-                  {/* Group header */}
-                  <button
-                    onClick={() => toggleGroup(type)}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider hover:bg-white/[0.02] transition-colors"
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight className="w-3 h-3" />
-                    ) : (
-                      <ChevronDown className="w-3 h-3" />
-                    )}
-                    <GroupIcon className={cn('w-3.5 h-3.5', conf.color)} />
-                    {conf.label}
-                    <Badge variant="outline" className="text-[8px] h-3.5 px-1 ml-auto bg-white/[0.03]">
-                      {items.length}
-                    </Badge>
-                  </button>
-
-                  {/* File items */}
-                  <AnimatePresence initial={false}>
-                    {!isCollapsed && items.map((art, i) => {
-                      const TypeIcon = typeConfig[art.type].icon;
-                      const isSelected = selectedId === art.id;
-
-                      return (
-                        <motion.button
-                          key={art.id}
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ delay: i * 0.02 }}
-                          onClick={() => setSelectedId(art.id)}
-                          className={cn(
-                            'w-full text-left px-4 py-2 flex items-center gap-2 transition-all',
-                            isSelected
-                              ? 'bg-white/[0.05] border-l-2 border-l-amber'
-                              : 'hover:bg-[var(--sidebar-accent)] border-l-2 border-l-transparent'
-                          )}
-                        >
-                          <TypeIcon className={cn('w-3.5 h-3.5 shrink-0', typeConfig[art.type].color)} />
-                          <span className="text-[12px] font-mono text-foreground truncate flex-1">
-                            {art.name}
-                          </span>
-                          <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white/[0.03] text-muted-foreground/40 shrink-0">
-                            {art.ownerAgent}
-                          </Badge>
-                        </motion.button>
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
+        {/* File tree */}
+        <div className="flex-1 overflow-y-auto py-1">
+          {fileTree.length > 0 ? (
+            fileTree.map((node) => (
+              <FileTreeNodeRow
+                key={node.name}
+                node={node}
+                depth={0}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                expandedDirs={expandedDirs}
+                onToggleDir={toggleDir}
+              />
+            ))
+          ) : (
+            <div className="px-4 py-6 text-center">
+              <p className="text-[11px] text-muted-foreground/40">No matching files</p>
+            </div>
+          )}
         </div>
 
         {/* Footer stats */}

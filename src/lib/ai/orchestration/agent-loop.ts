@@ -456,8 +456,15 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
     });
 
     // For pipeline calls, prefix the message so agents know they're in autonomous mode
+    let pipelinePrefix = `[PIPELINE] ${sanitizedMessage}\n\nYou are in PIPELINE MODE. Work autonomously — do NOT ask the user questions. Read the project documents in your context and produce your deliverables.`;
+
+    // BA in pipeline mode must immediately create and approve the BRD — no questions
+    if (input.isPipeline && currentAgent === 'BA') {
+      pipelinePrefix += `\n\nIMPORTANT: You are in PIPELINE MODE. Do NOT ask questions. Create the complete BRD document immediately using all available project context. Call create_document(type='BRD', title='Business Requirements Document', content='...full BRD...'). Then call approve_document(type='BRD'). Work autonomously.`;
+    }
+
     const userContent = input.isPipeline
-      ? `[PIPELINE] ${sanitizedMessage}\n\nYou are in PIPELINE MODE. Work autonomously — do NOT ask the user questions. Read the project documents in your context and produce your deliverables.`
+      ? pipelinePrefix
       : sanitizedMessage;
 
     // Consolidate all system content into ONE system message at the start
@@ -1008,6 +1015,25 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         });
       }
       } // end pipeline routing
+
+      // Check if there are more PLANNED cards to work on
+      if (currentAgent === 'QA' || currentAgent === 'SEC') {
+        try {
+          const remainingCards = await prisma.card.count({
+            where: { projectId: input.projectId, state: 'PLANNED' },
+          });
+          if (remainingCards > 0) {
+            console.log(`[AgentLoop] ♻️ ${remainingCards} PLANNED cards remaining. Pipeline will continue on next user message.`);
+            yield {
+              type: 'info',
+              data: {
+                title: `${remainingCards} tasks remaining`,
+                message: `Send "continue building" to start the next task.`,
+              },
+            };
+          }
+        } catch {}
+      }
 
       break; // Exit agent loop — we have a text response
     }

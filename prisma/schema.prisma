@@ -447,6 +447,8 @@ enum DocumentType {
   RUNBOOK
   ADR
   CONSTITUTION
+  DESIGN_SYSTEM
+  WIREFRAME
 }
 
 enum DocStatus {

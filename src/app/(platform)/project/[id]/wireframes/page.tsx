@@ -13,7 +13,7 @@ import {
   Smartphone, Monitor, Tablet, ChevronRight,
   Square, Type, Image, MousePointer, Layout,
   ArrowRight, CheckCircle2, Clock, Bot, Maximize2,
-  Trash2, Send,
+  Trash2, Send, Palette,
 } from 'lucide-react';
 
 interface Wireframe {
@@ -275,6 +275,135 @@ function mapApiWireframe(w: any): Wireframe {
     version: w.version ?? 1,
     penData: w.penData ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Design Tokens Extractor & Sidebar
+// ---------------------------------------------------------------------------
+
+interface DesignTokens {
+  colors: { value: string; usages: number }[];
+  fonts: { family: string; sizes: number[] }[];
+  variables: Record<string, string>;
+}
+
+function extractDesignTokens(doc: PenDocument): DesignTokens {
+  const colorMap = new Map<string, number>();
+  const fontMap = new Map<string, Set<number>>();
+
+  const walk = (nodes?: PenDocument['children']) => {
+    if (!nodes) return;
+    for (const node of nodes) {
+      // Colors
+      if (typeof node.fill === 'string' && node.fill.startsWith('#')) {
+        colorMap.set(node.fill, (colorMap.get(node.fill) ?? 0) + 1);
+      }
+      if (node.stroke && typeof node.stroke === 'object' && 'color' in node.stroke) {
+        const strokeColor = (node.stroke as { color: string }).color;
+        if (strokeColor.startsWith('#')) {
+          colorMap.set(strokeColor, (colorMap.get(strokeColor) ?? 0) + 1);
+        }
+      }
+      // Fonts
+      if (node.fontSize) {
+        const family = node.fontFamily ?? 'System';
+        if (!fontMap.has(family)) fontMap.set(family, new Set());
+        fontMap.get(family)!.add(node.fontSize);
+      }
+      // Recurse
+      if (node.children) walk(node.children as PenDocument['children']);
+    }
+  };
+
+  walk(doc.children);
+  // Also walk components
+  if (doc.components) {
+    for (const comp of Object.values(doc.components)) {
+      walk([comp] as PenDocument['children']);
+      if ((comp as any).children) walk((comp as any).children);
+    }
+  }
+
+  const colors = Array.from(colorMap.entries())
+    .map(([value, usages]) => ({ value, usages }))
+    .sort((a, b) => b.usages - a.usages);
+
+  const fonts = Array.from(fontMap.entries())
+    .map(([family, sizes]) => ({ family, sizes: Array.from(sizes).sort((a, b) => a - b) }))
+    .sort((a, b) => a.family.localeCompare(b.family));
+
+  return { colors, fonts, variables: doc.variables ?? {} };
+}
+
+function DesignTokensSidebar({ tokens }: { tokens: DesignTokens }) {
+  return (
+    <div className="w-[220px] border-l border-border flex flex-col shrink-0 overflow-y-auto bg-background">
+      <div className="px-3 py-3 border-b border-border">
+        <h3 className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider flex items-center gap-1.5">
+          <Palette className="w-3 h-3" />
+          Design Tokens
+        </h3>
+      </div>
+
+      {/* Colors */}
+      <div className="px-3 py-3 border-b border-border">
+        <h4 className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-2">Colors</h4>
+        <div className="space-y-1.5">
+          {tokens.colors.length > 0 ? tokens.colors.map((c) => (
+            <div key={c.value} className="flex items-center gap-2">
+              <div
+                className="w-4 h-4 rounded border border-border shrink-0"
+                style={{ backgroundColor: c.value }}
+              />
+              <span className="text-[11px] font-mono text-foreground/70 flex-1">{c.value}</span>
+              <span className="text-[9px] text-muted-foreground/40">{c.usages}x</span>
+            </div>
+          )) : (
+            <p className="text-[10px] text-muted-foreground/30">No colors found</p>
+          )}
+        </div>
+      </div>
+
+      {/* Fonts */}
+      <div className="px-3 py-3 border-b border-border">
+        <h4 className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <Type className="w-3 h-3" />
+          Typography
+        </h4>
+        <div className="space-y-2">
+          {tokens.fonts.length > 0 ? tokens.fonts.map((f) => (
+            <div key={f.family}>
+              <p className="text-[11px] font-medium text-foreground/70">{f.family}</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {f.sizes.map((s) => (
+                  <span key={s} className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.04] border border-border text-muted-foreground/50 font-mono">
+                    {s}px
+                  </span>
+                ))}
+              </div>
+            </div>
+          )) : (
+            <p className="text-[10px] text-muted-foreground/30">No fonts found</p>
+          )}
+        </div>
+      </div>
+
+      {/* Variables */}
+      {Object.keys(tokens.variables).length > 0 && (
+        <div className="px-3 py-3">
+          <h4 className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-2">Variables</h4>
+          <div className="space-y-1.5">
+            {Object.entries(tokens.variables).map(([key, val]) => (
+              <div key={key} className="flex flex-col">
+                <span className="text-[10px] font-mono text-amber/70">${key}</span>
+                <span className="text-[11px] text-foreground/60 pl-2">{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function WireframesPage() {
@@ -567,7 +696,10 @@ export default function WireframesPage() {
 
               {/* Canvas */}
               {selectedWireframe.penData ? (
-                <PenRenderer document={selectedWireframe.penData} className="flex-1" />
+                <div className="flex-1 flex overflow-hidden">
+                  <PenRenderer document={selectedWireframe.penData} className="flex-1" />
+                  <DesignTokensSidebar tokens={extractDesignTokens(selectedWireframe.penData)} />
+                </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center p-8 bg-[var(--sidebar-accent)]">
                   <div className={cn(

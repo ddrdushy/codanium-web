@@ -89,6 +89,12 @@ const INTENT_PATTERNS: Array<{ intent: UserIntent; patterns: RegExp[] }> = [
     ],
   },
   {
+    intent: 'card_management',
+    patterns: [
+      /\b(create.{0,10}card|add.{0,10}task|new.{0,10}task|backlog|create.{0,10}ticket|add.{0,10}card)\b/,
+    ],
+  },
+  {
     intent: 'new_requirement',
     patterns: [
       /\b(idea|build|create|want|need|should have|feature|add|make|implement|develop|can you|i('d| would) like)\b/,
@@ -118,6 +124,7 @@ const ROUTING_TABLE: Record<UserIntent, string> = {
   testing:         'QA',   // QA Engineer — test strategy
   architecture:    'SA',   // Solutions Architect — technical decisions
   code_generation: 'TL',   // Tech Lead — coordinates development execution
+  card_management: 'PM',   // Project Manager — card/task creation and backlog management
   general:         'BA',   // Business Analyst — default conversational agent
 };
 

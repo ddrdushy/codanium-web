@@ -41,6 +41,15 @@ export function Topbar() {
     }
   }, [currentProjectId, fetchProjectContext]);
 
+  // Poll SDLC stages every 10 seconds to keep header fresh
+  useEffect(() => {
+    if (!currentProjectId) return;
+    const interval = setInterval(() => {
+      fetchProjectContext(currentProjectId);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [currentProjectId, fetchProjectContext]);
+
   // Use store data only (no mock fallback)
   const sdlcProgress = storeStages;
   const agents = storeAgents;
