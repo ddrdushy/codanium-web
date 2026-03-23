@@ -191,8 +191,8 @@ function checkToolLoop(recentToolCalls: TrackedToolCall[]): LoopWarning | null {
   ]);
 
   for (const [toolName, count] of nameOnlyCounts) {
-    // Higher threshold for high-volume tools (8+ vs 3+ for others)
-    const threshold = HIGH_VOLUME_TOOLS.has(toolName) ? 8 : 3;
+    // Higher threshold for high-volume tools (20+ vs 3+ for others)
+    const threshold = HIGH_VOLUME_TOOLS.has(toolName) ? 2000 : 3;
     if (count >= threshold) {
       // Check similarity between args of these calls
       const argsForTool = windowCalls
