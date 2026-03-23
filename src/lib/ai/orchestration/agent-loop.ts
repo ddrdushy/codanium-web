@@ -88,7 +88,7 @@ export interface SSEEvent {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_TOOL_LOOPS = 7;
+const MAX_TOOL_LOOPS = 25;
 const MAX_LLM_ATTEMPTS = 3;
 // Full pipeline: BA → SA → PM → DO → TL → dev tasks → QA → SEC → PM → TL loop
 // Needs depth for: planning (4 hops) + multiple dev task cycles
@@ -164,11 +164,11 @@ The system resolves these automatically. NEVER ask the user for IDs again. Just 
   return corrections[agent] || '';
 }
 
-// Pipeline: BA → SA → PM → DO → TL → (JD/SD/UX) → QA → SEC → PM (loop)
-// UX is no longer a mandatory sequential step — TL assigns UI tasks to UX as needed.
+// Pipeline: BA → SA → UX → PM → DO → TL → (JD/SD) → QA → SEC → PM (loop)
 const PIPELINE_RULES: PipelineRule[] = [
   { from: 'BA', signals: ['approve_document(BRD)'], next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document in your context — it contains the full requirements including the Content Inventory. Produce a System Design Document (SDD).' },
-  { from: 'SA', signals: ['approve_document(SDD)'], next: 'PM', context: 'Organize the project backlog and plan execution. Read the BRD and SDD. Create task cards for every feature module — EPICs, FEATUREs, and TASKs. Include the actual content from the BRD Content Inventory in each card description. Set priorities using MoSCoW. Then hand off to DevOps for scaffolding.' },
+  { from: 'SA', signals: ['approve_document(SDD)'], next: 'UX', context: 'Create the UI/UX design for the project. Read the BRD and SDD to understand features and tech stack. Create wireframes or a design document describing: page layouts, navigation flow, component hierarchy, color scheme, and responsive breakpoints. Save as a WIREFRAME document.' },
+  { from: 'UX', signals: ['create_document(WIREFRAME)', 'approve_document(WIREFRAME)', 'create_document()'], next: 'PM', context: 'Organize the project backlog and plan execution. Read the BRD, SDD, and wireframes. Create task cards for EVERY feature module — EPICs, FEATUREs, and TASKs. Be thorough: create at least 15-20 cards covering all features from the BRD. Include the actual content from the BRD Content Inventory in each card description. Set priorities using MoSCoW. Then hand off to DevOps for scaffolding.' },
   { from: 'PM', signals: ['create_card()', 'task_progress()'], next: 'DO', context: 'Scaffold the project structure based on the SDD tech stack. Generate boilerplate files: package.json, tsconfig, framework config, entry point, global styles, Dockerfile, .gitignore.' },
   { from: 'DO', signals: ['write_file()', 'git_commit()', 'trigger_deploy()'], next: 'TL', context: 'Project scaffold is ready. Review the task cards on the board. Create any missing granular TASK cards. Assign UI/UX design tasks to UX, frontend tasks to JD, complex/backend tasks to SD. Include BRD content in each card. Start the first highest-priority task.' },
   { from: 'TL', signals: ['update_card(IN_PROGRESS)', 'update_card(PLANNED)'], next: 'DYNAMIC', context: 'Implement the assigned task. Read the card description carefully — it contains the exact content and acceptance criteria. Write production code, not placeholders. Run tests and commit when complete.' },
@@ -262,7 +262,8 @@ async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promi
 
 const DEFAULT_NEXT_AGENT: Record<string, { next: string; context: string; requiresApproval?: string }> = {
   BA: { next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document — it contains requirements AND the Content Inventory. Produce a System Design Document (SDD).', requiresApproval: 'BRD' },
-  SA: { next: 'PM', context: 'Organize the backlog. Read the BRD and SDD. Create task cards for every feature. Include actual content from BRD Content Inventory in each card.', requiresApproval: 'SDD' },
+  SA: { next: 'UX', context: 'Create UI/UX designs for the project. Read the BRD and SDD. Create a WIREFRAME design document with page layouts, navigation, components, color scheme, responsive design.', requiresApproval: 'SDD' },
+  UX: { next: 'PM', context: 'Organize the backlog. Read BRD, SDD, and wireframes. Create task cards for EVERY feature — at least 15-20 cards (EPICs, FEATUREs, TASKs). Be thorough.' },
   PM: { next: 'DO', context: 'Scaffold the project structure based on the SDD tech stack. Generate boilerplate files, package.json, config files.' },
   DO: { next: 'TL', context: 'Project scaffold is ready. Review cards, create granular tasks, assign to UX/JD/SD. Include BRD content in each card. Start first task.' },
   TL: { next: 'JD', context: 'Implement the assigned task. Read the card description — it has exact content and acceptance criteria. Write production code.' },
@@ -946,6 +947,26 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         if (nextAgent && nextContext) {
         // Auto-advance SDLC stages before delegating
         await autoAdvanceSDLC(input.projectId, currentAgent);
+
+        // Auto-move cards to IN_PROGRESS when dev agents take over
+        if (['JD', 'SD', 'TL'].includes(nextAgent)) {
+          try {
+            const plannedCards = await prisma.card.findMany({
+              where: { projectId: input.projectId, state: 'PLANNED' },
+              orderBy: { priority: 'desc' },
+              take: 1,
+            });
+            if (plannedCards.length > 0) {
+              await prisma.card.update({
+                where: { id: plannedCards[0].id },
+                data: { state: 'IN_PROGRESS' },
+              });
+              console.log(`[AgentLoop] Auto-moved card "${plannedCards[0].title}" to IN_PROGRESS`);
+            }
+          } catch (e) {
+            console.warn('[AgentLoop] Auto card state update failed:', e);
+          }
+        }
 
         console.log(`[AgentLoop] Pipeline: ${currentAgent} -> ${nextAgent} (depth ${pipelineDepth + 1})`);
 

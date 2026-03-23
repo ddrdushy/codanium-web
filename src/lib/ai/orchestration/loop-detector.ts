@@ -184,8 +184,16 @@ function checkToolLoop(recentToolCalls: TrackedToolCall[]): LoopWarning | null {
     nameOnlyCounts.set(tc.name, (nameOnlyCounts.get(tc.name) ?? 0) + 1);
   }
 
+  // Tools that are legitimately called many times (creating cards, writing files)
+  const HIGH_VOLUME_TOOLS = new Set([
+    'create_card', 'write_file', 'edit_file', 'git_commit', 'run_command',
+    'read_file', 'list_directory', 'glob', 'grep',
+  ]);
+
   for (const [toolName, count] of nameOnlyCounts) {
-    if (count >= 3) {
+    // Higher threshold for high-volume tools (8+ vs 3+ for others)
+    const threshold = HIGH_VOLUME_TOOLS.has(toolName) ? 8 : 3;
+    if (count >= threshold) {
       // Check similarity between args of these calls
       const argsForTool = windowCalls
         .filter(tc => tc.name === toolName)
