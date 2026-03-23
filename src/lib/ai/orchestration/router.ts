@@ -193,6 +193,12 @@ function isExplicitTopicSwitch(message: string): UserIntent | null {
 
   // Strong signals that the user wants a different agent
   // These are phrased as commands, not answers to questions
+
+  // HIGHEST PRIORITY: Approval/pipeline advancement — always go through BA first
+  // This ensures the proper pipeline chain (BA→SA→UX→PM→DO→TL) is followed
+  if (/\b(approv|proceed.{0,20}(phase|architecture|design|next)|move forward|advance)/i.test(lower)) return 'approval';
+  if (/\b(create.{0,10}(sdd|architecture|system design)|design.{0,10}(database|schema|api))/i.test(lower)) return 'architecture';
+
   if (/\b(show me the budget|how much (have|did) (we|i) spend|check cost|token usage)\b/.test(lower)) return 'cost_query';
   if (/\b(deploy now|push to production|go live now|release it)\b/.test(lower)) return 'deployment';
   if (/\b(run (the )?tests|check quality|qa report)\b/.test(lower)) return 'testing';
