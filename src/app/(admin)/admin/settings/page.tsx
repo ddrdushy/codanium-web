@@ -334,11 +334,14 @@ export default function SettingsPage() {
               <option value="anthropic">Anthropic</option>
               <option value="openai">OpenAI</option>
               <option value="ollama">Ollama</option>
-              <option value="google">Google</option>
+              <option value="mistral">Mistral</option>
+              <option value="nvidia">NVIDIA NIM</option>
+              <option value="groq">Groq</option>
+              <option value="together">Together AI</option>
               <option value="custom">Custom</option>
             </select>
           </SettingField>
-          {(defaultProvider === 'ollama' || defaultProvider === 'custom') && (
+          {['ollama', 'mistral', 'nvidia', 'groq', 'together', 'custom'].includes(defaultProvider) && (
             <SettingField label="Base URL">
               <input
                 type="text"
@@ -578,6 +581,10 @@ export default function SettingsPage() {
                             <option value="anthropic">Anthropic</option>
                             <option value="openai">OpenAI</option>
                             <option value="ollama">Ollama</option>
+                            <option value="mistral">Mistral</option>
+                            <option value="nvidia">NVIDIA NIM</option>
+                            <option value="groq">Groq</option>
+                            <option value="together">Together AI</option>
                             <option value="custom">Custom</option>
                           </select>
                         </td>

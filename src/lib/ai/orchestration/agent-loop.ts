@@ -458,9 +458,20 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
     // For pipeline calls, prefix the message so agents know they're in autonomous mode
     let pipelinePrefix = `[PIPELINE] ${sanitizedMessage}\n\nYou are in PIPELINE MODE. Work autonomously — do NOT ask the user questions. Read the project documents in your context and produce your deliverables.`;
 
-    // BA in pipeline mode must immediately create and approve the BRD — no questions
+    // BA kickoff: ask 3-5 targeted questions, then create BRD after answers
     if (input.isPipeline && currentAgent === 'BA') {
-      pipelinePrefix += `\n\nIMPORTANT: You are in PIPELINE MODE. Do NOT ask questions. Create the complete BRD document immediately using all available project context. Call create_document(type='BRD', title='Business Requirements Document', content='...full BRD...'). Then call approve_document(type='BRD'). Work autonomously.`;
+      try {
+        const existingBrd = await prisma.document.findFirst({
+          where: { projectId: input.projectId, type: 'BRD' },
+        });
+        if (existingBrd) {
+          pipelinePrefix += `\n\nA BRD already exists (status: ${existingBrd.status}). If the user approved it, call approve_document(type='BRD') and hand off to SA. Otherwise ask what changes they want.`;
+        } else {
+          pipelinePrefix += `\n\nYou are starting Phase 1. Ask the user 3-5 targeted questions to understand scope before creating the BRD. Cover: key features, user roles, integrations, constraints, and MVP scope. Ask ONE question at a time with clickable options [A/B/C/D]. After enough answers, create the complete BRD using create_document(type='BRD').`;
+        }
+      } catch {
+        pipelinePrefix += `\n\nAsk 3-5 targeted scope questions, then create the BRD.`;
+      }
     }
 
     const userContent = input.isPipeline

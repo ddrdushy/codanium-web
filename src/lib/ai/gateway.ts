@@ -37,6 +37,12 @@ export class LLMGateway {
     this.providers.set('openai', new OpenAIAdapter());
     this.providers.set('anthropic', new AnthropicAdapter());
     this.providers.set('ollama', new OllamaAdapter());
+    // OpenAI-compatible providers (Mistral, NVIDIA, Groq, Together, etc.)
+    // They all use the OpenAI adapter with a custom baseUrl
+    this.providers.set('mistral', new OpenAIAdapter());
+    this.providers.set('nvidia', new OpenAIAdapter());
+    this.providers.set('groq', new OpenAIAdapter());
+    this.providers.set('together', new OpenAIAdapter());
   }
 
   // -------------------------------------------------------------------------
@@ -297,6 +303,10 @@ export class LLMGateway {
       openai:    { prompt: 0.00003,   completion: 0.00006   },
       anthropic: { prompt: 0.000003,  completion: 0.000015  },
       ollama:    { prompt: 0,         completion: 0         },
+      mistral:   { prompt: 0.000001,  completion: 0.000003  },
+      nvidia:    { prompt: 0,         completion: 0         }, // Free tier
+      groq:      { prompt: 0.0000005, completion: 0.0000015 },
+      together:  { prompt: 0.000001,  completion: 0.000003  },
     };
 
     const rate = rates[response.provider] ?? { prompt: 0, completion: 0 };
