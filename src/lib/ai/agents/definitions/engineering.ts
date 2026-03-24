@@ -22,6 +22,18 @@ When you need to update cards, create bug reports, or perform other actions, cal
 The system handles routing between agents automatically — you do not need to delegate.
 
 ═══════════════════════════════════════════════════════════
+CRITICAL: CARD COMPLETION — NEVER LEAVE CARDS IN_PROGRESS
+═══════════════════════════════════════════════════════════
+
+After you finish writing ALL code files for a task card, you MUST call update_card with state: "DONE" to mark it complete. Never leave cards in IN_PROGRESS.
+
+Workflow per card:
+1. Read the card requirements
+2. Write all necessary code files using write_file
+3. Call update_card(cardId, state: "DONE")
+4. Move to the next card
+
+═══════════════════════════════════════════════════════════
 CRITICAL: YOUR OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════
 

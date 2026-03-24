@@ -216,11 +216,45 @@ const AGENT_STAGE_MAP: Record<string, string> = {
   CM: 'Maintenance & Improvement',
 };
 
+async function shouldAdvanceStage(projectId: string, currentStage: string): Promise<boolean> {
+  const cards = await prisma.card.groupBy({
+    by: ['state'],
+    where: { projectId },
+    _count: true,
+  });
+  const total = cards.reduce((sum, c) => sum + c._count, 0);
+  const done = cards.find(c => c.state === 'DONE')?._count ?? 0;
+  const pct = total > 0 ? done / total : 0;
+
+  switch (currentStage) {
+    case 'Idea & Planning':
+    case 'Requirement Gathering':
+    case 'Solution Design':
+    case 'UX/UI Design':
+      return true; // These advance on pipeline completion (documents created)
+    case 'Development':
+      return pct >= 0.8; // 80% cards done
+    case 'Testing':
+      return pct >= 0.95; // 95% cards done
+    case 'Deployment':
+      return pct >= 1.0; // All cards done
+    default:
+      return false;
+  }
+}
+
 async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promise<void> {
   const stageToAdvance = AGENT_STAGE_MAP[agentShortName];
   if (!stageToAdvance) return;
 
   try {
+    // Check card-completion gate before advancing
+    const canAdvance = await shouldAdvanceStage(projectId, stageToAdvance);
+    if (!canAdvance) {
+      console.log(`[AgentLoop] SDLC stage "${stageToAdvance}" not ready to advance (card completion threshold not met)`);
+      return;
+    }
+
     const stages = await prisma.sDLCStage.findMany({
       where: { projectId },
       orderBy: { order: 'asc' },
@@ -640,6 +674,9 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             llmSuccess = true;
             break;
           }
+          // Empty response — add nudge message so the next retry has extra guidance
+          messages.push({ role: 'user', content: 'Please provide your analysis. Do not return an empty response.' });
+          console.warn(`[AgentLoop] Empty response from ${currentAgent}, nudging with retry prompt`);
           throw new Error('LLM returned empty response');
         } catch (err: any) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -1027,21 +1064,47 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
       }
       } // end pipeline routing
 
-      // Check if there are more PLANNED cards to work on
+      // Check if there are more PLANNED cards to work on — auto-continue
       if (currentAgent === 'QA' || currentAgent === 'SEC') {
         try {
           const remainingCards = await prisma.card.count({
             where: { projectId: input.projectId, state: 'PLANNED' },
           });
           if (remainingCards > 0) {
-            console.log(`[AgentLoop] ♻️ ${remainingCards} PLANNED cards remaining. Pipeline will continue on next user message.`);
+            console.log(`[AgentLoop] ♻️ Auto-continuing: ${remainingCards} PLANNED cards remaining`);
             yield {
               type: 'info',
               data: {
-                title: `${remainingCards} tasks remaining`,
-                message: `Send "continue building" to start the next task.`,
+                title: `${remainingCards} tasks remaining — auto-continuing`,
+                message: `Automatically picking up the next planned task.`,
               },
             };
+            // Enqueue next cycle via orchestration queue
+            try {
+              const { addOrchestrationJob } = await import('@/lib/queue/orchestration-queue');
+              // Create an OrchestrationRun record for the auto-continue job
+              const autoContinueRun = await prisma.orchestrationRun.create({
+                data: {
+                  projectId: input.projectId,
+                  userId: input.userId,
+                  status: 'PENDING',
+                  userMessage: 'Continue to the next planned task card.',
+                  routedTo: 'TL',
+                  autoRouted: true,
+                  delegations: [],
+                },
+              });
+              await addOrchestrationJob(
+                {
+                  runId: autoContinueRun.id,
+                  projectId: input.projectId,
+                  userId: input.userId,
+                },
+                { delay: 2000 }, // 2s delay to avoid rate limits
+              );
+            } catch (err) {
+              console.warn('[AgentLoop] Auto-continue queue failed:', err);
+            }
           }
         } catch {}
       }

@@ -24,7 +24,10 @@ import {
   gitCommitInWorkspace,
   gitBranchInWorkspace,
   gitDiffInWorkspace,
+  getWorkspacePath,
 } from './workspace';
+import fs from 'fs/promises';
+import path from 'path';
 import { prisma } from '@/lib/prisma';
 import {
   validateCardTransition,
@@ -130,6 +133,31 @@ async function executeToolInternal(
     case 'read_file':
       return readFileInWorkspace(projectId, args.path);
     case 'write_file': {
+      // Dedup check for wireframe files
+      if (args.path && typeof args.path === 'string' && args.path.endsWith('.pen')) {
+        try {
+          const workspace = await getWorkspacePath(projectId);
+          const fullPath = path.resolve(workspace, args.path);
+          const dir = path.dirname(fullPath);
+          const baseName = path.basename(args.path, '.pen')
+            .replace(/-page$/, '')    // normalize: "login-page" -> "login"
+            .replace(/^wireframe-/, ''); // normalize: "wireframe-login" -> "login"
+
+          const existingFiles = await fs.readdir(dir).catch(() => [] as string[]);
+          const penFiles = existingFiles.filter(f => f.endsWith('.pen'));
+          for (const existing of penFiles) {
+            const existingBase = existing.replace('.pen', '')
+              .replace(/-page$/, '')
+              .replace(/^wireframe-/, '');
+            if (existingBase === baseName && existing !== path.basename(args.path)) {
+              console.log(`[ToolExecutor] Skipping duplicate wireframe: ${args.path} (similar to ${existing})`);
+              return { success: true, path: args.path, note: `Skipped: similar wireframe "${existing}" already exists` };
+            }
+          }
+        } catch {
+          // Non-fatal — proceed with write if dedup check fails
+        }
+      }
       const writeResult = await writeFileInWorkspace(projectId, args.path, args.content);
       // Persist artifact record so the Generated Code page can display it
       try {

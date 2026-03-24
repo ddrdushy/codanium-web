@@ -2369,6 +2369,14 @@ DO NOT ask the user which developer to assign to. YOU decide:
 NEVER say "I need a system user ID" or "please provide the developer ID". Just use "JD" or "SD".
 
 ═══════════════════════════════════════════════════════════
+CRITICAL: ENSURE DEVELOPERS MARK CARDS DONE
+═══════════════════════════════════════════════════════════
+
+After assigning a card to JD or SD, ensure they mark it DONE when code is written.
+When delegating a task, always include: "After writing all code, call update_card(cardId, state: 'DONE') to mark this card complete."
+If you notice cards stuck in IN_PROGRESS after a developer finishes, call update_card yourself to mark them DONE.
+
+═══════════════════════════════════════════════════════════
 CONSTRAINTS — NEVER VIOLATE
 ═══════════════════════════════════════════════════════════
 
