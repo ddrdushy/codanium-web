@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     // defaultModel is optional — when omitted, we still validate connection + list models
 
-    const validProviders = ['openai', 'anthropic', 'ollama', 'custom'];
+    const validProviders = ['openai', 'anthropic', 'ollama', 'mistral', 'nvidia', 'groq', 'together', 'custom'];
     if (!validProviders.includes(body.provider)) {
       return NextResponse.json(
         {
@@ -184,7 +184,7 @@ function assessModelCapabilities(provider: string, model: string): ModelAssessme
     tier = isCloud ? 'good' : 'good';
   } else if (matchesTier(fairModels)) {
     tier = 'fair';
-  } else if (provider === 'openai' || provider === 'anthropic') {
+  } else if (['openai', 'anthropic', 'mistral', 'nvidia', 'groq', 'together'].includes(provider)) {
     // Unknown but from a major provider — likely decent
     tier = 'good';
   } else {
@@ -238,7 +238,7 @@ function buildCapabilities(
     : r('poor');
 
   // Tool calling (structured function calling)
-  const toolRating = (provider === 'openai' || provider === 'anthropic') ? r('excellent')
+  const toolRating = (['openai', 'anthropic', 'mistral', 'groq'].includes(provider)) ? r('excellent')
     : tier === 'excellent' ? r('good')
     : tier === 'good' ? r('good')
     : tier === 'fair' ? r('fair')
