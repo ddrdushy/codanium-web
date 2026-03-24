@@ -247,10 +247,25 @@ export default function SettingsPage() {
       .catch(() => {});
   }, []);
 
-  // Reset models when provider changes
+  // Auto-fill base URL and reset models when provider changes
+  const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; placeholder: string }> = {
+    anthropic: { baseUrl: '', placeholder: 'https://api.anthropic.com' },
+    openai:    { baseUrl: '', placeholder: 'https://api.openai.com/v1' },
+    ollama:    { baseUrl: 'http://host.docker.internal:11434', placeholder: 'http://localhost:11434' },
+    mistral:   { baseUrl: 'https://api.mistral.ai/v1', placeholder: 'https://api.mistral.ai/v1' },
+    nvidia:    { baseUrl: 'https://integrate.api.nvidia.com/v1', placeholder: 'https://integrate.api.nvidia.com/v1' },
+    groq:      { baseUrl: 'https://api.groq.com/openai/v1', placeholder: 'https://api.groq.com/openai/v1' },
+    together:  { baseUrl: 'https://api.together.xyz/v1', placeholder: 'https://api.together.xyz/v1' },
+    custom:    { baseUrl: '', placeholder: 'https://your-endpoint.com/v1' },
+  };
+
   useEffect(() => {
     setAvailableModels([]);
     setDefaultModel('');
+    const defaults = PROVIDER_DEFAULTS[defaultProvider];
+    if (defaults?.baseUrl) {
+      setBaseUrl(defaults.baseUrl);
+    }
   }, [defaultProvider]);
 
   const toggleFeature = (key: keyof typeof featureFlags) => {
@@ -341,13 +356,13 @@ export default function SettingsPage() {
               <option value="custom">Custom</option>
             </select>
           </SettingField>
-          {['ollama', 'mistral', 'nvidia', 'groq', 'together', 'custom'].includes(defaultProvider) && (
+          {['ollama', 'mistral', 'nvidia', 'groq', 'together', 'custom', 'openai', 'anthropic'].includes(defaultProvider) && (
             <SettingField label="Base URL">
               <input
                 type="text"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder={defaultProvider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com'}
+                placeholder={PROVIDER_DEFAULTS[defaultProvider]?.placeholder || 'https://api.example.com/v1'}
                 className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
               />
             </SettingField>
