@@ -136,14 +136,11 @@ export class OpenAIAdapter implements LLMProvider {
 
   async validateConnection(config: ProviderConfig): Promise<boolean> {
     try {
-      const res = await fetch(`${baseUrl(config)}/chat/completions`, {
-        method: 'POST',
+      // Use /models endpoint for validation — works across all OpenAI-compatible providers
+      // (Mistral, NVIDIA, Groq, Together, etc.) without needing a valid model name
+      const res = await fetch(`${baseUrl(config)}/models`, {
+        method: 'GET',
         headers: headers(config),
-        body: JSON.stringify({
-          model: config.defaultModel || DEFAULT_MODEL,
-          messages: [{ role: 'user', content: 'test' }],
-          max_tokens: 5,
-        }),
       });
       return res.ok;
     } catch {
