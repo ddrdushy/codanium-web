@@ -150,7 +150,7 @@ export class LLMGateway {
   }): { provider: LLMProvider; config: ProviderConfig; isMock: boolean } {
     const provider = this.providers.get(dbConfig.provider);
     if (!provider) {
-      throw new Error(`Unknown LLM provider "${dbConfig.provider}". Supported: openai, anthropic, ollama`);
+      throw new Error(`Unknown LLM provider "${dbConfig.provider}". Supported: openai, anthropic, ollama, mistral, nvidia, groq, together`);
     }
 
     // Decrypt the API key — supports both encrypted and legacy plaintext values

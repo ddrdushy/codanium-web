@@ -120,12 +120,31 @@ export async function GET() {
       });
     }
 
+    // OpenAI-compatible providers (Mistral, NVIDIA, Groq, Together, custom)
+    // These use the same format as OpenAI — just need an API key and base URL
+    const openaiCompatible = ['mistral', 'nvidia', 'groq', 'together', 'custom'];
+    if (openaiCompatible.includes(effectiveProvider)) {
+      if (!effectiveApiKey && effectiveProvider !== 'custom') {
+        return NextResponse.json({
+          configured: false,
+          provider: effectiveProvider,
+          model: effectiveModel,
+          error: `${effectiveProvider} API key is not set. Please add your API key in Admin Settings.`,
+        });
+      }
+      return NextResponse.json({
+        configured: true,
+        provider: effectiveProvider,
+        model: effectiveModel,
+      });
+    }
+
     // Unknown provider — treat as not configured
     return NextResponse.json({
       configured: false,
       provider: effectiveProvider,
       model: effectiveModel,
-      error: `Unknown provider "${effectiveProvider}". Supported providers: openai, anthropic, ollama.`,
+      error: `Unknown provider "${effectiveProvider}". Supported: openai, anthropic, ollama, mistral, nvidia, groq, together, custom.`,
     });
   } catch (error) {
     console.error('GET /api/llm/health error:', error);

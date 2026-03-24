@@ -142,7 +142,7 @@ export async function POST(
       );
     }
 
-    const validProviders = ['openai', 'anthropic', 'ollama', 'custom'];
+    const validProviders = ['openai', 'anthropic', 'ollama', 'mistral', 'nvidia', 'groq', 'together', 'custom'];
     if (!validProviders.includes(body.provider)) {
       return NextResponse.json(
         { error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` },
