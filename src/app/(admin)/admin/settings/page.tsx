@@ -375,7 +375,7 @@ export default function SettingsPage() {
                   value={llmApiKey}
                   onChange={(e) => setLlmApiKey(e.target.value)}
                   placeholder={defaultProvider === 'openai' ? 'sk-...' : defaultProvider === 'anthropic' ? 'sk-ant-...' : 'API key'}
-                  className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 font-mono"
+                  className="w-80 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 font-mono"
                 />
                 <button
                   onClick={() => setShowLlmApiKey(!showLlmApiKey)}
