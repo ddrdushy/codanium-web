@@ -443,13 +443,18 @@ export class OpenAIAdapter implements LLMProvider {
     }
 
     const data = await res.json();
-    const models: string[] = (data.data ?? [])
+    const allModels: string[] = (data.data ?? [])
       .map((m: { id: string }) => m.id)
-      .filter((id: string) =>
-        CHAT_MODEL_PREFIXES.some((prefix) => id.startsWith(prefix)),
-      )
       .sort();
 
-    return models;
+    // For OpenAI, filter to chat models only. For other providers (Mistral, NVIDIA, Groq, etc.)
+    // return all models since their naming conventions differ.
+    const isOpenAI = !config.baseUrl || config.baseUrl.includes('api.openai.com');
+    if (isOpenAI) {
+      return allModels.filter((id: string) =>
+        CHAT_MODEL_PREFIXES.some((prefix) => id.startsWith(prefix)),
+      );
+    }
+    return allModels;
   }
 }
