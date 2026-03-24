@@ -353,6 +353,20 @@ export async function fetchAnalytics(params?: {
   };
 }
 
+// ─── Admin Analytics (aggregated) ────────────────────────────────────────────
+
+export interface AdminAnalyticsData {
+  dailyUsage: Array<{ date: string; provider: string; tokens: number; cost: number }>;
+  byAgent: Array<{ agent: string; tokens: number; cost: number; calls: number }>;
+  byProvider: Array<{ provider: string; model: string; tokens: number; cost: number; calls: number }>;
+  topProjects: Array<{ project_id: string; project_name: string; tokens: number; cost: number }>;
+  totals: { tokens: number; cost: number; totalCalls: number };
+}
+
+export async function fetchAdminAnalytics(): Promise<AdminAnalyticsData> {
+  return apiFetch<AdminAnalyticsData>('/api/admin/analytics');
+}
+
 // ─── Admin User Actions ─────────────────────────────────────────────────────
 
 export async function adminUpdateUser(params: {

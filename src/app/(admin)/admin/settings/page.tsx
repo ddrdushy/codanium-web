@@ -14,6 +14,9 @@ import {
   CreditCard,
   AlertTriangle,
   CheckCircle2,
+  Bot,
+  X,
+  Plus,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -78,6 +81,33 @@ function SettingField({
   );
 }
 
+// ─── Agent options for override dropdown ───
+const AGENT_OPTIONS = [
+  { shortName: 'BA', name: 'Business Analyst' },
+  { shortName: 'SA', name: 'Solution Architect' },
+  { shortName: 'UX', name: 'UI/UX Designer' },
+  { shortName: 'PM', name: 'Product Manager' },
+  { shortName: 'TL', name: 'Tech Lead' },
+  { shortName: 'JD', name: 'Junior Developer' },
+  { shortName: 'SD', name: 'Senior Developer' },
+  { shortName: 'QA', name: 'QA Engineer' },
+  { shortName: 'DO', name: 'DevOps Engineer' },
+  { shortName: 'PE', name: 'Platform Engineer' },
+  { shortName: 'AT', name: 'Automation Tester' },
+  { shortName: 'PF', name: 'Performance Engineer' },
+  { shortName: 'IE', name: 'Integration Engineer' },
+  { shortName: 'SM', name: 'Secrets Manager' },
+  { shortName: 'SR', name: 'Site Reliability' },
+  { shortName: 'SEC', name: 'Security' },
+  { shortName: 'ORC', name: 'Orchestrator' },
+  { shortName: 'STC', name: 'State Controller' },
+  { shortName: 'DEC', name: 'Decision Controller' },
+  { shortName: 'AUD', name: 'Audit Gatekeeper' },
+  { shortName: 'LLM', name: 'LLM Gateway Manager' },
+  { shortName: 'PRE', name: 'Prompt Engineer' },
+  { shortName: 'CA', name: 'Cost Analyst' },
+];
+
 export default function SettingsPage() {
   const [isLiveData, setIsLiveData] = useState(false);
 
@@ -127,6 +157,11 @@ export default function SettingsPage() {
   // ─── Security state ───
   const [twoFactorAuth, setTwoFactorAuth] = useState(true);
   const [ipAllowlist, setIpAllowlist] = useState(false);
+
+  // ─── Agent Override state ───
+  const [agentOverrides, setAgentOverrides] = useState<Array<{ id?: string; agentShortName: string; provider: string; model: string; baseUrl: string }>>([]);
+  const [savingOverrides, setSavingOverrides] = useState(false);
+  const [savedOverrides, setSavedOverrides] = useState(false);
 
   // ─── Save state ───
   const [saving, setSaving] = useState(false);
@@ -204,6 +239,12 @@ export default function SettingsPage() {
         }
       })
       .catch(() => {/* keep defaults */});
+
+    // Load agent overrides
+    fetch('/api/admin/agent-llm-config')
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setAgentOverrides(data); })
+      .catch(() => {});
   }, []);
 
   // Reset models when provider changes
@@ -468,6 +509,196 @@ export default function SettingsPage() {
                 </span>
               )}
             </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Agent Model Overrides */}
+      <motion.div
+        variants={itemVariants}
+        className="glass-card rounded-xl border border-border/50 p-6"
+      >
+        <SectionHeader
+          icon={<Bot className="w-4 h-4" />}
+          title="Agent Model Overrides"
+          subtitle="Override the default LLM for specific agents"
+          color="#f59e0b"
+        />
+        <div className="space-y-3">
+          {agentOverrides.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-muted-foreground border-b border-border/30">
+                    <th className="text-left py-2 pr-2 font-medium">Agent</th>
+                    <th className="text-left py-2 pr-2 font-medium">Provider</th>
+                    <th className="text-left py-2 pr-2 font-medium">Model</th>
+                    <th className="text-left py-2 pr-2 font-medium">Base URL</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agentOverrides.map((override, idx) => {
+                    const usedShortNames = agentOverrides
+                      .filter((_, i) => i !== idx)
+                      .map((o) => o.agentShortName);
+                    const availableAgents = AGENT_OPTIONS.filter(
+                      (a) => !usedShortNames.includes(a.shortName)
+                    );
+                    return (
+                      <tr key={idx} className="border-b border-border/20 last:border-0">
+                        <td className="py-2 pr-2">
+                          <select
+                            value={override.agentShortName}
+                            onChange={(e) => {
+                              const updated = [...agentOverrides];
+                              updated[idx] = { ...updated[idx], agentShortName: e.target.value };
+                              setAgentOverrides(updated);
+                            }}
+                            className="h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer w-full min-w-[140px]"
+                          >
+                            <option value="">Select agent...</option>
+                            {availableAgents.map((a) => (
+                              <option key={a.shortName} value={a.shortName}>
+                                {a.shortName} - {a.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-2 pr-2">
+                          <select
+                            value={override.provider}
+                            onChange={(e) => {
+                              const updated = [...agentOverrides];
+                              updated[idx] = { ...updated[idx], provider: e.target.value };
+                              setAgentOverrides(updated);
+                            }}
+                            className="h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer w-full min-w-[120px]"
+                          >
+                            <option value="anthropic">Anthropic</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="ollama">Ollama</option>
+                            <option value="custom">Custom</option>
+                          </select>
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="text"
+                            value={override.model}
+                            onChange={(e) => {
+                              const updated = [...agentOverrides];
+                              updated[idx] = { ...updated[idx], model: e.target.value };
+                              setAgentOverrides(updated);
+                            }}
+                            placeholder="e.g. gpt-4o"
+                            className="w-full min-w-[140px] h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          {(override.provider === 'ollama' || override.provider === 'custom') ? (
+                            <input
+                              type="text"
+                              value={override.baseUrl}
+                              onChange={(e) => {
+                                const updated = [...agentOverrides];
+                                updated[idx] = { ...updated[idx], baseUrl: e.target.value };
+                                setAgentOverrides(updated);
+                              }}
+                              placeholder={override.provider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com'}
+                              className="w-full min-w-[160px] h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">N/A</span>
+                          )}
+                        </td>
+                        <td className="py-2">
+                          <button
+                            onClick={() => {
+                              const updated = agentOverrides.filter((_, i) => i !== idx);
+                              setAgentOverrides(updated);
+                            }}
+                            className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
+                            title="Remove override"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setAgentOverrides((prev) => [
+                  ...prev,
+                  { agentShortName: '', provider: 'anthropic', model: '', baseUrl: '' },
+                ]);
+              }}
+              disabled={agentOverrides.length >= AGENT_OPTIONS.length}
+              className="gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Agent Override
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={savingOverrides || agentOverrides.length === 0}
+              onClick={async () => {
+                setSavingOverrides(true);
+                setSavedOverrides(false);
+                try {
+                  // Delete overrides that were removed
+                  const currentRes = await fetch('/api/admin/agent-llm-config');
+                  const currentData = await currentRes.json();
+                  if (Array.isArray(currentData)) {
+                    const currentShortNames = agentOverrides.map((o) => o.agentShortName).filter(Boolean);
+                    for (const existing of currentData) {
+                      if (!currentShortNames.includes(existing.agentShortName)) {
+                        await fetch(`/api/admin/agent-llm-config?agentShortName=${existing.agentShortName}`, { method: 'DELETE' });
+                      }
+                    }
+                  }
+                  // Upsert each override
+                  for (const override of agentOverrides) {
+                    if (!override.agentShortName || !override.model) continue;
+                    await fetch('/api/admin/agent-llm-config', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(override),
+                    });
+                  }
+                  setSavedOverrides(true);
+                  setTimeout(() => setSavedOverrides(false), 3000);
+                } catch {
+                  // silent fail
+                }
+                setSavingOverrides(false);
+              }}
+              className="gap-1.5"
+              style={{
+                borderColor: savedOverrides ? '#10b981' : undefined,
+                color: savedOverrides ? '#10b981' : undefined,
+              }}
+            >
+              {savingOverrides ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
+              ) : savedOverrides ? (
+                <><Check className="w-3.5 h-3.5" /> Saved</>
+              ) : (
+                'Save Overrides'
+              )}
+            </Button>
+          </div>
+
+          <div className="text-xs text-muted-foreground pt-2 border-t border-border/30">
+            All other agents use: <span className="font-medium text-foreground">{defaultProvider}</span> / <span className="font-medium text-foreground">{defaultModel || 'not set'}</span>
           </div>
         </div>
       </motion.div>

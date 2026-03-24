@@ -8,12 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { WireframeModal, DeleteWireframeDialog } from '@/components/modals/wireframe-modal';
 import { PenRenderer, type PenDocument } from '@/components/pen-renderer/PenRenderer';
+import { penToHTML, penToReactComponent } from '@/lib/pen-to-html';
 import {
   PenTool, Plus, Grid3X3, Layers, Eye, Edit3,
   Smartphone, Monitor, Tablet, ChevronRight,
   Square, Type, Image, MousePointer, Layout,
   ArrowRight, CheckCircle2, Clock, Bot, Maximize2,
-  Trash2, Send, Palette,
+  Trash2, Send, Palette, Code, FileCode, Copy, Check, X,
 } from 'lucide-react';
 
 interface Wireframe {
@@ -418,6 +419,9 @@ export default function WireframesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCodePreview, setShowCodePreview] = useState(false);
+  const [codePreviewContent, setCodePreviewContent] = useState('');
+  const [codeCopied, setCodeCopied] = useState(false);
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/wireframes`)
@@ -470,6 +474,43 @@ export default function WireframesPage() {
       setSelectedWireframe(wf);
     } catch {
       // silent
+    }
+  };
+
+  const handleExportHTML = () => {
+    if (!selectedWireframe?.penData) return;
+    const html = penToHTML(selectedWireframe.penData);
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    }
+  };
+
+  const handleExportReact = () => {
+    if (!selectedWireframe?.penData) return;
+    const code = penToReactComponent(selectedWireframe.penData);
+    setCodePreviewContent(code);
+    setCodeCopied(false);
+    setShowCodePreview(true);
+  };
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(codePreviewContent);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = codePreviewContent;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
     }
   };
 
@@ -658,6 +699,30 @@ export default function WireframesPage() {
                     </Button>
                   )}
 
+                  {/* Export buttons (only for .pen wireframes) */}
+                  {selectedWireframe.penData && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px]"
+                        onClick={handleExportHTML}
+                      >
+                        <FileCode className="w-3 h-3 mr-1" />
+                        Export HTML
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px]"
+                        onClick={handleExportReact}
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        Export React
+                      </Button>
+                    </>
+                  )}
+
                   {/* Device toggles */}
                   <div className="flex gap-0.5 bg-[var(--sidebar-accent)] rounded-md p-0.5">
                     {(['desktop', 'tablet', 'mobile'] as const).map(dev => {
@@ -761,6 +826,65 @@ export default function WireframesPage() {
         wireframeTitle={selectedWireframe?.title}
         onDeleted={handleDeleteSuccess}
       />
+
+      {/* Code Preview Modal */}
+      <AnimatePresence>
+        {showCodePreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowCodePreview(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-3xl max-h-[80vh] bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal header */}
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Code className="w-4 h-4 text-amber" />
+                  <h3 className="text-sm font-semibold">React Component</h3>
+                  <span className="text-[10px] text-muted-foreground/50">Tailwind CSS</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={cn(
+                      'h-7 text-[11px] transition-all',
+                      codeCopied && 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    )}
+                    onClick={handleCopyCode}
+                  >
+                    {codeCopied ? (
+                      <><Check className="w-3 h-3 mr-1" /> Copied</>
+                    ) : (
+                      <><Copy className="w-3 h-3 mr-1" /> Copy</>
+                    )}
+                  </Button>
+                  <button
+                    onClick={() => setShowCodePreview(false)}
+                    className="p-1 rounded hover:bg-[var(--sidebar-accent)] text-muted-foreground/60 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              {/* Code content */}
+              <div className="flex-1 overflow-auto p-5">
+                <pre className="text-[12px] leading-relaxed font-mono text-foreground/80 whitespace-pre-wrap break-words">
+                  <code>{codePreviewContent}</code>
+                </pre>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

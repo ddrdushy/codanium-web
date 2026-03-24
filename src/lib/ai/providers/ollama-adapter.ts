@@ -567,7 +567,61 @@ export class OllamaAdapter implements LLMProvider {
         }
       }
 
-      // If stream ended without a done message, yield final chunk
+      // Process any remaining data in the buffer (the final done:true chunk
+      // may not have a trailing newline, so it stays in the buffer)
+      const remaining = buffer.trim();
+      if (remaining) {
+        try {
+          const parsed = JSON.parse(remaining) as Record<string, unknown>;
+          const message = parsed.message as Record<string, unknown> | undefined;
+          const content = (message?.content as string) ?? '';
+
+          if (message?.tool_calls && Array.isArray(message.tool_calls)) {
+            for (const tc of message.tool_calls as Array<Record<string, any>>) {
+              accumulatedToolCalls.push({
+                id: `ollama-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                name: tc.function?.name ?? '',
+                arguments: tc.function?.arguments ?? {},
+              });
+            }
+          }
+
+          if (content) {
+            totalContent += content;
+          }
+
+          if (parsed.done === true) {
+            // Extract real token counts from Ollama's final message
+            promptTokens =
+              (parsed.prompt_eval_count as number) ??
+              estimateTokens(
+                options.messages.map((m) => m.content).join(' '),
+              );
+            completionTokens =
+              (parsed.eval_count as number) ??
+              estimateTokens(totalContent);
+
+            const hasToolCalls = accumulatedToolCalls.length > 0;
+
+            yield {
+              content: content,
+              done: true,
+              tokensUsed: {
+                prompt: promptTokens,
+                completion: completionTokens,
+                total: promptTokens + completionTokens,
+              },
+              toolCalls: hasToolCalls ? accumulatedToolCalls : undefined,
+              finishReason: hasToolCalls ? 'tool_calls' : 'stop',
+            };
+            return;
+          }
+        } catch {
+          // Could not parse remaining buffer — fall through to estimate
+        }
+      }
+
+      // If stream ended without a done message, yield final chunk with estimates
       promptTokens = estimateTokens(
         options.messages.map((m) => m.content).join(' '),
       );
