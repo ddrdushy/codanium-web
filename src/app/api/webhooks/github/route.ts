@@ -4,6 +4,7 @@ import { verifyGitHubSignature } from '@/lib/webhooks/verify';
 import { addGitSyncJob } from '@/lib/queue/git-sync-queue';
 import { eventBus } from '@/lib/ai/orchestration/event-bus';
 import { isRedisAvailable } from '@/lib/redis';
+import { pullBranchFiles } from '@/lib/git/pull';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +68,14 @@ export async function POST(request: NextRequest) {
       `[GitHubWebhook] Received ${eventType} for project ${matchedProject.id} (delivery: ${deliveryId})`,
     );
 
+    // Parse payload (needed for both push handling and event emission)
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      payload = {};
+    }
+
     // Queue git sync for relevant events
     if (SYNC_EVENTS.has(eventType) && (await isRedisAvailable())) {
       await addGitSyncJob({
@@ -75,12 +84,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Emit EventBus event for the webhook
-    let payload: Record<string, unknown> = {};
-    try {
-      payload = JSON.parse(rawBody);
-    } catch {
-      payload = {};
+    // For push events: also pull file contents into artifacts (bidirectional sync)
+    if (eventType === 'push') {
+      const ref: string = (payload.ref as string) ?? '';
+      const branch = ref.startsWith('refs/heads/') ? ref.slice('refs/heads/'.length) : undefined;
+      if (branch) {
+        pullBranchFiles({
+          projectId:   matchedProject.id,
+          branch,
+          triggeredBy: 'github-webhook',
+        }).catch((err: unknown) =>
+          console.error(`[GitWebhook] pullBranchFiles ${matchedProject!.id}/${branch}:`, err),
+        );
+      }
     }
 
     await eventBus.emit({

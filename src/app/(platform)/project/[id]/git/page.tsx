@@ -10,8 +10,8 @@ import {
   GitBranch, GitPullRequest, GitCommit, GitMerge,
   CheckCircle2, Clock, XCircle, AlertTriangle,
   Tag, ArrowRight, ExternalLink, Eye,
-  ChevronRight, Activity, Rocket, Upload,
-  Github, Plus
+  ChevronRight, Activity, Rocket, Upload, Download,
+  Github, Plus, Loader2
 } from 'lucide-react';
 import { PushToGitHubModal } from '@/components/modals/push-to-github-modal';
 import { CreateRepoModal } from '@/components/modals/create-repo-modal';
@@ -117,6 +117,8 @@ export default function GitPage() {
   const [releases, setReleases] = useState<Release[]>([]);
   const [pushModalOpen, setPushModalOpen] = useState(false);
   const [createRepoModalOpen, setCreateRepoModalOpen] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [pullResult, setPullResult] = useState<string | null>(null);
   const [projectName, setProjectName] = useState('');
   const [gitConfig, setGitConfig] = useState<{
     hasToken: boolean;
@@ -197,6 +199,24 @@ export default function GitPage() {
 
   const openPRs = pullRequests.filter(pr => pr.status === 'open').length;
 
+  async function handlePullFromGitHub() {
+    setPulling(true);
+    setPullResult(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/git/pull`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setPullResult(`Synced ${data.filesUpserted} file${data.filesUpserted !== 1 ? 's' : ''}`);
+      } else {
+        setPullResult('Pull failed');
+      }
+    } catch {
+      setPullResult('Pull failed');
+    }
+    setPulling(false);
+    setTimeout(() => setPullResult(null), 4000);
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       {/* Header */}
@@ -233,14 +253,30 @@ export default function GitPage() {
             </Badge>
           )}
           {gitConfig.hasToken && gitConfig.repoOwner ? (
-            <Button
-              size="sm"
-              onClick={() => setPushModalOpen(true)}
-              className="bg-amber hover:bg-amber/90 text-black text-xs"
-            >
-              <Upload className="w-3.5 h-3.5 mr-1.5" />
-              Push to GitHub
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handlePullFromGitHub}
+                disabled={pulling}
+                className="text-xs"
+              >
+                {pulling ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5 mr-1.5" />
+                )}
+                {pullResult ?? 'Pull from GitHub'}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setPushModalOpen(true)}
+                className="bg-amber hover:bg-amber/90 text-black text-xs"
+              >
+                <Upload className="w-3.5 h-3.5 mr-1.5" />
+                Push to GitHub
+              </Button>
+            </>
           ) : (
             <Button
               size="sm"

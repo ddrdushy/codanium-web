@@ -18,6 +18,7 @@ import {
   ChevronRight,
   ArrowLeft,
   Bot,
+  ScanEye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -42,6 +43,7 @@ const navSections: NavSection[] = [
       { label: 'AI Agents', icon: Bot, href: '/admin/agents' },
       { label: 'Billing', icon: CreditCard, href: '/admin/billing' },
       { label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
+      { label: 'Observability', icon: ScanEye, href: '/admin/observability' },
     ],
   },
   {
