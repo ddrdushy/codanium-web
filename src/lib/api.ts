@@ -297,6 +297,22 @@ export async function fetchAuditLog(params?: {
 export async function fetchBilling(): Promise<{
   metrics: BillingMetrics;
   transactions: AdminTransaction[];
+  credits: {
+    total_wallets: number;
+    total_balance: number;
+    lifetime_added: number;
+    lifetime_used: number;
+    byok_users: number;
+    platform_users: number;
+    recent_transactions: Array<{
+      id: string; amount: number; type: string; description: string;
+      createdAt: string; user_name: string | null; user_email: string | null;
+    }>;
+  } | null;
+  top_spenders: Array<{
+    userId: string; name: string; email: string;
+    totalSpend: number; totalTokens: number; calls: number;
+  }>;
 }> {
   const data = await apiFetch<any>('/api/admin/billing');
   return {
@@ -320,6 +336,8 @@ export async function fetchBilling(): Promise<{
       status: t.status as any,
       date: t.date,
     })),
+    credits: data.credits ?? null,
+    top_spenders: data.top_spenders ?? [],
   };
 }
 
@@ -439,4 +457,69 @@ function mapAuditToActivityType(action: string): string {
   if (action.startsWith('api_key.') || action.startsWith('settings.security')) return 'security_update';
   if (action.startsWith('settings.')) return 'settings_change';
   return 'settings_change';
+}
+
+// ─── Team Orchestration ──────────────────────────────────────────────────────
+
+export interface TeamTask {
+  agentShortName: string;
+  instruction: string;
+  cardId?: string;
+}
+
+export interface TeamDispatchResult {
+  teamId: string;
+  runIds: string[];
+  tasksCount: number;
+}
+
+export interface TeamStatusTask {
+  runId: string;
+  agentShortName: string;
+  instruction: string;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  latencyMs: number;
+  errorMessage: string | null;
+}
+
+export interface TeamStatus {
+  teamId: string;
+  goal: string;
+  overallStatus: 'running' | 'completed' | 'failed' | 'partial';
+  tasksCount: number;
+  completedCount: number;
+  failedCount: number;
+  tasks: TeamStatusTask[];
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export async function dispatchTeam(
+  projectId: string,
+  goal: string,
+  tasks: TeamTask[],
+): Promise<TeamDispatchResult> {
+  const res = await fetch(`/api/projects/${projectId}/orchestrate/team`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ goal, tasks }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? 'Failed to dispatch team');
+  }
+  return res.json();
+}
+
+export async function fetchTeamStatus(
+  projectId: string,
+  teamId: string,
+): Promise<TeamStatus> {
+  const res = await fetch(
+    `/api/projects/${projectId}/orchestrate/team?teamId=${encodeURIComponent(teamId)}`,
+  );
+  if (!res.ok) throw new Error('Failed to fetch team status');
+  return res.json();
 }

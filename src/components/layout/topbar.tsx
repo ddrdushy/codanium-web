@@ -10,7 +10,7 @@ import { useProjectStore } from '@/lib/project-store';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Search, Bell, Zap, Sun, Moon, Shield, LogOut, ChevronDown, User, FolderOpen, CreditCard, Key } from 'lucide-react';
+import { Search, Bell, Zap, Sun, Moon, Shield, LogOut, ChevronDown, User, FolderOpen, CreditCard, Key, BarChart2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCommandPaletteStore } from '@/lib/command-palette-store';
 import { useNotificationStore, selectUnreadCount } from '@/lib/notification-store';
@@ -260,12 +260,20 @@ export function Topbar() {
                 {/* Account */}
                 <div className="py-1 border-t border-border">
                   <Link
-                    href="/billing"
+                    href="/account/billing"
                     onClick={() => setUserMenuOpen(false)}
                     className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    Billing
+                    Credits & Billing
+                  </Link>
+                  <Link
+                    href="/account/usage"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-all"
+                  >
+                    <BarChart2 className="w-3.5 h-3.5" />
+                    Usage & Reports
                   </Link>
                   <Link
                     href="/account/api-keys"

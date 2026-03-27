@@ -56,6 +56,45 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // ── Create credit wallet with free trial credits ─────────────────────────
+    try {
+      // Read free credit settings from admin config
+      const [freeAmtSetting, freeDaysSetting] = await Promise.all([
+        prisma.adminSetting.findUnique({ where: { key: 'billing.freeCreditsAmount' } }),
+        prisma.adminSetting.findUnique({ where: { key: 'billing.freeCreditsExpiryDays' } }),
+      ]);
+      const freeAmount = freeAmtSetting
+        ? parseFloat(String(freeAmtSetting.value).replace(/"/g, '')) || 5
+        : 5;
+      const freeDays = freeDaysSetting
+        ? parseInt(String(freeDaysSetting.value).replace(/"/g, ''), 10) || 14
+        : 14;
+      const freeExpiry = new Date(Date.now() + freeDays * 24 * 60 * 60 * 1000);
+
+      const wallet = await prisma.creditWallet.create({
+        data: {
+          userId: user.id,
+          balance: freeAmount,
+          lifetimeAdded: freeAmount,
+          freeCreditsGranted: freeAmount,
+          freeCreditsExpiry: freeExpiry,
+          freeDataConsent: true, // implicit consent at signup
+        },
+      });
+
+      await prisma.creditTransaction.create({
+        data: {
+          walletId: wallet.id,
+          amount: freeAmount,
+          type: 'FREE_GRANT',
+          description: `Welcome! $${freeAmount.toFixed(2)} free trial credits (expires in ${freeDays} days)`,
+        },
+      });
+    } catch (err) {
+      console.error('[Register] Failed to create credit wallet:', err);
+      // Non-fatal — user account is still created
+    }
+
     // ── Send verification email ──────────────────────────────────────────────
     try {
       const { raw, hashed } = generateToken();

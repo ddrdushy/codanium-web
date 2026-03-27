@@ -247,7 +247,7 @@ export async function fetchLLMUsage(projectId: string, _scope?: ContextScope) {
     orderBy: { createdAt: 'desc' },
     take: 50,
     select: {
-      tokensUsed: true, cost: true, provider: true,
+      tokensUsed: true, actualCost: true, provider: true,
       model: true, agentName: true, createdAt: true,
     },
   });

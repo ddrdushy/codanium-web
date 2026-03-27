@@ -2,9 +2,14 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { DollarSign, TrendingUp, Users, TrendingDown, Search, CreditCard } from 'lucide-react';
+import {
+  DollarSign, TrendingUp, Users, TrendingDown, Search, CreditCard,
+  Zap, Key, Download, ArrowUpRight, ArrowDownRight, Gift,
+} from 'lucide-react';
 import { StatCard } from '@/components/admin/stat-card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableHeader,
@@ -75,18 +80,55 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 };
 
+type CreditData = NonNullable<Awaited<ReturnType<typeof fetchBilling>>['credits']>;
+type TopSpender  = Awaited<ReturnType<typeof fetchBilling>>['top_spenders'][number];
+
+function txIcon(type: string, amount: number) {
+  if (type === 'FREE_GRANT') return <Gift className="w-3 h-3 text-amber-400" />;
+  if (type === 'PURCHASE')   return <ArrowUpRight className="w-3 h-3 text-emerald-400" />;
+  if (type === 'USAGE')      return <ArrowDownRight className="w-3 h-3 text-muted-foreground" />;
+  return amount >= 0
+    ? <ArrowUpRight className="w-3 h-3 text-emerald-400" />
+    : <ArrowDownRight className="w-3 h-3 text-muted-foreground" />;
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function exportCSV(rows: CreditData['recent_transactions']) {
+  const headers = ['Date', 'User', 'Email', 'Type', 'Amount', 'Description'];
+  const body = rows.map(r => [
+    new Date(r.createdAt).toISOString(), r.user_name ?? '', r.user_email ?? '',
+    r.type, r.amount.toFixed(4), `"${r.description}"`,
+  ]);
+  const csv = [headers, ...body].map(r => r.join(',')).join('\n');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+    download: `credits-${new Date().toISOString().slice(0, 10)}.csv`,
+  });
+  a.click();
+}
+
 export default function AdminBillingPage() {
   const [billingMetrics, setBillingMetrics] = useState<BillingMetrics>(mockBillingMetrics);
   const [transactions, setTransactions] = useState<AdminTransaction[]>(mockTransactions);
+  const [credits, setCredits] = useState<CreditData | null>(null);
+  const [topSpenders, setTopSpenders] = useState<TopSpender[]>([]);
   const [, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isLiveData, setIsLiveData] = useState(false);
+  const [creditTab, setCreditTab] = useState<'credits' | 'spenders'>('credits');
 
   useEffect(() => {
     fetchBilling()
-      .then(({ metrics, transactions: txns }) => {
+      .then(({ metrics, transactions: txns, credits: c, top_spenders }) => {
         setBillingMetrics(metrics);
         setTransactions(txns);
+        if (c) setCredits(c);
+        setTopSpenders(top_spenders);
         setIsLiveData(true);
       })
       .catch(() => {
@@ -298,6 +340,202 @@ export default function AdminBillingPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* ─── Row 2b: Credit Wallet Overview ─── */}
+      {credits && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Wallet stats */}
+          <motion.div variants={itemVariants} className="glass-card rounded-xl border border-border/50 p-6">
+            <h2 className="text-base font-semibold text-foreground mb-1 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-400" />
+              Credit Wallet Overview
+            </h2>
+            <p className="text-xs text-muted-foreground mb-5">Platform credits in circulation</p>
+            <div className="space-y-3 text-sm">
+              {[
+                { label: 'Total Wallets',        value: credits.total_wallets.toLocaleString() },
+                { label: 'Credits Issued',        value: `$${credits.lifetime_added.toFixed(2)}`, color: 'text-emerald-400' },
+                { label: 'Credits Consumed',      value: `$${credits.lifetime_used.toFixed(2)}` },
+                { label: 'Outstanding Balance',   value: `$${credits.total_balance.toFixed(2)}`,  color: 'text-amber-400' },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between">
+                  <span className="text-muted-foreground">{row.label}</span>
+                  <span className={cn('font-medium tabular-nums', row.color)}>{row.value}</span>
+                </div>
+              ))}
+              <div className="pt-2 space-y-1.5">
+                {credits.lifetime_added > 0 && (
+                  <>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>{((credits.lifetime_used / credits.lifetime_added) * 100).toFixed(1)}% consumed</span>
+                      <span>{(100 - (credits.lifetime_used / credits.lifetime_added) * 100).toFixed(1)}% remaining</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-emerald-400"
+                        style={{ width: `${Math.min((credits.lifetime_used / credits.lifetime_added) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </motion.div>
+
+          {/* BYOK vs Platform */}
+          <motion.div variants={itemVariants} className="glass-card rounded-xl border border-border/50 p-6">
+            <h2 className="text-base font-semibold text-foreground mb-1 flex items-center gap-2">
+              <Key className="w-4 h-4 text-blue-400" />
+              BYOK vs Platform
+            </h2>
+            <p className="text-xs text-muted-foreground mb-5">Users by billing mode</p>
+            <div className="space-y-4">
+              {[
+                { label: 'BYOK Users',     count: credits.byok_users,     color: '#3b82f6' },
+                { label: 'Platform Users', count: credits.platform_users, color: '#f59e0b' },
+              ].map(row => {
+                const total = credits.byok_users + credits.platform_users;
+                const pct   = total > 0 ? (row.count / total) * 100 : 0;
+                return (
+                  <div key={row.label} className="space-y-1.5">
+                    <div className="flex justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: row.color }} />
+                        <span className="text-muted-foreground">{row.label}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-medium">{row.count}</span>
+                        <span className="text-muted-foreground text-xs w-10 text-right">{pct.toFixed(0)}%</span>
+                      </div>
+                    </div>
+                    <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: row.color }} />
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-[10px] text-muted-foreground pt-1">
+                BYOK users supply their own API key — no credits charged.
+              </p>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ─── Row 2c: Credit transactions + Top spenders ─── */}
+      {(credits || topSpenders.length > 0) && (
+        <motion.div variants={itemVariants} className="glass-card rounded-xl border border-border/50 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border/30">
+            <div className="flex">
+              {(['credits', 'spenders'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setCreditTab(t)}
+                  className={cn(
+                    'px-4 py-1.5 text-xs font-medium rounded-lg transition-colors',
+                    creditTab === t ? 'bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {t === 'credits' ? 'Credit Transactions' : 'Top Spenders'}
+                </button>
+              ))}
+            </div>
+            {creditTab === 'credits' && credits && credits.recent_transactions.length > 0 && (
+              <Button variant="outline" size="sm" onClick={() => exportCSV(credits.recent_transactions)} className="gap-1.5 text-xs h-8">
+                <Download className="w-3.5 h-3.5" /> Export
+              </Button>
+            )}
+          </div>
+
+          {creditTab === 'credits' && credits && (
+            credits.recent_transactions.length > 0 ? (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground border-b border-border/30 bg-white/[0.02]">
+                    <th className="text-left px-5 py-3 font-medium">Date</th>
+                    <th className="text-left px-4 py-3 font-medium">User</th>
+                    <th className="text-left px-4 py-3 font-medium">Type</th>
+                    <th className="text-left px-4 py-3 font-medium">Description</th>
+                    <th className="text-right px-5 py-3 font-medium">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/20">
+                  {credits.recent_transactions.map(t => (
+                    <tr key={t.id} className="hover:bg-white/[0.015]">
+                      <td className="px-5 py-2.5 text-muted-foreground whitespace-nowrap">
+                        {new Date(t.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <p className="font-medium">{t.user_name ?? '—'}</p>
+                        <p className="text-muted-foreground/60 text-[10px]">{t.user_email ?? ''}</p>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded flex items-center justify-center bg-white/[0.04]">
+                            {txIcon(t.type, t.amount)}
+                          </span>
+                          <span className="capitalize text-muted-foreground">{t.type.replace(/_/g, ' ').toLowerCase()}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground max-w-[180px] truncate">{t.description}</td>
+                      <td className={cn(
+                        'px-5 py-2.5 text-right font-semibold tabular-nums',
+                        t.amount >= 0 ? 'text-emerald-400' : 'text-muted-foreground',
+                      )}>
+                        {t.amount >= 0 ? '+' : ''}${Math.abs(t.amount).toFixed(4)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="text-center py-10 text-muted-foreground/40">
+                <Zap className="w-7 h-7 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No credit transactions yet</p>
+              </div>
+            )
+          )}
+
+          {creditTab === 'spenders' && (
+            topSpenders.length > 0 ? (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground border-b border-border/30 bg-white/[0.02]">
+                    <th className="text-left px-5 py-3 font-medium">User</th>
+                    <th className="text-right px-4 py-3 font-medium">Total Spend</th>
+                    <th className="text-right px-4 py-3 font-medium">Tokens</th>
+                    <th className="text-right px-5 py-3 font-medium">Calls</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/20">
+                  {topSpenders.map((s, i) => (
+                    <tr key={s.userId ?? i} className="hover:bg-white/[0.015]">
+                      <td className="px-5 py-2.5">
+                        <p className="font-medium">{s.name}</p>
+                        <p className="text-muted-foreground/60 text-[10px]">{s.email}</p>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-amber-400">
+                        ${s.totalSpend.toFixed(4)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                        {formatTokens(s.totalTokens)}
+                      </td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-muted-foreground">
+                        {s.calls.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="text-center py-10 text-muted-foreground/40">
+                <TrendingUp className="w-7 h-7 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No platform usage recorded yet</p>
+              </div>
+            )
+          )}
+        </motion.div>
+      )}
 
       {/* ─── Row 3: Transactions Table ─── */}
       <motion.div

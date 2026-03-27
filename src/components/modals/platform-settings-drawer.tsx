@@ -8,8 +8,18 @@ import { Switch } from '@/components/ui/switch';
 import {
   Settings, DollarSign, Bell, CheckCircle2, Info,
   Key, Trash2, Plus, Copy, Check as CheckIcon2,
-  Loader2, Shield, MessageSquare, Save, X,
+  Loader2, Shield, MessageSquare, Save, X, Cpu, Eye, EyeOff,
+  ExternalLink,
 } from 'lucide-react';
+
+const BYOK_PROVIDERS = [
+  { id: 'openai',     label: 'OpenAI',     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
+  { id: 'anthropic',  label: 'Anthropic',  models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'] },
+  { id: 'ollama',     label: 'Ollama (local)', models: ['llama3', 'mistral', 'gemma2', 'phi3'] },
+  { id: 'mistral',    label: 'Mistral AI', models: ['mistral-large-latest', 'mistral-small-latest'] },
+  { id: 'groq',       label: 'Groq',       models: ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'] },
+  { id: 'together',   label: 'Together AI', models: ['meta-llama/Llama-3-70b-chat-hf', 'mistralai/Mixtral-8x7B-Instruct-v0.1'] },
+] as const;
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -53,6 +63,18 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [savedPrefs, setSavedPrefs] = useState(false);
 
+  // BYOK state
+  const [byokConfigured, setByokConfigured] = useState(false);
+  const [byokProvider, setByokProvider] = useState('openai');
+  const [byokModel, setByokModel] = useState('gpt-4o');
+  const [byokApiKey, setByokApiKey] = useState('');
+  const [byokBaseUrl, setByokBaseUrl] = useState('');
+  const [byokShowKey, setByokShowKey] = useState(false);
+  const [byokHasKey, setByokHasKey] = useState(false);
+  const [savingByok, setSavingByok] = useState(false);
+  const [savedByok, setSavedByok] = useState(false);
+  const [byokError, setByokError] = useState<string | null>(null);
+
   // API Keys state
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [apiKeyLimit, setApiKeyLimit] = useState(2);
@@ -65,6 +87,19 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
 
   useEffect(() => {
     if (!open) return;
+
+    fetch('/api/account/llm-config')
+      .then(r => r.json())
+      .then(data => {
+        if (data.configured) {
+          setByokConfigured(true);
+          setByokProvider(data.provider || 'openai');
+          setByokModel(data.defaultModel || 'gpt-4o');
+          setByokBaseUrl(data.baseUrl || '');
+          setByokHasKey(data.hasApiKey);
+        }
+      })
+      .catch(() => {});
 
     fetch('/api/user/api-keys')
       .then(r => r.json())
@@ -154,6 +189,50 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
       }
     } catch {} finally {
       setRevokingId(null);
+    }
+  }
+
+  async function saveByok() {
+    setSavingByok(true);
+    setSavedByok(false);
+    setByokError(null);
+    try {
+      const res = await fetch('/api/account/llm-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: byokProvider,
+          apiKey: byokApiKey || '', // empty = keep existing
+          defaultModel: byokModel,
+          baseUrl: byokBaseUrl || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setByokError(data.error ?? 'Failed to save');
+      } else {
+        setByokConfigured(true);
+        setByokHasKey(data.hasApiKey);
+        setByokApiKey(''); // clear input after save
+        setSavedByok(true);
+        setTimeout(() => setSavedByok(false), 3000);
+      }
+    } catch {
+      setByokError('Failed to save');
+    } finally {
+      setSavingByok(false);
+    }
+  }
+
+  async function removeByok() {
+    setSavingByok(true);
+    try {
+      await fetch('/api/account/llm-config', { method: 'DELETE' });
+      setByokConfigured(false);
+      setByokApiKey('');
+      setByokHasKey(false);
+    } catch {} finally {
+      setSavingByok(false);
     }
   }
 
@@ -465,6 +544,145 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
                     Install the AI Team Studio VS Code extension, click "Login", and you'll be redirected here to auto-connect.
                   </p>
                 </div>
+              </section>
+
+              {/* ─── Bring Your Own Model ──────────────────────────────── */}
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-4 h-4 text-amber" />
+                    <h3 className="text-sm font-semibold">Your AI Model</h3>
+                  </div>
+                  {byokConfigured && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-medium">
+                      Active — using your key
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-amber/5 border border-amber/10">
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    Connect your own AI provider key. You'll only pay the platform fee — token costs go directly to your provider. Leave blank to use platform credits instead.
+                  </p>
+                </div>
+
+                <div className="space-y-2.5">
+                  {/* Provider */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Provider</label>
+                    <select
+                      value={byokProvider}
+                      onChange={e => {
+                        setByokProvider(e.target.value);
+                        const p = BYOK_PROVIDERS.find(p => p.id === e.target.value);
+                        if (p) setByokModel(p.models[0]);
+                      }}
+                      className="w-full text-xs bg-[var(--surface)] border border-border rounded-lg px-3 py-2 outline-none focus:border-amber/40 transition-colors"
+                    >
+                      {BYOK_PROVIDERS.map(p => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Model */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Default Model</label>
+                    <select
+                      value={byokModel}
+                      onChange={e => setByokModel(e.target.value)}
+                      className="w-full text-xs bg-[var(--surface)] border border-border rounded-lg px-3 py-2 outline-none focus:border-amber/40 transition-colors"
+                    >
+                      {(BYOK_PROVIDERS.find(p => p.id === byokProvider)?.models ?? []).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* API Key */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground block mb-1">
+                      API Key
+                      {byokHasKey && !byokApiKey && (
+                        <span className="ml-1.5 text-emerald-400">· key saved</span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={byokShowKey ? 'text' : 'password'}
+                        value={byokApiKey}
+                        onChange={e => setByokApiKey(e.target.value)}
+                        placeholder={byokHasKey ? 'Leave blank to keep existing key' : byokProvider === 'ollama' ? 'Not required for Ollama' : 'sk-...'}
+                        className="w-full text-xs bg-[var(--surface)] border border-border rounded-lg px-3 py-2 pr-8 outline-none focus:border-amber/40 placeholder:text-muted-foreground/30 transition-colors font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setByokShowKey(v => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground"
+                      >
+                        {byokShowKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Base URL (for Ollama / custom) */}
+                  {(byokProvider === 'ollama' || byokProvider === 'together') && (
+                    <div>
+                      <label className="text-[10px] font-semibold text-muted-foreground block mb-1">
+                        {byokProvider === 'ollama' ? 'Ollama Base URL' : 'Custom Base URL (optional)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={byokBaseUrl}
+                        onChange={e => setByokBaseUrl(e.target.value)}
+                        placeholder={byokProvider === 'ollama' ? 'http://localhost:11434' : 'https://api.together.xyz'}
+                        className="w-full text-xs bg-[var(--surface)] border border-border rounded-lg px-3 py-2 outline-none focus:border-amber/40 placeholder:text-muted-foreground/30 transition-colors font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {byokError && (
+                    <p className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
+                      {byokError}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      onClick={saveByok}
+                      disabled={savingByok}
+                      size="sm"
+                      className="gap-1.5 h-7 text-xs bg-amber text-background hover:bg-amber/90 flex-1"
+                    >
+                      {savingByok ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : savedByok ? (
+                        <><CheckCircle2 className="w-3 h-3" /> Saved</>
+                      ) : (
+                        <><Save className="w-3 h-3" /> Save Model Config</>
+                      )}
+                    </Button>
+                    {byokConfigured && (
+                      <Button
+                        onClick={removeByok}
+                        disabled={savingByok}
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs text-red-400 border-red-500/20 hover:bg-red-500/10"
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <a
+                  href="/account/billing"
+                  className="flex items-center gap-1.5 text-[10px] text-amber hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Manage credits & billing →
+                </a>
               </section>
             </div>
           </motion.div>

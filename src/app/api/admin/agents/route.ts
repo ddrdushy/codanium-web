@@ -48,7 +48,7 @@ export async function GET() {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const usageStats = await prisma.lLMUsage.groupBy({
       by: ['agentName'],
-      _sum: { tokensUsed: true, cost: true },
+      _sum: { tokensUsed: true, actualCost: true },
       _count: { id: true },
       where: { createdAt: { gte: thirtyDaysAgo } },
     });
@@ -57,9 +57,9 @@ export async function GET() {
       usageStats.map((u) => [
         u.agentName,
         {
-          totalTokens: u._sum.tokensUsed ?? 0,
-          totalCost: u._sum.cost ?? 0,
-          callCount: u._count.id,
+          totalTokens: u._sum?.tokensUsed ?? 0,
+          totalCost: u._sum?.actualCost ?? 0,
+          callCount: u._count?.id ?? 0,
         },
       ]),
     );

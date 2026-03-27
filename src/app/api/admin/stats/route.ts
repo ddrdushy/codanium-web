@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 
       // Total LLM cost
       prisma.lLMUsage.aggregate({
-        _sum: { cost: true, tokensUsed: true },
+        _sum: { actualCost: true, tokensUsed: true },
       }),
 
       // Users by plan
@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
         total: totalDocuments,
       },
       costs: {
-        totalLLMCost: costData._sum.cost ?? 0,
-        totalTokensUsed: costData._sum.tokensUsed ?? 0,
+        totalLLMCost: costData._sum?.actualCost ?? 0,
+        totalTokensUsed: costData._sum?.tokensUsed ?? 0,
       },
       revenue: {
         total: recentTransactions._sum.amount ?? 0,

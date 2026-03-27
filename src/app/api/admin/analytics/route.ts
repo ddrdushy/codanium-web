@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         DATE("createdAt") as date,
         provider,
         SUM("tokensUsed")::int as tokens,
-        SUM(cost)::float as cost
+        SUM("actualCost")::float as cost
       FROM llm_usage
       WHERE "createdAt" > NOW() - INTERVAL '30 days'
       GROUP BY DATE("createdAt"), provider
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       SELECT
         "agentName" as agent,
         SUM("tokensUsed")::int as tokens,
-        SUM(cost)::float as cost,
+        SUM("actualCost")::float as cost,
         COUNT(*)::int as calls
       FROM llm_usage
       GROUP BY "agentName"
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
         provider,
         model,
         SUM("tokensUsed")::int as tokens,
-        SUM(cost)::float as cost,
+        SUM("actualCost")::float as cost,
         COUNT(*)::int as calls
       FROM llm_usage
       GROUP BY provider, model
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
         u."projectId" as project_id,
         p.name as project_name,
         SUM(u."tokensUsed")::int as tokens,
-        SUM(u.cost)::float as cost
+        SUM(u."actualCost")::float as cost
       FROM llm_usage u
       LEFT JOIN projects p ON p.id = u."projectId"
       GROUP BY u."projectId", p.name
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 
     // Totals
     const totals = await prisma.lLMUsage.aggregate({
-      _sum: { tokensUsed: true, cost: true },
+      _sum: { tokensUsed: true, actualCost: true },
       _count: true,
     });
 
@@ -90,8 +90,8 @@ export async function GET(request: NextRequest) {
       byProvider,
       topProjects,
       totals: {
-        tokens: totals._sum.tokensUsed ?? 0,
-        cost: totals._sum.cost ?? 0,
+        tokens: totals._sum?.tokensUsed ?? 0,
+        cost: totals._sum?.actualCost ?? 0,
         totalCalls: totals._count,
       },
     });
@@ -146,7 +146,7 @@ async function handleListMode(searchParams: URLSearchParams) {
   const usage = usageRecords.map((r) => ({
     date: r.createdAt.toISOString().split('T')[0],
     tokens_used: r.tokensUsed,
-    cost: r.cost,
+    cost: r.actualCost,
     provider: r.provider.toLowerCase(),
     model: r.model,
     agent_name: r.agentName,

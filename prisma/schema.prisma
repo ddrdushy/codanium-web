@@ -56,6 +56,8 @@ model User {
   orgMemberships  OrgMember[]
   transactions    Transaction[]
   preferences     UserPreferences?
+  creditWallet    CreditWallet?
+  llmUsages       LLMUsage[]
 
   @@map("users")
 }
@@ -514,20 +516,30 @@ model AuditLog {
 // ─── LLM Usage Tracking ────────────────────────────────────────────────────
 
 model LLMUsage {
-  id         String   @id @default(cuid())
-  tokensUsed Int
-  cost       Float
-  provider   String   // openai, anthropic, ollama
-  model      String   @default("")
-  agentName  String   @default("")
-  projectId  String
-  createdAt  DateTime @default(now())
+  id           String      @id @default(cuid())
+  tokensUsed   Int
+  actualCost   Float       @default(0) // raw provider cost
+  markedUpCost Float?      // actualCost × (1 + markup%) — null for BYOK
+  billingType  BillingType @default(PLATFORM)
+  provider     String      // openai, anthropic, ollama
+  model        String      @default("")
+  agentName    String      @default("")
+  projectId    String
+  userId       String?     // who triggered the call
+  createdAt    DateTime    @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
 
   @@index([projectId])
+  @@index([userId])
   @@index([createdAt])
   @@map("llm_usage")
+}
+
+enum BillingType {
+  PLATFORM  // deducted from credit wallet
+  BYOK      // user's own key — no credit deduction
 }
 
 // ─── Billing / Transactions ─────────────────────────────────────────────────
@@ -757,6 +769,7 @@ model LLMProviderConfig {
 }
 
 enum ConfigScope {
+  USER
   PROJECT
   AGENT
 }
@@ -1162,6 +1175,53 @@ model ProjectMemory {
   @@index([projectId])
   @@index([projectId, category])
   @@map("project_memories")
+}
+
+// ─── Credit Wallet & Transactions ───────────────────────────────────────────
+
+model CreditWallet {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  balance            Float     @default(0)    // current spendable balance in USD
+  lifetimeAdded      Float     @default(0)    // total ever added (purchased + free)
+  lifetimeUsed       Float     @default(0)    // total ever spent
+  freeCreditsGranted Float     @default(0)    // amount given at signup
+  freeCreditsExpiry  DateTime?               // when free credits expire
+  freeDataConsent    Boolean   @default(false) // consented to data use for improvement
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+
+  @@map("credit_wallets")
+}
+
+model CreditTransaction {
+  id                    String                @id @default(cuid())
+  walletId              String
+  amount                Float                 // positive = credit in, negative = debit out
+  type                  CreditTransactionType
+  description           String                @default("")
+  stripePaymentIntentId String?               @unique
+  stripeSessionId       String?               @unique
+  llmUsageId            String?               // which LLM call caused the debit
+  createdAt             DateTime              @default(now())
+
+  wallet CreditWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([createdAt])
+  @@map("credit_transactions")
+}
+
+enum CreditTransactionType {
+  FREE_GRANT   // onboarding free credits
+  PURCHASE     // Stripe top-up
+  USAGE        // LLM call debit (negative)
+  REFUND       // Stripe refund (positive)
+  ADJUSTMENT   // admin manual correction
+  EXPIRY       // free credits expired (negative)
 }
 
 // ─── Admin Settings (Key-Value) ─────────────────────────────────────────────

@@ -221,6 +221,58 @@ export async function createCheckoutSession(
 }
 
 /**
+ * Create a Stripe Checkout Session for a one-time credit pack purchase.
+ */
+export async function createCreditCheckoutSession(params: {
+  customerId: string;
+  userId: string;
+  packId: string;
+  packLabel: string;
+  priceInCents: number;
+  credits: number;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<string> {
+  const stripe = await getStripeClient();
+
+  const session = await stripe.checkout.sessions.create({
+    customer: params.customerId,
+    mode: 'payment',
+    line_items: [
+      {
+        price_data: {
+          currency: 'usd',
+          unit_amount: params.priceInCents,
+          product_data: {
+            name: `${params.packLabel} Credits`,
+            description: `$${params.credits} USD of AI agent credits`,
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+    metadata: {
+      type: 'credit_purchase',
+      userId: params.userId,
+      packId: params.packId,
+      credits: String(params.credits),
+    },
+    payment_intent_data: {
+      metadata: {
+        type: 'credit_purchase',
+        userId: params.userId,
+        packId: params.packId,
+        credits: String(params.credits),
+      },
+    },
+  });
+
+  return session.url ?? '';
+}
+
+/**
  * Create a Stripe Customer Portal session.
  */
 export async function createPortalSession(

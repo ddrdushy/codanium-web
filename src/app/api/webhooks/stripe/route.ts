@@ -51,6 +51,50 @@ export async function POST(request: NextRequest) {
       // ── Checkout completed ────────────────────────────────────────────
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // ── One-time credit purchase ──
+        if (session.mode === 'payment' && session.metadata?.type === 'credit_purchase') {
+          const userId = session.metadata.userId;
+          const credits = parseFloat(session.metadata.credits ?? '0');
+          const packId = session.metadata.packId ?? 'unknown';
+
+          if (userId && credits > 0) {
+            try {
+              const wallet = await prisma.creditWallet.findUnique({ where: { userId } });
+              if (wallet) {
+                const piId = typeof session.payment_intent === 'string'
+                  ? session.payment_intent
+                  : session.payment_intent?.id ?? null;
+
+                await prisma.$transaction([
+                  prisma.creditWallet.update({
+                    where: { userId },
+                    data: {
+                      balance: { increment: credits },
+                      lifetimeAdded: { increment: credits },
+                    },
+                  }),
+                  prisma.creditTransaction.create({
+                    data: {
+                      walletId: wallet.id,
+                      amount: credits,
+                      type: 'PURCHASE',
+                      description: `Credit pack: ${packId} (+$${credits})`,
+                      stripeSessionId: session.id,
+                      stripePaymentIntentId: piId ?? undefined,
+                    },
+                  }),
+                ]);
+                console.log(`[StripeWebhook] Added $${credits} credits to user ${userId}`);
+              }
+            } catch (err) {
+              console.error('[StripeWebhook] Failed to credit wallet:', err);
+            }
+          }
+          break;
+        }
+
+        // ── Subscription checkout ──
         if (session.mode === 'subscription' && session.subscription) {
           const subId =
             typeof session.subscription === 'string'

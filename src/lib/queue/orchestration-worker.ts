@@ -96,6 +96,14 @@ async function processOrchestrationJob(
     projectId: run.projectId,
     payload: { runId },
   });
+
+  // 8. If this was a child of a parallel team, check if team is now complete
+  if (run.parentRunId) {
+    const { maybeCompleteTeam } = await import('@/lib/ai/orchestration/team-dispatch');
+    await maybeCompleteTeam(run.parentRunId, run.projectId).catch((err) => {
+      console.warn('[Worker] maybeCompleteTeam failed:', err.message);
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

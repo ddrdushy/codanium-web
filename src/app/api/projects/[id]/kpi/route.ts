@@ -43,7 +43,7 @@ export async function GET(
       }),
       prisma.lLMUsage.findMany({
         where: { projectId },
-        select: { provider: true, tokensUsed: true, cost: true, createdAt: true },
+        select: { provider: true, tokensUsed: true, actualCost: true, createdAt: true },
       }),
       prisma.sDLCStage.findMany({
         where: { projectId },
@@ -90,11 +90,11 @@ export async function GET(
     };
 
     // LLM cost metrics
-    const totalCost = llmUsage.reduce((sum, u) => sum + u.cost, 0);
+    const totalCost = llmUsage.reduce((sum, u) => sum + u.actualCost, 0);
     const totalTokens = llmUsage.reduce((sum, u) => sum + u.tokensUsed, 0);
     const costByProvider = llmUsage.reduce((acc, u) => {
       const provider = u.provider.toLowerCase();
-      acc[provider] = (acc[provider] || 0) + u.cost;
+      acc[provider] = (acc[provider] || 0) + u.actualCost;
       return acc;
     }, {} as Record<string, number>);
     const tokensByProvider = llmUsage.reduce((acc, u) => {

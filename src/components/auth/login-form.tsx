@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+
 import { Input } from '@/components/ui/input';
 import { SocialButtons } from './social-buttons';
 import { Zap, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
@@ -110,9 +111,9 @@ export function LoginForm() {
             <label htmlFor="password" className="text-xs font-medium text-muted-foreground">
               Password
             </label>
-            <button type="button" className="text-xs text-amber hover:text-amber/80 transition-colors">
+            <Link href="/forgot-password" className="text-xs text-amber hover:text-amber/80 transition-colors">
               Forgot password?
-            </button>
+            </Link>
           </div>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />

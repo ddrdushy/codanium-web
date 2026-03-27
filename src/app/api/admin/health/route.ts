@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
       // Platform-wide LLM stats
       prisma.lLMUsage.count(),
-      prisma.lLMUsage.aggregate({ _sum: { cost: true } }),
+      prisma.lLMUsage.aggregate({ _sum: { actualCost: true } }),
 
       // Recent errors: last 10 failed orchestration runs
       prisma.orchestrationRun.findMany({
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       bullmq: bullmqMetrics,
       platform: {
         totalLlmCalls: totalLlmCalls,
-        totalLlmCost: llmCostAggregate._sum.cost ?? 0,
+        totalLlmCost: llmCostAggregate._sum?.actualCost ?? 0,
         uptime: process.uptime(),
       },
       recentErrors,

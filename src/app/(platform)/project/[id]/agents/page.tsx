@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchAgents, fetchCards } from '@/lib/api';
+import { fetchAgents, fetchCards, type TeamDispatchResult } from '@/lib/api';
+import { RunTeamModal } from '@/components/agents/run-team-modal';
+import { useTeamStatus } from '@/lib/hooks/use-team-status';
 
 import { Agent, Card, AgentGroup, AgentStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -12,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import {
   Bot, Activity, Cpu, Shield, Code2, Cloud, BrainCircuit,
   Circle, ChevronRight, Zap, Clock, Pause, AlertTriangle,
-  Eye, BarChart3, GitPullRequest, FileText, Terminal
+  Eye, BarChart3, GitPullRequest, FileText, Terminal, Users, CheckCircle2
 } from 'lucide-react';
 
 const groupConfig: Record<AgentGroup, {
@@ -151,6 +153,10 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
+  const [showRunTeam, setShowRunTeam] = useState(false);
+  const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
+
+  const { status: teamStatus } = useTeamStatus(projectId, activeTeamId);
 
   useEffect(() => {
     Promise.all([
@@ -205,8 +211,32 @@ export default function AgentsPage() {
                   {waitingCount} waiting
                 </Badge>
               )}
+              <button
+                onClick={() => setShowRunTeam(true)}
+                className="flex items-center gap-1 text-[10px] font-semibold bg-amber/10 border border-amber/20 text-amber hover:bg-amber/15 px-2 py-1 rounded-md transition-colors"
+              >
+                <Users className="w-3 h-3" />
+                Run Team
+              </button>
             </div>
           </div>
+
+          {/* Active team status banner */}
+          {teamStatus && teamStatus.overallStatus === 'running' && (
+            <div className="mb-2 flex items-center gap-2 text-[11px] bg-amber/5 border border-amber/20 rounded-lg px-3 py-2">
+              <Zap className="w-3 h-3 text-amber animate-pulse shrink-0" />
+              <span className="text-amber font-medium">Team running</span>
+              <span className="text-muted-foreground">— {teamStatus.completedCount}/{teamStatus.tasksCount} tasks complete</span>
+            </div>
+          )}
+          {teamStatus && teamStatus.overallStatus !== 'running' && (
+            <div className="mb-2 flex items-center gap-2 text-[11px] bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+              <span className="text-emerald-400 font-medium">Team done</span>
+              <span className="text-muted-foreground">— {teamStatus.completedCount} completed, {teamStatus.failedCount} failed</span>
+              <button onClick={() => setActiveTeamId(null)} className="ml-auto text-muted-foreground/50 hover:text-muted-foreground">×</button>
+            </div>
+          )}
 
           {/* Filter tabs */}
           <div className="flex gap-1 bg-white/[0.03] rounded-lg p-0.5">
@@ -542,6 +572,20 @@ export default function AgentsPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Run Team Modal */}
+      <AnimatePresence>
+        {showRunTeam && (
+          <RunTeamModal
+            projectId={projectId}
+            agents={agents}
+            onClose={() => setShowRunTeam(false)}
+            onDispatched={(result) => {
+              setActiveTeamId(result.teamId);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

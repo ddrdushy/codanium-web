@@ -34,6 +34,8 @@ import {
   CardState as LifecycleCardState,
   CardType as LifecycleCardType,
 } from '../orchestration/card-lifecycle';
+import { pushProjectToGitHub } from '@/lib/git/push';
+import { runDeploy } from '@/lib/deploy/runner';
 
 interface ExecuteOptions {
   projectId: string;
@@ -236,8 +238,32 @@ async function executeToolInternal(
       return gitBranchInWorkspace(projectId, args.name, args.action);
     case 'git_diff':
       return gitDiffInWorkspace(projectId, args.file, args.staged);
-    case 'create_pr':
-      return { message: 'PR creation not yet connected to GitHub API', title: args.title };
+    case 'create_pr': {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { gitTokenEncrypted: true, gitRepoOwner: true, gitRepoName: true },
+      });
+      if (!project?.gitTokenEncrypted || !project?.gitRepoOwner || !project?.gitRepoName) {
+        return { error: 'Git integration is not configured for this project. Ask the user to connect a GitHub repository in Project Settings.' };
+      }
+      const branchName = `ai-team-studio/agent-${Date.now()}`;
+      const result = await pushProjectToGitHub({
+        projectId,
+        branchName,
+        commitMessage: args.title,
+        createPR: true,
+        prTitle: args.title,
+        triggeredBy: agentShortName ?? 'agent',
+      });
+      if (!result.success) return { error: result.error ?? 'Failed to create PR' };
+      return {
+        success: true,
+        prNumber: result.pr?.number,
+        prUrl: result.pr?.htmlUrl,
+        branch: result.branchName,
+        filesCount: result.filesCount,
+      };
+    }
 
     // ── Web ─────────────────────────────────────────────────
     case 'web_search':
@@ -246,8 +272,24 @@ async function executeToolInternal(
       return handleWebFetch(args.url);
 
     // ── Deploy ──────────────────────────────────────────────
-    case 'trigger_deploy':
-      return { message: `Deploy to ${args.environment} queued`, environment: args.environment };
+    case 'trigger_deploy': {
+      const deployEnv: 'staging' | 'production' = args.environment === 'production' ? 'production' : 'staging';
+      const deployResult = await runDeploy({
+        projectId,
+        environment: deployEnv,
+        triggeredBy: agentShortName ?? 'agent',
+      });
+      if (!deployResult.success) {
+        return { error: deployResult.error ?? 'Deployment failed' };
+      }
+      return {
+        success: true,
+        environment: deployEnv,
+        runId: deployResult.runId,
+        deployUrl: deployResult.deployUrl ?? null,
+        logs: deployResult.logs,
+      };
+    }
 
     // ── Analysis ────────────────────────────────────────────
     case 'run_analysis':

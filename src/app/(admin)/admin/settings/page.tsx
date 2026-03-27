@@ -158,6 +158,15 @@ export default function SettingsPage() {
   const [twoFactorAuth, setTwoFactorAuth] = useState(true);
   const [ipAllowlist, setIpAllowlist] = useState(false);
 
+  // ─── Ollama token rates state ───
+  const [ollamaPromptRate, setOllamaPromptRate] = useState('0');
+  const [ollamaCompletionRate, setOllamaCompletionRate] = useState('0');
+
+  // ─── Billing state ───
+  const [markupPercent, setMarkupPercent] = useState('15');
+  const [freeCreditsAmount, setFreeCreditsAmount] = useState('5');
+  const [freeCreditsExpiryDays, setFreeCreditsExpiryDays] = useState('14');
+
   // ─── Agent Override state ───
   const [agentOverrides, setAgentOverrides] = useState<Array<{ id?: string; agentShortName: string; provider: string; model: string; baseUrl: string }>>([]);
   const [savingOverrides, setSavingOverrides] = useState(false);
@@ -237,6 +246,23 @@ export default function SettingsPage() {
         if (settings['security.ipAllowlist'] !== undefined) {
           setIpAllowlist(settings['security.ipAllowlist']);
         }
+        // Ollama token rates
+        if (settings['llm.ollama.promptRatePer1KTokens'] !== undefined) {
+          setOllamaPromptRate(String(settings['llm.ollama.promptRatePer1KTokens']));
+        }
+        if (settings['llm.ollama.completionRatePer1KTokens'] !== undefined) {
+          setOllamaCompletionRate(String(settings['llm.ollama.completionRatePer1KTokens']));
+        }
+        // Billing settings
+        if (settings['billing.markupPercent'] !== undefined) {
+          setMarkupPercent(String(settings['billing.markupPercent']));
+        }
+        if (settings['billing.freeCreditsAmount'] !== undefined) {
+          setFreeCreditsAmount(String(settings['billing.freeCreditsAmount']));
+        }
+        if (settings['billing.freeCreditsExpiryDays'] !== undefined) {
+          setFreeCreditsExpiryDays(String(settings['billing.freeCreditsExpiryDays']));
+        }
       })
       .catch(() => {/* keep defaults */});
 
@@ -295,6 +321,11 @@ export default function SettingsPage() {
         'stripe.webhookSecret': stripeWebhookSecret,
         'security.twoFactorAuth': twoFactorAuth,
         'security.ipAllowlist': ipAllowlist,
+        'llm.ollama.promptRatePer1KTokens': Number(ollamaPromptRate),
+        'llm.ollama.completionRatePer1KTokens': Number(ollamaCompletionRate),
+        'billing.markupPercent': Number(markupPercent),
+        'billing.freeCreditsAmount': Number(freeCreditsAmount),
+        'billing.freeCreditsExpiryDays': Number(freeCreditsExpiryDays),
       });
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 3000);
@@ -468,6 +499,32 @@ export default function SettingsPage() {
               className="w-20 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
             />
           </SettingField>
+          {defaultProvider === 'ollama' && (
+            <>
+              <SettingField label="Ollama Prompt Rate (per 1K tokens, $)">
+                <input
+                  type="number"
+                  value={ollamaPromptRate}
+                  onChange={(e) => setOllamaPromptRate(e.target.value)}
+                  step="0.0001"
+                  min="0"
+                  placeholder="0"
+                  className="w-28 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                />
+              </SettingField>
+              <SettingField label="Ollama Completion Rate (per 1K tokens, $)">
+                <input
+                  type="number"
+                  value={ollamaCompletionRate}
+                  onChange={(e) => setOllamaCompletionRate(e.target.value)}
+                  step="0.0001"
+                  min="0"
+                  placeholder="0"
+                  className="w-28 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                />
+              </SettingField>
+            </>
+          )}
           <div className="flex items-center justify-between py-3">
             <span className="text-sm text-muted-foreground">Test Connection</span>
             <div className="flex items-center gap-2">
@@ -528,6 +585,58 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
+        </div>
+      </motion.div>
+
+      {/* Billing Configuration */}
+      <motion.div
+        variants={itemVariants}
+        className="glass-card rounded-xl border border-border/50 p-6"
+      >
+        <SectionHeader
+          icon={<CreditCard className="w-4 h-4" />}
+          title="Billing Configuration"
+          subtitle="Credit system, markup, and free trial settings"
+          color="#8b5cf6"
+        />
+        <div className="space-y-0">
+          <SettingField label="Platform Markup % (applied to token costs)">
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={markupPercent}
+                onChange={(e) => setMarkupPercent(e.target.value)}
+                step="1"
+                min="0"
+                max="100"
+                className="w-20 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+              />
+              <span className="text-xs text-muted-foreground">%</span>
+            </div>
+          </SettingField>
+          <SettingField label="Free Credits for New Users ($)">
+            <input
+              type="number"
+              value={freeCreditsAmount}
+              onChange={(e) => setFreeCreditsAmount(e.target.value)}
+              step="1"
+              min="0"
+              className="w-24 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+            />
+          </SettingField>
+          <SettingField label="Free Trial Duration (days)">
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={freeCreditsExpiryDays}
+                onChange={(e) => setFreeCreditsExpiryDays(e.target.value)}
+                step="1"
+                min="1"
+                className="w-20 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+              />
+              <span className="text-xs text-muted-foreground">days</span>
+            </div>
+          </SettingField>
         </div>
       </motion.div>
 

@@ -17,6 +17,11 @@ export async function GET(request: NextRequest) {
       usersByPlan,
       totalRevenue,
       activeSubscriptions,
+      creditWalletStats,
+      creditTransactions,
+      byokUserCount,
+      platformUserCount,
+      topSpenders,
     ] = await Promise.all([
       prisma.transaction.findMany({
         orderBy: { createdAt: 'desc' },
@@ -32,6 +37,37 @@ export async function GET(request: NextRequest) {
       }),
       prisma.user.count({
         where: { status: 'ACTIVE' },
+      }),
+      // Credit wallet aggregate
+      prisma.creditWallet.aggregate({
+        _sum: { balance: true, lifetimeAdded: true, lifetimeUsed: true },
+        _count: true,
+      }),
+      // Recent credit transactions
+      prisma.creditTransaction.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          amount: true,
+          type: true,
+          description: true,
+          createdAt: true,
+          wallet: { select: { user: { select: { name: true, email: true } } } },
+        },
+      }),
+      // BYOK users: have an active USER-scope LLMProviderConfig
+      prisma.lLMProviderConfig.count({ where: { scope: 'USER', isActive: true } }),
+      // Platform users with a wallet (non-BYOK)
+      prisma.creditWallet.count(),
+      // Top spenders by markedUpCost
+      prisma.lLMUsage.groupBy({
+        by: ['userId'],
+        where: { userId: { not: null }, billingType: 'PLATFORM' },
+        _sum: { markedUpCost: true, tokensUsed: true },
+        _count: true,
+        orderBy: { _sum: { markedUpCost: 'desc' } },
+        take: 10,
       }),
     ]);
 
@@ -61,6 +97,25 @@ export async function GET(request: NextRequest) {
       date: t.createdAt.toISOString(),
     }));
 
+    // Resolve top spender user details
+    const topSpenderUserIds = topSpenders.map(s => s.userId).filter(Boolean) as string[];
+    const topSpenderUsers = topSpenderUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: topSpenderUserIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+    const userMap = Object.fromEntries(topSpenderUsers.map(u => [u.id, u]));
+
+    const topSpenderList = topSpenders.map(s => ({
+      userId: s.userId,
+      name:   s.userId ? (userMap[s.userId]?.name  ?? 'Unknown') : 'Unknown',
+      email:  s.userId ? (userMap[s.userId]?.email ?? '')         : '',
+      totalSpend:  s._sum.markedUpCost ?? 0,
+      totalTokens: s._sum.tokensUsed   ?? 0,
+      calls:       s._count,
+    }));
+
     return NextResponse.json({
       mrr,
       total_revenue: totalRevenue._sum.amount ?? 0,
@@ -68,6 +123,24 @@ export async function GET(request: NextRequest) {
       churn_rate: 2.4,
       plan_distribution: planDistribution,
       transactions: mappedTransactions,
+      credits: {
+        total_wallets:    creditWalletStats._count,
+        total_balance:    creditWalletStats._sum.balance       ?? 0,
+        lifetime_added:   creditWalletStats._sum.lifetimeAdded ?? 0,
+        lifetime_used:    creditWalletStats._sum.lifetimeUsed  ?? 0,
+        byok_users:       byokUserCount,
+        platform_users:   platformUserCount,
+        recent_transactions: creditTransactions.map(t => ({
+          id:          t.id,
+          amount:      t.amount,
+          type:        t.type,
+          description: t.description,
+          createdAt:   t.createdAt.toISOString(),
+          user_name:   t.wallet?.user?.name  ?? null,
+          user_email:  t.wallet?.user?.email ?? null,
+        })),
+      },
+      top_spenders: topSpenderList,
     });
   } catch (error) {
     console.error('GET /api/admin/billing error:', error);
