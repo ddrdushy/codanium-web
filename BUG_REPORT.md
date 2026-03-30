@@ -15,13 +15,13 @@
 | 3 | BUG-003 | PM creates only EPIC cards, no granular tasks | MEDIUM | PM agent prompt | FIXED (via BUG-002) | 2026-03-30 |
 | 4 | BUG-004 | LLM response timeouts >90s cause missed rounds | LOW | Gateway/provider | OPEN | 2026-03-30 |
 | 5 | BUG-005 | SA first response includes "don't have capability" text | LOW | SA prompt | OPEN | 2026-03-30 |
-| 6 | BUG-006 | Duplicate security task cards created (same title, diff IDs) | LOW | SEC/tool-executor | OPEN | 2026-03-30 |
+| 6 | BUG-006 | Duplicate security task cards created (same title, diff IDs) | LOW | SEC/tool-executor | FIXED | 2026-03-30 |
 | 7 | BUG-007 | Router has no intent patterns for 14 of 23 agents | HIGH | router.ts, types.ts | FIXED | 2026-03-30 |
-| 8 | BUG-008 | BA/SA re-activated after project entered building phase | MEDIUM | router.ts | OPEN | 2026-03-30 |
-| 9 | BUG-009 | JD unreachable — "need" in message matches cost_query before new_requirement | LOW | router.ts | OPEN | 2026-03-30 |
-| 10 | BUG-010 | SM unreachable — "API keys" matches architecture intent | LOW | router.ts | OPEN | 2026-03-30 |
-| 11 | BUG-011 | PRE unreachable — "rounds"/"test" in prompt message matches testing intent | LOW | router.ts | OPEN | 2026-03-30 |
-| 12 | BUG-012 | Intent pattern ordering — broad patterns (cost_query, testing) match before specific ones | MEDIUM | router.ts | OPEN | 2026-03-30 |
+| 8 | BUG-008 | BA/SA re-activated after project entered building phase | MEDIUM | router.ts | FIXED | 2026-03-30 |
+| 9 | BUG-009 | JD unreachable — "need" in message matches cost_query before new_requirement | LOW | router.ts | FIXED (via BUG-012) | 2026-03-30 |
+| 10 | BUG-010 | SM unreachable — "API keys" matches architecture intent | LOW | router.ts | FIXED (via BUG-012) | 2026-03-30 |
+| 11 | BUG-011 | PRE unreachable — "rounds"/"test" in prompt message matches testing intent | LOW | router.ts | FIXED (via BUG-012) | 2026-03-30 |
+| 12 | BUG-012 | Intent pattern ordering — broad patterns (cost_query, testing) match before specific ones | MEDIUM | router.ts | FIXED | 2026-03-30 |
 
 ---
 

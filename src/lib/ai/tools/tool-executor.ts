@@ -382,6 +382,15 @@ async function handleCreateCard(
     if (agent) ownerAgentId = agent.id;
   }
 
+  // ── BUG-006 fix: Deduplicate by title within the same project ─────
+  const existing = await prisma.card.findFirst({
+    where: { projectId, title: args.title },
+    select: { id: true, title: true, state: true },
+  });
+  if (existing) {
+    return { cardId: existing.id, title: existing.title, state: existing.state, requirementIds, deduplicated: true };
+  }
+
   const card = await prisma.card.create({
     data: {
       projectId,

@@ -32,53 +32,15 @@ export const VSCODE_REQUIRED_SENTINEL = '__VSCODE_REQUIRED__';
  * Patterns are tested against the lowercased message.
  * Order matters: first match wins.
  */
+// ─── ORDERING: Most specific patterns first, broadest last ───────────────
+// First-match-wins, so specific multi-word phrases must appear before
+// broad single-keyword patterns (BUG-012 fix).
 const INTENT_PATTERNS: Array<{ intent: UserIntent; patterns: RegExp[] }> = [
-  {
-    intent: 'bug_report',
-    patterns: [
-      /\b(bug|error|fix|broken|wrong|issue|crash|failing|exception|doesn'?t work|not working)\b/,
-    ],
-  },
-  {
-    intent: 'cost_query',
-    patterns: [
-      /\b(cost|budget|spending|token|expensive|price|money|billing|usage|how much)\b/,
-    ],
-  },
-  {
-    intent: 'deployment',
-    patterns: [
-      /\b(deploy|release|ship|launch|production|go live|rollback|staging|publish)\b/,
-    ],
-  },
-  {
-    intent: 'testing',
-    patterns: [
-      /\b(test|quality|qa|verify|check|validation|coverage|regression|e2e|unit test)\b/,
-    ],
-  },
+  // ── Tier 1: Highly specific — multi-word phrases, low false-positive ────
   {
     intent: 'approval',
     patterns: [
       /\b(brd\s+(is\s+)?approv|approv.{0,10}brd|proceed\s+to\s+(solution|architecture|design phase)|move\s+to\s+(next|architecture|solution)|advance\s+(the\s+)?phase|phase\s+(complet|done|approv))\b/i,
-    ],
-  },
-  {
-    intent: 'architecture',
-    patterns: [
-      /\b(architecture|database|api|structure|tech stack|framework|schema|microservice|scalab|infra|solution design|system design|sdd|hld)\b/,
-    ],
-  },
-  {
-    intent: 'ui_feedback',
-    patterns: [
-      /\b(look and feel|layout|color|ui\b|ux\b|screen|mockup|wireframe|font|spacing|responsive|visual design)\b/,
-    ],
-  },
-  {
-    intent: 'status_query',
-    patterns: [
-      /\b(status|progress|how('s| is)|what'?s happening|update|where are we|overview|summary|report)\b/,
     ],
   },
   {
@@ -95,9 +57,47 @@ const INTENT_PATTERNS: Array<{ intent: UserIntent; patterns: RegExp[] }> = [
     ],
   },
   {
+    intent: 'state_validation',
+    patterns: [
+      /\b(card.{0,10}state|state.{0,10}(transition|valid|correct|issue)|task.{0,10}(stuck|block|invalid)|board.{0,10}(check|valid|correct)|pipeline.{0,10}(stuck|block|issue)|workflow.{0,10}(valid|correct|issue))\b/,
+    ],
+  },
+
+  // ── Tier 2: Specific domain intents — unique keywords per domain ────────
+  {
+    intent: 'prompt_optimization',
+    patterns: [
+      /\b(prompt.{0,10}(optimi|improv|efficien|rewrit|engin)|system.{0,10}prompt|agent.{0,10}prompt|fewer.{0,10}round|prompt.{0,10}(token|length|size))\b/,
+    ],
+  },
+  {
+    intent: 'llm_optimization',
+    patterns: [
+      /\b(ai.{0,10}(cost|usage|optimi|efficien)|model.{0,10}(routing|selection|cost|cheaper)|token.{0,10}(budget|optimi|reduc)|llm.{0,10}(routing|cost|optimi)|cheaper.{0,10}model)\b/,
+    ],
+  },
+  {
+    intent: 'secrets',
+    patterns: [
+      /\b(secret|credential|api.?key.{0,10}(manage|stor|rotat|secur|leak)|vault|key.{0,10}(management|rotation|storage)|env.{0,10}(var|secret)|\.env\b|securely.{0,10}(store|manage))\b/,
+    ],
+  },
+  {
+    intent: 'integration',
+    patterns: [
+      /\b(integrat|third.?party|external.{0,10}(api|service)|webhook|connect.{0,10}(stripe|sendgrid|twilio|s3|aws|google|oauth|api)|api.{0,10}(integration|connect))\b/,
+    ],
+  },
+  {
+    intent: 'monitoring',
+    patterns: [
+      /\b(monitor|observ|alert.{0,10}(rule|setup|plan)|uptime|incident|slo\b|sli\b|sla\b|grafana|datadog|pager|on.?call|health.?check|site.?reliab)\b/,
+    ],
+  },
+  {
     intent: 'decision',
     patterns: [
-      /\b(decide|decision|compare|pros.{0,10}cons|trade.?off|which.{0,10}(should|better|best)|choose between|option.{0,10}(a|b|c)|recommend.{0,10}(between|which)|vs\b|versus)\b/,
+      /\b(decide|decision|compare.{0,10}(option|pros|cons)|pros.{0,10}cons|trade.?off|which.{0,10}(should|better|best)|choose between|recommend.{0,10}(between|which)|vs\b|versus)\b/,
     ],
   },
   {
@@ -107,47 +107,62 @@ const INTENT_PATTERNS: Array<{ intent: UserIntent; patterns: RegExp[] }> = [
     ],
   },
   {
-    intent: 'state_validation',
-    patterns: [
-      /\b(card.{0,10}state|state.{0,10}(transition|valid|correct|issue)|task.{0,10}(stuck|block|invalid)|board.{0,10}(check|valid|correct)|pipeline.{0,10}(stuck|block|issue)|workflow.{0,10}(valid|correct|issue))\b/,
-    ],
-  },
-  {
     intent: 'performance',
     patterns: [
-      /\b(performance|bottleneck|load time|page speed|core web vital|lighthouse|latency|benchmark|optimization|slow|caching strategy|performance budget)\b/,
+      /\b(performance|bottleneck|load time|page speed|core web vital|lighthouse|latency|benchmark|caching strategy|performance budget)\b/,
     ],
   },
   {
-    intent: 'integration',
+    intent: 'bug_report',
     patterns: [
-      /\b(integrat|third.?party|external.{0,10}(api|service)|webhook|connect.{0,10}(stripe|sendgrid|twilio|s3|aws|google|oauth|api)|api.{0,10}(integration|connect|design))\b/,
+      /\b(bug|error|fix|broken|wrong|issue|crash|failing|exception|doesn'?t work|not working)\b/,
     ],
   },
   {
-    intent: 'secrets',
+    intent: 'ui_feedback',
     patterns: [
-      /\b(secret|credential|api.?key.{0,10}(manage|stor|rotat|secur|leak)|vault|key.{0,10}(management|rotation|storage)|env.{0,10}(var|secret)|\.env)\b/,
+      /\b(look and feel|layout|color|ui\b|ux\b|screen|mockup|wireframe|font|spacing|responsive|visual design)\b/,
     ],
   },
   {
-    intent: 'monitoring',
+    intent: 'status_query',
     patterns: [
-      /\b(monitor|observ|alert|uptime|incident|slo\b|sli\b|sla\b|grafana|datadog|pager|on.?call|health.?check|site.?reliab)\b/,
+      /\b(status|progress|how('s| is)|what'?s happening|update|where are we|overview|summary|report)\b/,
+    ],
+  },
+
+  // ── Tier 3: Broad intents — tightened patterns to reduce false matches ──
+  {
+    intent: 'cost_query',
+    patterns: [
+      /\b(cost|budget|spending|expensive|price|money|billing|how much)\b/,
+      // "token" alone is too broad — require context
+      /\btoken.{0,10}(usage|cost|spend|bill)/,
     ],
   },
   {
-    intent: 'llm_optimization',
+    intent: 'deployment',
     patterns: [
-      /\b(ai.{0,10}(cost|usage|optimi|efficien)|model.{0,10}(routing|selection|cost|cheaper)|token.{0,10}(budget|optimi|reduc)|llm.{0,10}(routing|cost|optimi))\b/,
+      /\b(deploy|release|ship|launch|production|go live|rollback|staging|publish)\b/,
     ],
   },
   {
-    intent: 'prompt_optimization',
+    intent: 'testing',
     patterns: [
-      /\b(prompt.{0,10}(optimi|improv|efficien|rewrit|engin)|system.{0,10}prompt|agent.{0,10}prompt|fewer.{0,10}round|prompt.{0,10}(token|length|size))\b/,
+      // Tightened: require multi-word phrases, not bare "test" or "check"
+      /\b(test suite|test plan|test case|run.{0,3}test|write.{0,3}test|unit test|integration test|e2e test|qa\b|quality assurance|test coverage|regression|automated test)\b/,
     ],
   },
+  {
+    intent: 'architecture',
+    patterns: [
+      // Tightened: "api" alone is too broad — require "api design/endpoint/route"
+      /\b(architecture|database|tech stack|framework|schema|microservice|scalab|solution design|system design|sdd|hld)\b/,
+      /\bapi.{0,10}(design|endpoint|route|structure|gateway)\b/,
+    ],
+  },
+
+  // ── Tier 4: Broadest — catch-all for generic user messages ──────────────
   {
     intent: 'new_requirement',
     patterns: [
@@ -439,6 +454,19 @@ export class MessageRouter {
     // ── Priority 3: Keyword intent classification ─────────────────────
     const intent = this.classifyIntent(message);
     let agent = this.resolveAgent(intent);
+
+    // ── Priority 3.1: BA redirect guard for keyword routing ──────────
+    // If keyword routing points to BA but the project is past requirements
+    // (BRD exists, cards exist), redirect to ORC instead. (BUG-008 fix)
+    if (agent === 'BA' && intent !== 'approval') {
+      const shouldRedirect = await this.shouldRedirectFromBA(projectId);
+      if (shouldRedirect) {
+        console.log(
+          `[MessageRouter] BA keyword route OVERRIDDEN → BRD exists, intent "${intent}" redirected to ORC`,
+        );
+        return 'ORC';
+      }
+    }
 
     // ── Priority 3.5: Smart code_generation routing ──────────────────
     // If user wants to build but no cards exist yet, route to PM first

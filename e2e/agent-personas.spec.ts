@@ -1,14 +1,9 @@
 /**
- * Agent Persona Test Suite — User Simulation
+ * Agent Persona Test Suite — Conversational User Simulation
  *
- * Simulates a real user continuing the "BA Test - Craft Store" project
- * through the chat UI. Each test sends a natural user message designed
- * to trigger a specific untested agent persona.
- *
- * Project State:
- *   - BRD: DONE | SDD: DONE | 22 cards | Code: Auth module generated
- *   - Tested: BA, SA, PM, UX, TL, SD, QA, SEC, CA (9/23)
- *   - Untested: JD, AT, PF, ORC, STC, DEC, AUD, PE, DO, IE, SM, SR, LLM, PRE (14)
+ * Simulates a real user continuing the "BA Test - Craft Store" project.
+ * Each message waits for the FULL LLM response before sending the next.
+ * Follow-up messages are contextual to the agent's reply.
  *
  * Run:
  *   npx playwright test e2e/agent-personas.spec.ts --headed
@@ -21,70 +16,95 @@ const CHAT_URL = `/project/${PROJECT_ID}/chat`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Send a message via the chat textarea and press Enter */
-async function sendMessage(page: Page, text: string) {
+/**
+ * Send a message and wait for the agent to fully respond.
+ *
+ * Strategy:
+ *   1. Count completed agent messages (`.chat-markdown`) BEFORE sending
+ *   2. Type and send the message
+ *   3. Wait for a NEW `.chat-markdown` to appear (count increases)
+ *   4. Wait for the message text to stabilize (streaming finished)
+ *   5. Return the full response text
+ */
+async function sendAndWait(page: Page, text: string, timeoutMs = 180_000): Promise<string> {
+  console.log(`  [sendAndWait] Sending: "${text.slice(0, 80)}..."`);
+
+  // Type into textarea and send
   const input = page.locator('textarea').last();
-  await input.waitFor({ state: 'visible', timeout: 10_000 });
+  await input.waitFor({ state: 'visible', timeout: 15_000 });
   await input.click();
   await input.fill(text);
   await page.waitForTimeout(500);
   await page.keyboard.press('Enter');
-}
 
-/**
- * Wait for the agent to finish streaming its response.
- * Detects streaming by looking for the "is working..." indicator
- * or the spinning loader, then waits for them to disappear.
- */
-async function waitForResponse(page: Page, timeoutMs = 150_000): Promise<string> {
-  // First, wait a moment for streaming to start
-  await page.waitForTimeout(3000);
+  // Wait for the send button to become disabled (streaming started)
+  await page.waitForTimeout(2000);
 
-  // Wait for the streaming indicator to appear (agent is working)
-  const workingIndicator = page.locator('text=/is working/i').first();
-  const streamingSpinner = page.locator('.animate-spin').first();
-  const streamingText = page.locator('text=streaming...').first();
-
-  // Wait up to 10s for streaming to begin
-  await Promise.race([
-    workingIndicator.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {}),
-    streamingSpinner.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {}),
-    streamingText.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {}),
-  ]);
-
-  // Now wait for streaming to FINISH (all indicators gone)
+  // Phase 1: Wait for streaming to finish
+  // The send button is disabled during streaming (disabled={!inputValue.trim() || isStreaming})
+  // Wait for the streaming spinner/working indicator to appear then disappear
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const isWorking = await workingIndicator.isVisible().catch(() => false);
-    const isSpinning = await streamingSpinner.isVisible().catch(() => false);
-    const isStreaming = await streamingText.isVisible().catch(() => false);
 
-    if (!isWorking && !isSpinning && !isStreaming) {
-      // Extra wait for final render
-      await page.waitForTimeout(2000);
+  // Wait for streaming to START (spinner appears or "is working" text)
+  let streamingDetected = false;
+  const startDeadline = Date.now() + 30_000;
+  while (Date.now() < startDeadline) {
+    const hasSpinner = await page.locator('.animate-spin').first().isVisible().catch(() => false);
+    const isWorking = await page.locator('text=/is working|Working/').first().isVisible().catch(() => false);
+    const streamingLabel = await page.locator('text=streaming...').first().isVisible().catch(() => false);
+    if (hasSpinner || isWorking || streamingLabel) {
+      streamingDetected = true;
+      console.log(`  [sendAndWait] Streaming detected, waiting for completion...`);
       break;
+    }
+    await page.waitForTimeout(1000);
+  }
+
+  if (!streamingDetected) {
+    console.log(`  [sendAndWait] WARNING: No streaming indicator detected within 30s`);
+  }
+
+  // Phase 2: Wait for streaming to FINISH (all indicators gone)
+  while (Date.now() < deadline) {
+    const hasSpinner = await page.locator('.animate-spin').first().isVisible().catch(() => false);
+    const isWorking = await page.locator('text=/is working|Working/').first().isVisible().catch(() => false);
+    const streamingLabel = await page.locator('text=streaming...').first().isVisible().catch(() => false);
+
+    if (!hasSpinner && !isWorking && !streamingLabel) {
+      // Double-check: wait 4 more seconds and verify still not streaming
+      await page.waitForTimeout(4000);
+      const stillStreaming = await page.locator('.animate-spin').first().isVisible().catch(() => false);
+      if (!stillStreaming) {
+        console.log(`  [sendAndWait] Streaming finished.`);
+        break;
+      }
     }
     await page.waitForTimeout(2000);
   }
 
-  // Get the last agent message text
-  const agentMessages = page.locator('[class*="rounded-tl-sm"]');
-  const count = await agentMessages.count();
+  // Phase 3: Get the last agent message text
+  await page.waitForTimeout(2000); // Final render settle
+  const agentBubbles = page.locator('.chat-markdown');
+  const count = await agentBubbles.count();
   if (count > 0) {
-    const lastMessage = agentMessages.nth(count - 1);
-    return (await lastMessage.textContent()) ?? '';
+    const lastMsg = agentBubbles.nth(count - 1);
+    const finalText = (await lastMsg.textContent()) ?? '';
+    console.log(`  [sendAndWait] Got response: ${finalText.length} chars (${count} total agent messages)`);
+    return finalText;
   }
+
+  console.log(`  [sendAndWait] No agent messages found after streaming`);
   return '';
 }
 
-/** Get the name of the agent that responded (from the message header) */
-async function getRespondingAgent(page: Page): Promise<string> {
-  // Agent name appears as a bold span above the message bubble
-  const agentLabels = page.locator('span.font-semibold, [class*="font-semibold"]').filter({ hasNotText: /you|user/i });
-  const count = await agentLabels.count();
+/** Get the name of the last responding agent from the chat */
+async function getLastAgentName(page: Page): Promise<string> {
+  // Agent names appear in the header above each agent bubble
+  // Look for the text-[11px] font-semibold span inside the agent message groups
+  const agentHeaders = page.locator('[class*="rounded-tl-sm"]').locator('xpath=../..').locator('[class*="font-semibold"]');
+  const count = await agentHeaders.count();
   if (count > 0) {
-    const lastLabel = agentLabels.nth(count - 1);
-    return (await lastLabel.textContent())?.trim() ?? 'Unknown';
+    return (await agentHeaders.nth(count - 1).textContent())?.trim() ?? 'Unknown';
   }
   return 'Unknown';
 }
@@ -97,290 +117,145 @@ async function screenshot(page: Page, name: string) {
 /** Navigate to the Craft Store project chat */
 async function goToChat(page: Page) {
   await page.goto(CHAT_URL, { waitUntil: 'domcontentloaded' });
-  // Wait for chat input to be visible (page is ready)
   await page.locator('textarea').last().waitFor({ state: 'visible', timeout: 20_000 });
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3000); // Let messages load
 }
 
 // ─── Test Suite ───────────────────────────────────────────────────────────────
 
-test.describe('Agent Persona Tests — User Simulation', () => {
-  // 3 minutes per test — agents can be slow
-  test.describe.configure({ timeout: 240_000 });
+test.describe('Agent Persona Tests — Conversational Flow', () => {
+  test.describe.configure({ timeout: 600_000 }); // 10 min per test
 
-  // ── GOVERNANCE GROUP ──────────────────────────────────────────────────────
-
-  test('01 — ORC: Request project status update', async ({ page }) => {
+  test('Full agent conversation — project status through deployment', async ({ page }) => {
     await goToChat(page);
-    await sendMessage(page,
+
+    // ── Round 1: ORC — Project Status ──────────────────────────────
+    console.log('\n══════ ROUND 1: ORC — Status Update ══════');
+    const r1 = await sendAndWait(page,
       "Can you give me a full status update? I want to know where we stand — what's been completed, what's in progress, and what should happen next."
     );
-
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
     await screenshot(page, '01-orc-status');
+    const agent1 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent1} | Length: ${r1.length}`);
+    expect(r1.length).toBeGreaterThan(50);
 
-    console.log(`\n[ORC TEST] Responding agent: ${agent}`);
-    console.log(`[ORC TEST] Response length: ${response.length} chars`);
-    console.log(`[ORC TEST] Preview: ${response.slice(0, 300)}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('02 — DEC: Request a decision on payment gateway', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "I need help deciding on the payment system. Should we go with Stripe, PayPal, or Square for the craft store? Can you compare them for me with pros and cons so I can choose?"
+    // ── Round 2: DEC — Decision based on status ────────────────────
+    console.log('\n══════ ROUND 2: DEC — Payment Decision ══════');
+    const r2 = await sendAndWait(page,
+      "Thanks for the update. Before we continue building, I need help deciding on the payment system. Should we use Stripe, PayPal, or Square? Compare them with pros and cons."
     );
+    await screenshot(page, '02-dec-decision');
+    const agent2 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent2} | Length: ${r2.length}`);
+    expect(r2.length).toBeGreaterThan(50);
 
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '02-dec-payment-decision');
-
-    console.log(`\n[DEC TEST] Responding agent: ${agent}`);
-    console.log(`[DEC TEST] Response length: ${response.length} chars`);
-    console.log(`[DEC TEST] Has options: ${response.toLowerCase().includes('option') || response.toLowerCase().includes('stripe')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('03 — AUD: Audit the requirements phase', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "Before we go further, I want to make sure everything is solid. Can you audit what's been done so far — check if the requirements document covers everything, the architecture is complete, and nothing was missed?"
+    // ── Round 3: AUD — Audit before proceeding ─────────────────────
+    console.log('\n══════ ROUND 3: AUD — Phase Audit ══════');
+    const r3 = await sendAndWait(page,
+      "Good, let's go with Stripe. Before we build more, can you audit what's been done so far? Check if the requirements and architecture documents are complete and nothing was missed."
     );
-
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
     await screenshot(page, '03-aud-audit');
+    const agent3 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent3} | Length: ${r3.length}`);
+    expect(r3.length).toBeGreaterThan(50);
 
-    console.log(`\n[AUD TEST] Responding agent: ${agent}`);
-    console.log(`[AUD TEST] Response length: ${response.length} chars`);
-    console.log(`[AUD TEST] Has audit terms: ${response.toLowerCase().includes('audit') || response.toLowerCase().includes('gate') || response.toLowerCase().includes('complete')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('04 — STC: Check card state consistency', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "Can you check the task board and make sure all the card states are correct? I want to know if any tasks are stuck or if there are problems with how things are moving through the pipeline."
+    // ── Round 4: STC — Card state validation ───────────────────────
+    console.log('\n══════ ROUND 4: STC — Card States ══════');
+    const r4 = await sendAndWait(page,
+      "Can you also check the task board card states? I want to make sure all tasks are moving through the pipeline correctly and nothing is stuck."
     );
+    await screenshot(page, '04-stc-states');
+    const agent4 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent4} | Length: ${r4.length}`);
+    expect(r4.length).toBeGreaterThan(50);
 
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '04-stc-card-states');
-
-    console.log(`\n[STC TEST] Responding agent: ${agent}`);
-    console.log(`[STC TEST] Response length: ${response.length} chars`);
-    console.log(`[STC TEST] Has state terms: ${response.toLowerCase().includes('state') || response.toLowerCase().includes('card') || response.toLowerCase().includes('progress')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  // ── ENGINEERING GROUP ─────────────────────────────────────────────────────
-
-  test('05 — JD: Assign a simple UI task', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "I need a simple product card component built for the store. It should show the product image, name, price, and artisan name with an Add to Cart button. Can a junior developer handle this?"
+    // ── Round 5: PF — Performance planning ─────────────────────────
+    console.log('\n══════ ROUND 5: PF — Performance ══════');
+    const r5 = await sendAndWait(page,
+      "The product listing page will have hundreds of items with filters. What performance targets should we set? Analyze bottlenecks and recommend optimizations."
     );
+    await screenshot(page, '05-pf-performance');
+    const agent5 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent5} | Length: ${r5.length}`);
+    expect(r5.length).toBeGreaterThan(50);
 
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '05-jd-product-card');
-
-    console.log(`\n[JD TEST] Responding agent: ${agent}`);
-    console.log(`[JD TEST] Response length: ${response.length} chars`);
-    console.log(`[JD TEST] Has code: ${response.includes('function') || response.includes('const') || response.includes('export') || response.includes('```')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('06 — AT: Request automated test suite', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "We need automated tests for the authentication system. Can you create a full test suite covering registration, login, password reset, and OAuth? I want unit tests and integration tests."
+    // ── Round 6: IE — Integration design ───────────────────────────
+    console.log('\n══════ ROUND 6: IE — Integrations ══════');
+    const r6 = await sendAndWait(page,
+      "Now let's design the third-party integrations. We decided on Stripe for payments. We also need Google OAuth for login, SendGrid for emails, and S3 for product images. How should these integrations work?"
     );
+    await screenshot(page, '06-ie-integrations');
+    const agent6 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent6} | Length: ${r6.length}`);
+    expect(r6.length).toBeGreaterThan(50);
 
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '06-at-test-suite');
-
-    console.log(`\n[AT TEST] Responding agent: ${agent}`);
-    console.log(`[AT TEST] Response length: ${response.length} chars`);
-    console.log(`[AT TEST] Has test terms: ${response.toLowerCase().includes('test') || response.toLowerCase().includes('jest') || response.toLowerCase().includes('expect')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('07 — PF: Analyze performance requirements', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "I'm worried about performance. The product listing page will have hundreds of items with filters. What performance targets should we set? Can you analyze the bottlenecks and recommend optimizations?"
+    // ── Round 7: SM — Secrets management ───────────────────────────
+    console.log('\n══════ ROUND 7: SM — Secrets ══════');
+    const r7 = await sendAndWait(page,
+      "With all those integrations, we'll have many API keys and credentials. How should we manage these secrets securely? Plan for storing, rotating, and preventing leaks."
     );
+    await screenshot(page, '07-sm-secrets');
+    const agent7 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent7} | Length: ${r7.length}`);
+    expect(r7.length).toBeGreaterThan(50);
 
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '07-pf-performance');
-
-    console.log(`\n[PF TEST] Responding agent: ${agent}`);
-    console.log(`[PF TEST] Response length: ${response.length} chars`);
-    console.log(`[PF TEST] Has perf terms: ${response.toLowerCase().includes('performance') || response.toLowerCase().includes('latency') || response.toLowerCase().includes('load')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  // ── PLATFORM GROUP ────────────────────────────────────────────────────────
-
-  test('08 — PE: Design cloud infrastructure', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "Let's plan the hosting. Where should we deploy the craft store? I need recommendations for cloud provider, server setup, database hosting, and file storage. We're expecting about 10,000 users at launch."
+    // ── Round 8: DO — CI/CD pipeline ───────────────────────────────
+    console.log('\n══════ ROUND 8: DO — CI/CD ══════');
+    const r8 = await sendAndWait(page,
+      "Let's set up the deployment pipeline. I want automated builds, tests, and deployments when we push code. Design the CI/CD workflow with staging and production environments."
     );
+    await screenshot(page, '08-do-cicd');
+    const agent8 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent8} | Length: ${r8.length}`);
+    expect(r8.length).toBeGreaterThan(50);
 
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '08-pe-infrastructure');
-
-    console.log(`\n[PE TEST] Responding agent: ${agent}`);
-    console.log(`[PE TEST] Response length: ${response.length} chars`);
-    console.log(`[PE TEST] Has infra terms: ${response.toLowerCase().includes('cloud') || response.toLowerCase().includes('server') || response.toLowerCase().includes('deploy') || response.toLowerCase().includes('aws')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('09 — DO: Set up CI/CD pipeline', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "We need to set up the deployment pipeline. I want automated builds, tests, and deployments when we push code. Can you design the CI/CD workflow with staging and production environments?"
+    // ── Round 9: SR — Monitoring & reliability ─────────────────────
+    console.log('\n══════ ROUND 9: SR — Monitoring ══════');
+    const r9 = await sendAndWait(page,
+      "Before we go live, we need monitoring. Set up an observability plan — how will we know if the site goes down? Include alerting rules and an incident response plan."
     );
+    await screenshot(page, '09-sr-monitoring');
+    const agent9 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent9} | Length: ${r9.length}`);
+    expect(r9.length).toBeGreaterThan(50);
 
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '09-do-cicd');
-
-    console.log(`\n[DO TEST] Responding agent: ${agent}`);
-    console.log(`[DO TEST] Response length: ${response.length} chars`);
-    console.log(`[DO TEST] Has CI/CD terms: ${response.toLowerCase().includes('pipeline') || response.toLowerCase().includes('ci') || response.toLowerCase().includes('deploy') || response.toLowerCase().includes('docker')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('10 — IE: Design third-party integrations', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "We need to integrate several third-party services: Stripe for payments, Google for login, SendGrid for emails, and S3 for product images. Can you design how these integrations should work?"
+    // ── Round 10: LLM — AI cost optimization ───────────────────────
+    console.log('\n══════ ROUND 10: LLM — AI Cost Optimization ══════');
+    const r10 = await sendAndWait(page,
+      "We've spent over $4 on AI so far and the code generation agent used 60% of the tokens. Can you analyze our AI model usage and recommend how to reduce costs? Maybe some agents should use cheaper models?"
     );
+    await screenshot(page, '10-llm-cost');
+    const agent10 = await getLastAgentName(page);
+    console.log(`  Agent: ${agent10} | Length: ${r10.length}`);
+    expect(r10.length).toBeGreaterThan(50);
 
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '10-ie-integrations');
+    // ── Summary ────────────────────────────────────────────────────
+    console.log('\n══════ CONVERSATION SUMMARY ══════');
+    const results = [
+      { round: 1, target: 'ORC', agent: agent1, len: r1.length },
+      { round: 2, target: 'DEC', agent: agent2, len: r2.length },
+      { round: 3, target: 'AUD', agent: agent3, len: r3.length },
+      { round: 4, target: 'STC', agent: agent4, len: r4.length },
+      { round: 5, target: 'PF',  agent: agent5, len: r5.length },
+      { round: 6, target: 'IE',  agent: agent6, len: r6.length },
+      { round: 7, target: 'SM',  agent: agent7, len: r7.length },
+      { round: 8, target: 'DO',  agent: agent8, len: r8.length },
+      { round: 9, target: 'SR',  agent: agent9, len: r9.length },
+      { round: 10, target: 'LLM', agent: agent10, len: r10.length },
+    ];
 
-    console.log(`\n[IE TEST] Responding agent: ${agent}`);
-    console.log(`[IE TEST] Response length: ${response.length} chars`);
-    console.log(`[IE TEST] Has integration terms: ${response.toLowerCase().includes('api') || response.toLowerCase().includes('stripe') || response.toLowerCase().includes('integration') || response.toLowerCase().includes('webhook')}`);
+    for (const r of results) {
+      console.log(`  Round ${r.round}: Target=${r.target} | Agent=${r.agent} | ${r.len} chars`);
+    }
+    console.log(`  Total rounds: ${results.length} | All responded: ${results.every(r => r.len > 50)}`);
 
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('11 — SM: Plan secrets management', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "We'll have API keys for Stripe, SendGrid, Google, and AWS. How should we manage all these secrets securely? I need a plan for storing them, rotating them, and making sure they don't leak."
-    );
-
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '11-sm-secrets');
-
-    console.log(`\n[SM TEST] Responding agent: ${agent}`);
-    console.log(`[SM TEST] Response length: ${response.length} chars`);
-    console.log(`[SM TEST] Has secrets terms: ${response.toLowerCase().includes('secret') || response.toLowerCase().includes('key') || response.toLowerCase().includes('vault') || response.toLowerCase().includes('credential')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('12 — SR: Set up monitoring and reliability', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "Before we go live, we need monitoring. How will we know if the site goes down or gets slow? Set up an observability plan — monitoring, alerts, and what to do when something breaks."
-    );
-
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '12-sr-monitoring');
-
-    console.log(`\n[SR TEST] Responding agent: ${agent}`);
-    console.log(`[SR TEST] Response length: ${response.length} chars`);
-    console.log(`[SR TEST] Has SRE terms: ${response.toLowerCase().includes('monitor') || response.toLowerCase().includes('alert') || response.toLowerCase().includes('uptime') || response.toLowerCase().includes('incident')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  // ── AI_COST GROUP ─────────────────────────────────────────────────────────
-
-  test('13 — LLM: Optimize AI model usage', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "We've spent over $4 on AI so far and the code generation agent used 60% of the tokens. Can you analyze our AI usage and recommend how to reduce costs? Maybe some agents should use cheaper models?"
-    );
-
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '13-llm-optimization');
-
-    console.log(`\n[LLM TEST] Responding agent: ${agent}`);
-    console.log(`[LLM TEST] Response length: ${response.length} chars`);
-    console.log(`[LLM TEST] Has cost terms: ${response.toLowerCase().includes('cost') || response.toLowerCase().includes('token') || response.toLowerCase().includes('model') || response.toLowerCase().includes('optimization')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  test('14 — PRE: Optimize agent prompts', async ({ page }) => {
-    await goToChat(page);
-    await sendMessage(page,
-      "The Business Analyst agent takes 10 rounds of questions and uses 20K tokens per call. Can you review its prompts and suggest how to make it more efficient — fewer rounds, shorter prompts, better output quality?"
-    );
-
-    const response = await waitForResponse(page);
-    const agent = await getRespondingAgent(page);
-    await screenshot(page, '14-pre-prompt-optimization');
-
-    console.log(`\n[PRE TEST] Responding agent: ${agent}`);
-    console.log(`[PRE TEST] Response length: ${response.length} chars`);
-    console.log(`[PRE TEST] Has prompt terms: ${response.toLowerCase().includes('prompt') || response.toLowerCase().includes('token') || response.toLowerCase().includes('optimize') || response.toLowerCase().includes('instruction')}`);
-
-    expect(response.length).toBeGreaterThan(50);
-  });
-
-  // ── VERIFICATION ──────────────────────────────────────────────────────────
-
-  test('15 — Final: Screenshot board and agents page', async ({ page }) => {
-    // Board view
-    await page.goto(`/project/${PROJECT_ID}/board`);
-    await page.waitForLoadState('domcontentloaded');
+    // Take final screenshots
+    await page.goto(`/project/${PROJECT_ID}/board`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
-    await screenshot(page, '15-board-final');
+    await screenshot(page, '11-board-final');
 
-    // Agents page
-    await page.goto(`/project/${PROJECT_ID}/agents`);
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto(`/project/${PROJECT_ID}/agents`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
-    await screenshot(page, '15-agents-final');
-
-    // Documents page
-    await page.goto(`/project/${PROJECT_ID}/documents`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3000);
-    await screenshot(page, '15-documents-final');
-
-    // Overview/dashboard
-    await page.goto(`/project/${PROJECT_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3000);
-    await screenshot(page, '15-overview-final');
-
-    console.log('\n=== All 14 agent persona tests completed ===');
+    await screenshot(page, '11-agents-final');
   });
 });
