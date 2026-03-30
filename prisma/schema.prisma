@@ -785,7 +785,8 @@ model LLMProviderConfig {
   organizationId  String?     // For OpenAI
   defaultModel    String
   isActive        Boolean     @default(true)
-  scope           ConfigScope // USER, PROJECT, AGENT
+  scope           ConfigScope // USER, PROJECT, AGENT, PLATFORM
+  priority        Int         @default(0) // lower number = higher priority, 0 = primary
 
   // Polymorphic ownership
   userId         String?
@@ -805,6 +806,7 @@ enum ConfigScope {
   USER
   PROJECT
   AGENT
+  PLATFORM
 }
 
 // ─── Orchestration Events ──────────────────────────────────────────────────

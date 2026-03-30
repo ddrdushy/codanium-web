@@ -15,6 +15,70 @@ interface RouteContext {
 }
 
 /**
+ * GET /api/projects/:id/cards/:cardId
+ * Returns a single card with its comments and token usage summary.
+ */
+export async function GET(request: NextRequest, context: RouteContext) {
+  try {
+    const { id: projectId, cardId } = await context.params;
+    const { session, error } = await requireAuthOrApiKey();
+    if (error) return error;
+
+    const card = await prisma.card.findFirst({
+      where: { id: cardId, projectId },
+      include: {
+        assignee: {
+          select: { id: true, name: true, email: true, avatarColor: true },
+        },
+        ownerAgent: {
+          select: { id: true, name: true, shortName: true, avatar: true },
+        },
+        children: {
+          select: { id: true, title: true, state: true, priority: true },
+        },
+        comments: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!card) {
+      return NextResponse.json(
+        { error: 'Card not found in this project' },
+        { status: 404 }
+      );
+    }
+
+    // Aggregate token usage for this card
+    const tokenUsage = await prisma.lLMUsage.aggregate({
+      where: { projectId, cardId },
+      _sum: {
+        tokensUsed: true,
+        promptTokens: true,
+        completionTokens: true,
+        actualCost: true,
+      },
+    });
+
+    return NextResponse.json({
+      ...card,
+      tokenUsage: {
+        totalTokens: tokenUsage._sum.tokensUsed ?? 0,
+        promptTokens: tokenUsage._sum.promptTokens ?? 0,
+        completionTokens: tokenUsage._sum.completionTokens ?? 0,
+        totalCost: tokenUsage._sum.actualCost ?? 0,
+      },
+    });
+  } catch (error) {
+    console.error('GET /api/projects/[id]/cards/[cardId] error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch card' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * PATCH /api/projects/:id/cards/:cardId
  * Update a card's fields: state, title, description, priority, type, assigneeId, ownerAgentId, parentId, linkedDecisionId.
  */

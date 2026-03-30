@@ -167,6 +167,12 @@ export default function SettingsPage() {
   const [freeCreditsAmount, setFreeCreditsAmount] = useState('5');
   const [freeCreditsExpiryDays, setFreeCreditsExpiryDays] = useState('14');
 
+  // ─── LLM Fallback Chain state ───
+  const [fallbackProviders, setFallbackProviders] = useState<Array<{ id?: string; provider: string; displayName: string; defaultModel: string; baseUrl: string; priority: number; isActive: boolean }>>([]);
+  const [showFallbackForm, setShowFallbackForm] = useState(false);
+  const [newFallback, setNewFallback] = useState({ provider: 'anthropic', apiKey: '', baseUrl: '', defaultModel: '', priority: 1 });
+  const [savingFallback, setSavingFallback] = useState(false);
+
   // ─── Agent Override state ───
   const [agentOverrides, setAgentOverrides] = useState<Array<{ id?: string; agentShortName: string; provider: string; model: string; baseUrl: string }>>([]);
   const [savingOverrides, setSavingOverrides] = useState(false);
@@ -270,6 +276,12 @@ export default function SettingsPage() {
     fetch('/api/admin/agent-llm-config')
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setAgentOverrides(data); })
+      .catch(() => {});
+
+    // Load platform fallback providers
+    fetch('/api/admin/llm-providers')
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setFallbackProviders(data); })
       .catch(() => {});
   }, []);
 
@@ -584,6 +596,223 @@ export default function SettingsPage() {
                 </span>
               )}
             </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* LLM Provider Fallback Chain */}
+      <motion.div
+        variants={itemVariants}
+        className="glass-card rounded-xl border border-border/50 p-6"
+      >
+        <SectionHeader
+          icon={<Zap className="w-4 h-4" />}
+          title="LLM Provider Fallback Chain"
+          subtitle="Configure multi-provider fallback for high availability"
+          color="#f97316"
+        />
+        <div className="space-y-3">
+          {fallbackProviders.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-muted-foreground border-b border-border/30">
+                    <th className="text-left py-2 pr-2 font-medium">Priority</th>
+                    <th className="text-left py-2 pr-2 font-medium">Provider</th>
+                    <th className="text-left py-2 pr-2 font-medium">Model</th>
+                    <th className="text-left py-2 pr-2 font-medium">Status</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fallbackProviders.map((fp) => (
+                    <tr key={fp.id} className="border-b border-border/20 last:border-0">
+                      <td className="py-2 pr-2">
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-orange-500/10 text-orange-500 text-xs font-bold">
+                          {fp.priority}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-2">
+                        <div>
+                          <span className="font-medium text-foreground">{fp.displayName || fp.provider}</span>
+                          {fp.baseUrl && (
+                            <span className="block text-xs text-muted-foreground truncate max-w-[200px]">{fp.baseUrl}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 pr-2">
+                        <span className="font-mono text-xs bg-muted px-2 py-1 rounded">{fp.defaultModel}</span>
+                      </td>
+                      <td className="py-2 pr-2">
+                        <button
+                          onClick={async () => {
+                            const updated = fallbackProviders.map((p) =>
+                              p.id === fp.id ? { ...p, isActive: !p.isActive } : p
+                            );
+                            setFallbackProviders(updated);
+                            try {
+                              await fetch(`/api/admin/llm-providers`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ...fp, isActive: !fp.isActive }),
+                              });
+                            } catch { /* silent */ }
+                          }}
+                          className={`text-xs px-2 py-1 rounded-full font-medium transition-colors ${
+                            fp.isActive
+                              ? 'bg-emerald-500/10 text-emerald-500'
+                              : 'bg-red-500/10 text-red-400'
+                          }`}
+                        >
+                          {fp.isActive ? 'Active' : 'Inactive'}
+                        </button>
+                      </td>
+                      <td className="py-2">
+                        <button
+                          onClick={async () => {
+                            setFallbackProviders((prev) => prev.filter((p) => p.id !== fp.id));
+                            try {
+                              await fetch(`/api/admin/llm-providers?id=${fp.id}`, { method: 'DELETE' });
+                            } catch { /* silent */ }
+                          }}
+                          className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
+                          title="Remove provider"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {fallbackProviders.length === 0 && !showFallbackForm && (
+            <p className="text-xs text-muted-foreground py-2">
+              No fallback providers configured. The platform default (Admin Settings) will be used as the sole provider.
+            </p>
+          )}
+
+          {showFallbackForm && (
+            <div className="border border-border/50 rounded-lg p-4 space-y-3 bg-muted/20">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Provider</label>
+                  <select
+                    value={newFallback.provider}
+                    onChange={(e) => setNewFallback((prev) => ({ ...prev, provider: e.target.value }))}
+                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
+                  >
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="mistral">Mistral</option>
+                    <option value="nvidia">NVIDIA NIM</option>
+                    <option value="groq">Groq</option>
+                    <option value="together">Together AI</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Priority</label>
+                  <input
+                    type="number"
+                    value={newFallback.priority}
+                    onChange={(e) => setNewFallback((prev) => ({ ...prev, priority: parseInt(e.target.value) || 1 }))}
+                    min="1"
+                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">API Key</label>
+                <input
+                  type="password"
+                  value={newFallback.apiKey}
+                  onChange={(e) => setNewFallback((prev) => ({ ...prev, apiKey: e.target.value }))}
+                  placeholder="sk-..."
+                  className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Base URL (optional)</label>
+                  <input
+                    type="text"
+                    value={newFallback.baseUrl}
+                    onChange={(e) => setNewFallback((prev) => ({ ...prev, baseUrl: e.target.value }))}
+                    placeholder="https://api.example.com/v1"
+                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Model</label>
+                  <input
+                    type="text"
+                    value={newFallback.defaultModel}
+                    onChange={(e) => setNewFallback((prev) => ({ ...prev, defaultModel: e.target.value }))}
+                    placeholder="e.g. gpt-4o, claude-sonnet-4"
+                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={savingFallback || !newFallback.defaultModel.trim()}
+                  onClick={async () => {
+                    setSavingFallback(true);
+                    try {
+                      const res = await fetch('/api/admin/llm-providers', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newFallback),
+                      });
+                      const data = await res.json();
+                      if (res.ok && data.id) {
+                        setFallbackProviders((prev) => [...prev, data].sort((a, b) => a.priority - b.priority));
+                        setNewFallback({ provider: 'anthropic', apiKey: '', baseUrl: '', defaultModel: '', priority: fallbackProviders.length + 2 });
+                        setShowFallbackForm(false);
+                      }
+                    } catch { /* silent */ }
+                    setSavingFallback(false);
+                  }}
+                  className="gap-1.5"
+                >
+                  {savingFallback ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
+                  ) : (
+                    <><Check className="w-3.5 h-3.5" /> Save Provider</>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowFallbackForm(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!showFallbackForm && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setNewFallback({ provider: 'anthropic', apiKey: '', baseUrl: '', defaultModel: '', priority: fallbackProviders.length + 1 });
+                setShowFallbackForm(true);
+              }}
+              className="gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Fallback Provider
+            </Button>
+          )}
+
+          <div className="text-xs text-muted-foreground pt-2 border-t border-border/30">
+            Resolution order: User BYOK &rarr; Agent Override &rarr; Project Override &rarr; Fallback Chain (by priority) &rarr; Admin Default
           </div>
         </div>
       </motion.div>

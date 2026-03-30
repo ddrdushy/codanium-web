@@ -9,8 +9,9 @@
 //   1. User-level BYOK config  (scope=USER) ← user's own key, no credit charge
 //   2. Agent-level DB config   (scope=AGENT, admin override)
 //   3. Project-level DB config (scope=PROJECT, admin override)
-//   4. Admin settings          (platform-wide default) ← credits charged
-//   5. Error — admin must configure LLM provider
+//   4. Platform-level fallback chain (scope=PLATFORM, ordered by priority)
+//   5. Admin settings          (platform-wide default, last resort) ← credits charged
+//   6. Error — admin must configure LLM provider
 // =============================================================================
 
 import {
@@ -116,7 +117,24 @@ export class LLMGateway {
       }
     }
 
-    // ── 4. Admin settings (platform-wide default) ──
+    // ── 4. Platform-level fallback chain (scope=PLATFORM, ordered by priority) ──
+    try {
+      const platformConfigs = await prisma.lLMProviderConfig.findMany({
+        where: { scope: 'PLATFORM', isActive: true },
+        orderBy: { priority: 'asc' },
+      });
+      if (platformConfigs.length > 0) {
+        const firstConfig = platformConfigs[0];
+        if (this.providers.has(firstConfig.provider)) {
+          console.log(`[LLMGateway] ✓ PLATFORM fallback chain: provider=${firstConfig.provider}, model=${firstConfig.defaultModel}, priority=${firstConfig.priority}`);
+          return { ...this.resolveConfig(firstConfig), billingType: 'PLATFORM' };
+        }
+      }
+    } catch (err) {
+      console.warn('[LLMGateway] ✗ Platform fallback chain query failed:', err);
+    }
+
+    // ── 5. Admin settings (platform-wide default, last resort) ──
     try {
       const adminSettings = await prisma.adminSetting.findMany({
         where: {
@@ -155,7 +173,7 @@ export class LLMGateway {
       console.warn('[LLMGateway] ✗ Admin settings query failed:', err);
     }
 
-    // ── 5. No config found ──
+    // ── 6. No config found ──
     const errMsg =
       'LLM provider not configured. Please contact your administrator to set up the AI provider in Admin Settings.';
     console.error(`[LLMGateway] ✗ ${errMsg}`);

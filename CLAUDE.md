@@ -55,10 +55,12 @@ npx prisma generate  # Regenerate Prisma client
 - Connection: `DATABASE_URL` in `.env.local`
 
 ## LLM Configuration
-- **Admin-only**: LLM provider (Anthropic, OpenAI, Ollama) configured in Admin Settings
-- **Resolution priority**: Agent-level override → Project-level override → Admin settings (platform default)
-- **No user-level config**: Users don't configure LLM providers — admin sets one provider for the entire platform
-- **Admin settings keys**: `llm.defaultProvider`, `llm.defaultModel`, `llm.baseUrl`, `llm.apiKey`
+- **Multi-provider fallback**: Configure multiple LLM providers with priority order in Admin Settings
+- **Supported providers**: OpenAI, Anthropic, Ollama, NVIDIA, Mistral, Groq, Together, Custom
+- **Resolution priority**: User BYOK → Agent override → Project override → Platform fallback chain → Admin default
+- **Platform fallback**: Stored in `llm_provider_configs` table with `scope=PLATFORM`, ordered by `priority`
+- **Admin default**: Last-resort fallback via `admin_settings` key-value store
+- **API keys**: AES-256-GCM encrypted at rest in `apiKeyEncrypted` column
 
 ## Development Patterns
 - **Graceful fallback**: `useState(mockData)` + `useEffect(fetch.then(set).catch(noop))` — pages always render, even if API fails
@@ -90,7 +92,7 @@ All user-facing text reframed from developer-centric to client-centric language 
 | Component | Description | Files |
 |-----------|-------------|-------|
 | **LLM Provider Layer** | OpenAI, Anthropic, Ollama adapters with raw fetch (no SDK deps) | `src/lib/ai/providers/*.ts` |
-| **23 Agent Definitions** | System prompts, capabilities, authority for all 5 groups | `src/lib/ai/agents/definitions/*.ts` |
+| **15+3 Agent Definitions** | 15 pipeline agents (PM gatekeeper) + 3 internal, system prompts, authority | `src/lib/ai/agents/definitions/*.ts` |
 | **Context Builder** | Injects project state (cards, decisions, SDLC, agents) into agent prompts | `src/lib/ai/context/*.ts` |
 | **Orchestration Engine** | Intent routing, agent execution, delegation chains, side effects | `src/lib/ai/orchestration/*.ts` |
 | **SSE Streaming** | Token-by-token streaming via `/api/projects/[id]/chat/stream` | `src/app/api/projects/[id]/chat/stream/route.ts` |
@@ -101,6 +103,19 @@ All user-facing text reframed from developer-centric to client-centric language 
 | **Loop Detection** | Fuzzy tool-loop + text-repetition + question-reask detectors | `src/lib/ai/orchestration/loop-detector.ts` |
 | **Card Lifecycle** | State transition validation in both API routes and tool executor | `src/lib/ai/orchestration/card-lifecycle.ts` |
 
+### SDLC Pipeline — PM Gatekeeper
+
+```
+PROJECT CREATED → PM activated (gatekeeper)
+  → PM creates card → BA → BRD → PM validates (loop if gaps)
+  → PM creates card → SA → SDD → PM validates (loop if gaps)
+  → PM creates card → DO → Scaffolding → build verified
+  → PM → TL → UX → UI Kit → TL → UID → UI Interfaces → user approves
+  → PM confirms 4 gates (BRD+SDD+Scaffold+UI) → TL assigns dev cards
+  → ONE card at a time: JD/SD codes → tsc validates → QA+SEC+DO+PE sign off → DONE
+  → TL picks next card → repeat → PM validates all DONE → deploy
+```
+
 ### AI Architecture
 
 ```
@@ -109,17 +124,17 @@ User Message → Chat API → Orchestration Engine
   ├── ContextBuilder (fetch project data → system prompt)
   ├── AgentExecutor (call LLM via Gateway)
   └── LLM Gateway (resolve admin config → provider adapter)
-      ├── OpenAI/Anthropic/Ollama (raw fetch, admin-configured)
+      ├── Multi-provider fallback (try primary → fallback 1 → fallback 2)
+      ├── OpenAI/Anthropic/Ollama/NVIDIA/Mistral/Groq (raw fetch adapters)
+      ├── Model-agnostic sanitization (strips tool call syntax from all providers)
       └── Response Parser (extract actions, artifacts, delegations)
 ```
 
 ### What's Next — Production Readiness
-The AI orchestration engine is built. Remaining work:
 
-- Development agents trigger from VS Code only (web UI for requirements/planning, VS Code for coding)
-- Real code generation by agents (output real files)
-- Real deployment pipeline
+- Custom desktop app (replacing VS Code extension) — Electron/Tauri cross-platform
 - Production authentication (currently demo mode)
 - Payment/billing integration (Stripe)
-- Agent task queue for parallel multi-agent workflows
+- Cloud deployment pipeline
+- GitHub/GitLab PR creation
 - WebSocket for real-time agent status updates on dashboard
