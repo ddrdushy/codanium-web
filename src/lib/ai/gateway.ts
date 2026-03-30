@@ -317,6 +317,9 @@ export class LLMGateway {
       const usageRecord = await prisma.lLMUsage.create({
         data: {
           tokensUsed: response.tokensUsed.total,
+          promptTokens: response.tokensUsed.prompt,
+          completionTokens: response.tokensUsed.completion,
+          contextTokens: response.tokensUsed.prompt, // context ≈ prompt (system + history + user msg)
           actualCost,
           markedUpCost,
           billingType,

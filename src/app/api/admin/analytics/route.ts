@@ -146,6 +146,9 @@ async function handleListMode(searchParams: URLSearchParams) {
   const usage = usageRecords.map((r) => ({
     date: r.createdAt.toISOString().split('T')[0],
     tokens_used: r.tokensUsed,
+    prompt_tokens: r.promptTokens,
+    completion_tokens: r.completionTokens,
+    context_tokens: r.contextTokens,
     cost: r.actualCost,
     provider: r.provider.toLowerCase(),
     model: r.model,
