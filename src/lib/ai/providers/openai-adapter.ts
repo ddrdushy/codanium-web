@@ -23,6 +23,14 @@ import type {
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-4o';
 
+const PROVIDER_BASE_URLS: Record<string, string> = {
+  openai: 'https://api.openai.com/v1',
+  nvidia: 'https://integrate.api.nvidia.com/v1',
+  mistral: 'https://api.mistral.ai/v1',
+  groq: 'https://api.groq.com/openai/v1',
+  together: 'https://api.together.xyz/v1',
+};
+
 // Chat-capable model prefixes (used to filter the models list)
 const CHAT_MODEL_PREFIXES = [
   'gpt-4',
@@ -37,8 +45,8 @@ const CHAT_MODEL_PREFIXES = [
 // ---------------------------------------------------------------------------
 
 function baseUrl(config: ProviderConfig): string {
-  const url = config.baseUrl?.replace(/\/+$/, '') || DEFAULT_BASE_URL;
-  return url;
+  if (config.baseUrl) return config.baseUrl.replace(/\/+$/, '');
+  return PROVIDER_BASE_URLS[config.provider] || DEFAULT_BASE_URL;
 }
 
 function headers(config: ProviderConfig): Record<string, string> {
@@ -48,7 +56,7 @@ function headers(config: ProviderConfig): Record<string, string> {
   if (config.apiKey) {
     h['Authorization'] = `Bearer ${config.apiKey}`;
   }
-  if (config.organizationId) {
+  if (config.organizationId && config.provider === 'openai') {
     h['OpenAI-Organization'] = config.organizationId;
   }
   if (config.extraHeaders) {
@@ -117,10 +125,10 @@ function extractError(body: unknown): string {
     const obj = body as Record<string, unknown>;
     if (obj.error && typeof obj.error === 'object') {
       const err = obj.error as Record<string, unknown>;
-      return (err.message as string) || 'Unknown OpenAI error';
+      return (err.message as string) || 'Unknown API error';
     }
   }
-  return 'Unknown OpenAI error';
+  return 'Unknown API error';
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +202,7 @@ export class OpenAIAdapter implements LLMProvider {
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(`OpenAI API error (${res.status}): ${extractError(data)}`);
+      throw new Error(`LLM API error (${res.status}): ${extractError(data)}`);
     }
 
     const choice = data.choices?.[0];
@@ -234,7 +242,7 @@ export class OpenAIAdapter implements LLMProvider {
         total: data.usage?.total_tokens ?? 0,
       },
       model,
-      provider: 'openai',
+      provider: config.provider || 'openai',
       latencyMs: Date.now() - startTime,
       finishReason,
     };
@@ -254,8 +262,10 @@ export class OpenAIAdapter implements LLMProvider {
       model,
       messages: formatMessages(options.messages),
       stream: true,
-      stream_options: { include_usage: true },
     };
+    if (config.provider === 'openai') {
+      body.stream_options = { include_usage: true };
+    }
     if (options.temperature !== undefined) body.temperature = options.temperature;
     if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
 
@@ -285,7 +295,7 @@ export class OpenAIAdapter implements LLMProvider {
     });
 
     if (!res.ok) {
-      let errorMsg = `OpenAI streaming error (${res.status})`;
+      let errorMsg = `LLM streaming error (${res.status})`;
       try {
         const errorData = await res.json();
         errorMsg += `: ${extractError(errorData)}`;
@@ -296,7 +306,7 @@ export class OpenAIAdapter implements LLMProvider {
     }
 
     if (!res.body) {
-      throw new Error('OpenAI streaming: no response body');
+      throw new Error('LLM streaming: no response body');
     }
 
     const reader = res.body.getReader();
@@ -439,7 +449,7 @@ export class OpenAIAdapter implements LLMProvider {
     });
 
     if (!res.ok) {
-      throw new Error(`OpenAI list models error (${res.status})`);
+      throw new Error(`LLM list models error (${res.status})`);
     }
 
     const data = await res.json();

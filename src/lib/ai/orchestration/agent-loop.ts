@@ -90,8 +90,8 @@ export interface SSEEvent {
 
 const MAX_TOOL_LOOPS = 25;
 const MAX_LLM_ATTEMPTS = 3;
-// Full pipeline: BA → SA → PM → DO → TL → dev tasks → QA → SEC → PM → TL loop
-// Needs depth for: planning (4 hops) + multiple dev task cycles
+// Full pipeline: PM → BA → PM → SA → PM → DO → PM → TL → UX → TL → UID → TL → PM → TL → dev tasks → QA → SEC → DO → PE → TL loop
+// Needs depth for: planning phases (6+ hops) + UI phase + multiple dev task cycles
 const MAX_PIPELINE_DEPTH = 15;
 const MAX_CONSULTATION_DEPTH = 3;
 const TOOL_ERROR_CIRCUIT_BREAKER = 3;
@@ -104,7 +104,7 @@ const TOOL_ERROR_CIRCUIT_BREAKER = 3;
  * Agents that execute code generation, file writing, deployment, or infrastructure.
  * These MUST run from VS Code, not from the web browser.
  *
- * Web-only agents (NOT gated): BA, SA, PM, UX, DEC, ORC, CA, AUD, PRE, LLM, STC
+ * Web-only agents (NOT gated): BA, SA, PM, UX, UID, DEC, ORC, CA, AUD, PRE, LLM, STC
  */
 export const DEV_AGENTS = new Set([
   'TL', 'JD', 'SD',              // Engineering — code generation & review
@@ -164,19 +164,30 @@ The system resolves these automatically. NEVER ask the user for IDs again. Just 
   return corrections[agent] || '';
 }
 
-// Pipeline: BA → SA → UX → PM → DO → TL → (JD/SD) → QA → SEC → PM (loop)
+// Pipeline: PM → BA → PM → SA → PM → DO → PM → TL → UX → TL → UID → TL → PM → TL → (JD/SD) → QA → SEC → DO/PE → TL (loop)
+// PM is the gatekeeper — every phase routes back through PM for validation.
 const PIPELINE_RULES: PipelineRule[] = [
-  { from: 'BA', signals: ['approve_document(BRD)'], next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document in your context — it contains the full requirements including the Content Inventory. Produce a System Design Document (SDD).' },
-  { from: 'SA', signals: ['approve_document(SDD)'], next: 'UX', context: 'Create the UI/UX design for the project. Read the BRD and SDD to understand features and tech stack. Create wireframes or a design document describing: page layouts, navigation flow, component hierarchy, color scheme, and responsive breakpoints. Save as a WIREFRAME document.' },
-  { from: 'UX', signals: ['create_document(WIREFRAME)', 'approve_document(WIREFRAME)', 'create_document()'], next: 'PM', context: 'Organize the project backlog and plan execution. Read the BRD, SDD, and wireframes. Create task cards for EVERY feature module — EPICs, FEATUREs, and TASKs. Be thorough: create at least 15-20 cards covering all features from the BRD. Include the actual content from the BRD Content Inventory in each card description. Set priorities using MoSCoW. Then hand off to DevOps for scaffolding.' },
-  { from: 'PM', signals: ['create_card()', 'task_progress()'], next: 'TL', context: 'Cards are created. Pick the highest-priority PLANNED task, assign to JD or SD, move to IN_PROGRESS. Ensure developers call update_card(state=DONE) when complete.' },
-  { from: 'DO', signals: ['write_file()', 'git_commit()', 'trigger_deploy()'], next: 'TL', context: 'Project scaffold is ready. Review the task cards on the board. Create any missing granular TASK cards. Assign UI/UX design tasks to UX, frontend tasks to JD, complex/backend tasks to SD. Include BRD content in each card. Start the first highest-priority task.' },
+  // ── PHASE 1: REQUIREMENTS ──────────────────────────────────────────
+  { from: 'BA', signals: ['approve_document(BRD)'], next: 'PM', context: 'The BRD is complete. Validate it — check for completeness, acceptance criteria coverage, and content inventory. If gaps exist, add a card comment explaining what is missing and send back to BA. If the BRD is satisfactory, mark the Requirements phase card as COMPLETE and create the Architecture phase card for SA.' },
+
+  // ── PHASE 2: ARCHITECTURE ──────────────────────────────────────────
+  { from: 'SA', signals: ['approve_document(SDD)'], next: 'PM', context: 'The SDD is complete. Validate it — check that all BRD requirements (FR-XXX) are mapped to architecture components. If gaps exist, add a card comment and send back to SA. If satisfactory, mark the Architecture phase card as COMPLETE and create the Scaffolding phase card for DO.' },
+
+  // ── PHASE 3: SCAFFOLDING ───────────────────────────────────────────
+  { from: 'DO', signals: ['write_file()', 'git_commit()', 'trigger_deploy()', 'run_build()'], next: 'PM', context: 'The project scaffold is ready. Verify the build compiles. Mark the Scaffolding phase card as COMPLETE. Hand control to TL for the UI/UX phase.' },
+
+  // ── PHASE 4: UI/UX DESIGN ─────────────────────────────────────────
+  { from: 'UX', signals: ['create_document(DESIGN_SYSTEM)', 'approve_document(DESIGN_SYSTEM)', 'create_document()'], next: 'TL', context: 'The UI Kit / Design System is complete. Review the design system document. If satisfactory, mark the UI Kit card as DONE. Then create a "UI Interfaces" card and assign it to UID (UI Designer) to build page layouts and wireframes based on the design system.' },
+  { from: 'UID', signals: ['create_document(WIREFRAME)', 'create_document()', 'update_document()'], next: 'TL', context: 'UI interfaces and wireframes are complete. Review the wireframe documents. Get user approval via ask_user. If approved, mark the UI Interfaces card as DONE and report to PM that the UI phase is complete.' },
   { from: 'TL', signals: ['update_card(IN_PROGRESS)', 'update_card(PLANNED)'], next: 'DYNAMIC', context: 'Implement the assigned task. Read the card description carefully — it contains the exact content and acceptance criteria. Write production code, not placeholders. Run tests and commit when complete.' },
-  { from: 'JD', signals: ['update_card(DONE)', 'update_card(REVIEW)', 'git_commit()'], next: 'QA', context: 'Review and test the implementation that was just completed. Run tests, validate code quality, and check for bugs.' },
-  { from: 'SD', signals: ['update_card(DONE)', 'update_card(REVIEW)', 'git_commit()'], next: 'QA', context: 'Review the senior developer implementation. Run quality checks and verify it meets standards.' },
-  { from: 'QA', signals: ['validate_code()', 'review_changes()', 'run_tests()', 'update_card(DONE)'], next: 'SEC', context: 'Security review the tested implementation. Check for vulnerabilities and security best practices.' },
-  { from: 'SEC', signals: ['validate_code()', 'validate_architecture()', 'review_changes()', 'update_card(DONE)'], next: 'PM', context: 'Provide a progress summary. Check if there are more PLANNED cards — if so, route to TL for the next task.' },
-  { from: 'PM', signals: ['update_card()', 'task_progress()'], next: 'TL', context: 'Check for remaining PLANNED cards. If any exist, assign the next highest-priority task to the appropriate developer (JD, SD, or UX).' },
+
+  // ── PHASE 5: DEVELOPMENT (after all 4 gates pass) ──────────────────
+  { from: 'JD', signals: ['update_card(DONE)', 'update_card(REVIEW)', 'git_commit()'], next: 'QA', context: 'Review and test the implementation. Run tests, validate code quality, check for bugs. If tests pass, sign off and route to SEC.' },
+  { from: 'SD', signals: ['update_card(DONE)', 'update_card(REVIEW)', 'git_commit()'], next: 'QA', context: 'Review the senior developer implementation. Run quality checks. If tests pass, sign off and route to SEC.' },
+  { from: 'QA', signals: ['validate_code()', 'review_changes()', 'run_tests()', 'update_card()'], next: 'SEC', context: 'Security review the tested implementation. Check for vulnerabilities and security best practices. If approved, sign off and route to DO for deployment review.' },
+  { from: 'SEC', signals: ['validate_code()', 'validate_architecture()', 'review_changes()', 'update_card()'], next: 'DO', context: 'Review deployment readiness. Check build compiles, dependencies are valid. Sign off and route to PE for final platform review.' },
+  { from: 'DO', signals: ['update_card()', 'task_progress()'], next: 'PE', context: 'Final platform review. Verify infrastructure compatibility. Sign off. After all 4 sign-offs (QA, SEC, DO, PE), route back to TL for the next card.' },
+  { from: 'PE', signals: ['update_card()', 'task_progress()'], next: 'TL', context: 'All 4 sign-offs received (QA, SEC, DO, PE). Mark the current card as DONE. Pick the next PLANNED card. If no more PLANNED cards, report to PM that development is complete.' },
 ];
 
 function matchPipelineRule(
@@ -295,16 +306,26 @@ async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promi
 // ---------------------------------------------------------------------------
 
 const DEFAULT_NEXT_AGENT: Record<string, { next: string; context: string; requiresApproval?: string }> = {
-  BA: { next: 'SA', context: 'Design the technical architecture based on the approved requirements. Read the BRD document — it contains requirements AND the Content Inventory. Produce a System Design Document (SDD).', requiresApproval: 'BRD' },
-  SA: { next: 'UX', context: 'Create UI/UX designs for the project. Read the BRD and SDD. Create a WIREFRAME design document with page layouts, navigation, components, color scheme, responsive design.', requiresApproval: 'SDD' },
-  UX: { next: 'PM', context: 'Organize the backlog. Read BRD, SDD, and wireframes. Create task cards for EVERY feature — at least 15-20 cards (EPICs, FEATUREs, TASKs). Be thorough.' },
-  PM: { next: 'TL', context: 'Cards are ready. Assign the next highest-priority PLANNED task to JD (frontend/simple) or SD (backend/complex). Move the card to IN_PROGRESS. After JD/SD finish, they MUST call update_card(state=DONE).' },
-  DO: { next: 'TL', context: 'Scaffold is ready. Pick the first task card and assign to JD or SD. Move card to IN_PROGRESS.' },
-  TL: { next: 'JD', context: 'Implement the assigned task. Read the card description. Write production code. When DONE, call update_card(state=DONE) on the card. This is critical.' },
-  JD: { next: 'QA', context: 'Review the implementation. When review passes, call update_card(state=DONE) on the card. Check for bugs.' },
-  SD: { next: 'QA', context: 'Review the senior developer implementation. Run quality checks and verify standards.' },
-  QA: { next: 'SEC', context: 'Security review the tested implementation. Check for vulnerabilities.' },
-  SEC: { next: 'PM', context: 'Progress summary. Check for remaining PLANNED cards — route to TL for the next task.' },
+  // PM is FIRST agent on project start. PM routes to BA for requirements.
+  PM: { next: 'BA', context: 'Gather requirements from the user. Ask questions ONE AT A TIME with clickable options. After enough answers, generate the full BRD, call update_document(type="BRD") to persist it, then call approve_document(type="BRD").' },
+  // BA completes BRD → routes back to PM for validation
+  BA: { next: 'PM', context: 'Validate the BRD — check completeness, acceptance criteria, content inventory. If gaps, send back to BA with comments. If satisfactory, mark Requirements phase COMPLETE and create Architecture phase card for SA.', requiresApproval: 'BRD' },
+  // PM validates BRD → routes to SA for architecture
+  SA: { next: 'PM', context: 'Validate the SDD — check all BRD FR-XXX requirements are mapped. If gaps, send back to SA. If satisfactory, mark Architecture phase COMPLETE and create Scaffolding phase card for DO.', requiresApproval: 'SDD' },
+  // DO completes scaffold → routes back to PM
+  DO: { next: 'PM', context: 'Scaffold complete. Verify build compiles. Mark Scaffolding phase COMPLETE. Hand to TL for UI/UX phase.' },
+  // TL manages UI phase (UX → UID) then dev phase (JD/SD → QA → SEC → DO → PE)
+  TL: { next: 'JD', context: 'Implement the assigned task. Read the card description. Write production code. Run npx tsc --noEmit for zero compile errors. When done, request sign-off from QA, SEC, DO, and PE.' },
+  // UX completes UI Kit → routes to TL
+  UX: { next: 'TL', context: 'UI Kit complete. Review the design system. If satisfactory, mark UI Kit card DONE. Create UI Interfaces card for UID.' },
+  // UID completes wireframes → routes to TL
+  UID: { next: 'TL', context: 'UI interfaces complete. Review wireframes. Get user approval. Mark UI Interfaces card DONE. Report to PM that UI phase is complete.' },
+  // Dev sign-off chain: JD/SD → QA → SEC → DO → PE → TL
+  JD: { next: 'QA', context: 'Review and test the implementation. Validate code quality, check for bugs. Sign off if tests pass.' },
+  SD: { next: 'QA', context: 'Review the senior implementation. Run quality checks. Sign off if standards met.' },
+  QA: { next: 'SEC', context: 'Security review. Check for vulnerabilities. Sign off and route to DO.' },
+  SEC: { next: 'DO', context: 'Review deployment readiness. Check build compiles. Sign off and route to PE.' },
+  PE: { next: 'TL', context: 'All 4 sign-offs received. Mark card DONE. Pick next PLANNED card or report to PM that dev is complete.' },
 };
 
 /**
@@ -336,6 +357,34 @@ function checkLoops(loopState: LoopState): LoopWarning | null {
     recentToolCalls: loopState.recentToolCalls,
     recentResponses: loopState.recentResponses,
   } as any);
+}
+
+// ---------------------------------------------------------------------------
+// Model-Agnostic Content Sanitization
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip raw tool call markup from ALL LLM providers before showing to user.
+ * Handles XML, Anthropic, ChatML/Qwen, agent tags, and action markers.
+ */
+function sanitizeContent(text: string): string {
+  return text
+    // XML tool calls: <tool_call>...</tool_call>
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+    // Anthropic-style: <function=name>...</function> or self-closing <function=name>
+    .replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '')
+    .replace(/<function=[^>]*\/?>/gi, '')
+    // Parameter blocks: <parameter=name>...</parameter>
+    .replace(/<parameter=[^>]*>[\s\S]*?<\/parameter>/gi, '')
+    // ChatML/Qwen: <|tool_call|>...<|end|>
+    .replace(/<\|tool_call\|>[\s\S]*?<\|end\|>/gi, '')
+    // Agent tags at start of lines: [BA], [SA], [TL], [ORC], etc.
+    .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM|SEC|STC|JD|SD|AT|PF|SR|LLM|PRE|UI)\s*\]\s*/gm, '')
+    // [ACTION:...] markers
+    .replace(/\[ACTION:[^\]]*\]/gi, '')
+    // Clean up excess whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -567,14 +616,45 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         consecutiveLoopWarnings++;
         console.warn(`[AgentLoop] Loop detected (${loopWarning.type}), warning #${consecutiveLoopWarnings}`);
 
-        // Hard stop: if we've warned 2+ times and the agent keeps looping, break
-        if (consecutiveLoopWarnings >= 2) {
+        // Hard stop: if we've warned 4+ times and the agent keeps looping, break
+        if (consecutiveLoopWarnings >= 4) {
           console.error(`[AgentLoop] ⛔ Hard stop: ${consecutiveLoopWarnings} consecutive loop warnings for ${currentAgent}. Aborting.`);
+
+          // Create a Decision record so the user can decide what to do next
+          try {
+            const member = await prisma.projectMember.findFirst({
+              where: { projectId: input.projectId },
+              select: { userId: true },
+            });
+            const ownerId = member?.userId || 'usr-001';
+            const decision = await prisma.decision.create({
+              data: {
+                projectId: input.projectId,
+                trigger: `${currentAgent} blocked — repeated loop detected`,
+                context: `Agent ${currentAgent} was stopped after ${consecutiveLoopWarnings} consecutive loop warnings. The agent was unable to make progress and kept repeating the same actions.`,
+                status: 'DRAFTED',
+                recommendation: 'Retry with different instructions or skip this step.',
+                ownerId,
+              },
+            });
+            // Create options for the decision
+            await prisma.decisionOption.createMany({
+              data: [
+                { decisionId: decision.id, name: 'Retry', description: 'Retry the operation with adjusted instructions' },
+                { decisionId: decision.id, name: 'Skip', description: 'Skip this step and continue to the next phase' },
+                { decisionId: decision.id, name: 'Manual Intervention', description: 'Handle this step manually outside the platform' },
+              ],
+            });
+            console.log(`[AgentLoop] Created Decision record: ${decision.id}`);
+          } catch (e) {
+            console.warn('[AgentLoop] Failed to create Decision record for loop hard stop:', e);
+          }
+
           yield {
             type: 'chunk',
             data: {
               content: '\n\nI encountered a repeated issue and stopped to avoid going in circles. ' +
-                'The operation may require manual intervention or different conditions to proceed.',
+                'Check **My Decisions** for next steps.',
             },
           };
           break;
@@ -590,6 +670,8 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
       let iterThinking = '';
       let collectedToolCalls: LLMToolCall[] = [];
       let llmSuccess = false;
+
+      let lastLLMError = '';
 
       for (let attempt = 0; attempt < MAX_LLM_ATTEMPTS; attempt++) {
         iterContent = '';
@@ -680,6 +762,7 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
           throw new Error('LLM returned empty response');
         } catch (err: any) {
           const errMsg = err instanceof Error ? err.message : String(err);
+          lastLLMError = errMsg;
           console.error(`[AgentLoop] LLM attempt ${attempt + 1}/${MAX_LLM_ATTEMPTS} failed: ${errMsg}`);
 
           if (attempt === 1 && !modelOverride) {
@@ -693,11 +776,14 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
       }
 
       if (!llmSuccess) {
-        yield { type: 'error', data: { message: 'LLM failed after all retry attempts.' } };
+        const isRateLimit = lastLLMError.includes('429') || lastLLMError.toLowerCase().includes('rate limit');
+        const userMessage = isRateLimit
+          ? 'Our AI service is temporarily busy (rate limit reached). Please wait a moment and try again.'
+          : `AI service unavailable after ${MAX_LLM_ATTEMPTS} attempts. Error: ${lastLLMError.slice(0, 200)}`;
+        yield { type: 'error', data: { message: userMessage } };
         break;
       }
 
-      fullContent += iterContent;
       fullThinking += iterThinking;
 
       // ── Fallback: extract text-based tool calls ──────────────────────
@@ -708,6 +794,10 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
           console.log(`[AgentLoop] Fallback: extracted ${textCalls.length} text tool call(s)`);
         }
       }
+
+      // Sanitize iterContent AFTER text tool extraction (so extraction still works)
+      iterContent = sanitizeContent(iterContent);
+      fullContent += iterContent;
 
       // ── Handle tool calls ────────────────────────────────────────────
       if (collectedToolCalls.length > 0) {
@@ -875,6 +965,9 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         }
       }
 
+      // Sanitize content: strip raw tool call markup from all LLM providers
+      fullContent = sanitizeContent(fullContent);
+
       // Parse, persist, and emit done
       const parsed = parseAgentResponse(fullContent);
 
@@ -951,7 +1044,7 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
                   include: { ownerAgent: { select: { shortName: true } } },
                 });
                 const targetAgent = lastAssigned?.ownerAgent?.shortName;
-                resolvedNext = (targetAgent && ['JD', 'SD', 'UX', 'DO'].includes(targetAgent))
+                resolvedNext = (targetAgent && ['JD', 'SD', 'UX', 'UID', 'DO'].includes(targetAgent))
                   ? targetAgent : 'JD';
               } catch {
                 resolvedNext = 'JD';

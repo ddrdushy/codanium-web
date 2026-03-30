@@ -22,12 +22,39 @@ export async function GET(
 
     const { id: projectId } = await params;
 
+    // Fetch from wireframes table
     const wireframes = await prisma.wireframe.findMany({
       where: { projectId },
       orderBy: { updatedAt: 'desc' },
     });
 
-    return NextResponse.json(wireframes);
+    // Also fetch WIREFRAME and DESIGN_SYSTEM documents created by UX/UI agents
+    const designDocs = await prisma.document.findMany({
+      where: {
+        projectId,
+        type: { in: ['WIREFRAME', 'DESIGN_SYSTEM'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Merge: convert documents into wireframe-compatible shape
+    const docWireframes = designDocs.map((doc: any) => ({
+      id: doc.id,
+      title: doc.title,
+      screen: doc.type === 'DESIGN_SYSTEM' ? 'Design System' : doc.title,
+      status: doc.status === 'APPROVED' ? 'approved' : 'review',
+      device: 'desktop' as const,
+      owner: 'UX Designer',
+      ownerAvatar: '',
+      lastUpdated: doc.updatedAt?.toISOString() ?? doc.createdAt.toISOString(),
+      components: 0,
+      version: doc.version ?? 1,
+      content: doc.content,
+      type: doc.type,
+      isDocument: true,
+    }));
+
+    return NextResponse.json([...docWireframes, ...wireframes]);
   } catch (error) {
     console.error('GET /api/projects/[id]/wireframes error:', error);
     return NextResponse.json({ error: 'Failed to fetch wireframes' }, { status: 500 });

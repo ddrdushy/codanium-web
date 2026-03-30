@@ -143,7 +143,7 @@ export class LLMGateway {
           baseUrl: adminMap['llm.baseUrl'] || undefined,
           defaultModel: adminMap['llm.defaultModel'] || 'llama3',
         };
-        console.log(`[LLMGateway] ✓ ADMIN settings: provider=${adminProvider}, model=${config.defaultModel}`);
+        console.log(`[LLMGateway] ✓ ADMIN settings: provider=${adminProvider}, model=${config.defaultModel}, baseUrl=${config.baseUrl ?? '(provider default)'}`);
         return {
           provider: this.providers.get(adminProvider)!,
           config,
@@ -327,7 +327,7 @@ export class LLMGateway {
           model: response.model,
           agentName: options.agentId ?? 'unknown',
           projectId: options.projectId,
-          userId: userId ?? null,
+          userId: (userId && userId !== 'system' && userId !== 'unknown') ? userId : null,
         },
       });
 

@@ -132,9 +132,31 @@ async function executeToolInternal(
       return { status: args.status, percent: args.percent };
 
     // ── Filesystem ──────────────────────────────────────────
-    case 'read_file':
-      return readFileInWorkspace(projectId, args.path);
+    case 'read_file': {
+      const readPath = args.path;
+      if (!readPath || typeof readPath !== 'string' || !readPath.trim()) {
+        throw new Error('read_file requires a valid file path. Provide the relative path to the file you want to read.');
+      }
+      return readFileInWorkspace(projectId, readPath.trim());
+    }
     case 'write_file': {
+      // Sanitize filename: strip invalid filesystem characters
+      if (args.path && typeof args.path === 'string') {
+        args.path = args.path.replace(/[?*<>|"\x00-\x1f]/g, '_');
+      }
+
+      // Reject mixed routing: Next.js pages/ directory should not be used
+      if (args.path && typeof args.path === 'string') {
+        const normalizedPath = args.path.replace(/\\/g, '/');
+        if (normalizedPath.startsWith('src/pages/api/') || normalizedPath.startsWith('pages/api/')) {
+          throw new Error(
+            'Invalid path: Do NOT use src/pages/api/ or pages/api/. ' +
+            'This project uses the Next.js App Router. All API routes MUST be in src/app/api/ instead. ' +
+            'Example: src/app/api/users/route.ts'
+          );
+        }
+      }
+
       // Dedup check for wireframe files
       if (args.path && typeof args.path === 'string' && args.path.endsWith('.pen')) {
         try {
@@ -382,9 +404,47 @@ async function handleCreateCard(
     if (agent) ownerAgentId = agent.id;
   }
 
-  // ── BUG-006 fix: Deduplicate by title within the same project ─────
+  // ── Semantic dedup: check for cards with similar titles (>70% word overlap) ────
+  const normalizeCardTitle = (title: string): string =>
+    title
+      .replace(/^(EPIC|Feature|Task|Bug|Story)\s*:\s*/i, '')
+      .toLowerCase()
+      .trim();
+
+  const normalizedNewTitle = normalizeCardTitle(args.title);
+  const newWords = normalizedNewTitle.split(/\s+/).filter(w => w.length > 2);
+
+  if (newWords.length > 0) {
+    const existingCards = await prisma.card.findMany({
+      where: { projectId },
+      select: { id: true, title: true, state: true },
+    });
+
+    for (const card of existingCards) {
+      const normalizedExisting = normalizeCardTitle(card.title);
+      const existingWords = normalizedExisting.split(/\s+/).filter(w => w.length > 2);
+      if (existingWords.length === 0) continue;
+
+      // Calculate word overlap
+      const newSet = new Set(newWords);
+      const existingSet = new Set(existingWords);
+      let overlap = 0;
+      for (const word of newSet) {
+        if (existingSet.has(word)) overlap++;
+      }
+      const maxLen = Math.max(newSet.size, existingSet.size);
+      const similarity = maxLen > 0 ? overlap / maxLen : 0;
+
+      if (similarity > 0.7) {
+        console.log(`[ToolExecutor] Semantic dedup: "${args.title}" ~= "${card.title}" (${(similarity * 100).toFixed(0)}% overlap)`);
+        return { cardId: card.id, title: card.title, state: card.state, requirementIds, deduplicated: true };
+      }
+    }
+  }
+
+  // ── BUG-006 fix: Deduplicate by title within the same project (case-insensitive) ─────
   const existing = await prisma.card.findFirst({
-    where: { projectId, title: args.title },
+    where: { projectId, title: { equals: args.title, mode: 'insensitive' } },
     select: { id: true, title: true, state: true },
   });
   if (existing) {

@@ -259,6 +259,8 @@ model Card {
   gitBranch  GitBranch? @relation(fields: [gitBranchId], references: [id])
   artifacts  Artifact[]
   chatMessages ChatMessage[]
+  comments   CardComment[]
+  llmUsage   LLMUsage[]
 
   @@index([projectId])
   @@index([state])
@@ -289,6 +291,30 @@ enum Priority {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+// ─── Card Comments & Sign-offs ──────────────────────────────────────────────
+
+model CardComment {
+  id         String           @id @default(cuid())
+  cardId     String
+  agentName  String           // Agent shortName (e.g. "QA", "SEC", "PM")
+  content    String
+  type       CardCommentType  @default(COMMENT)
+  createdAt  DateTime         @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+  @@index([cardId, type])
+  @@map("card_comments")
+}
+
+enum CardCommentType {
+  COMMENT
+  SIGN_OFF
+  REJECTION
+  REWORK_REQUEST
 }
 
 // ─── Decisions ──────────────────────────────────────────────────────────────
@@ -531,11 +557,15 @@ model LLMUsage {
   userId           String?     // who triggered the call
   createdAt        DateTime    @default(now())
 
+  cardId           String?     // Card this usage is attributed to (for per-card cost tracking)
+
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User?   @relation(fields: [userId], references: [id])
+  card    Card?   @relation(fields: [cardId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([userId])
+  @@index([cardId])
   @@index([createdAt])
   @@map("llm_usage")
 }

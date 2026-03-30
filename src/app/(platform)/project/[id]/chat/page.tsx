@@ -88,6 +88,17 @@ function stripAgentMarkers(content: string): string {
     .replace(/(.{2,20})\1{4,}/g, '*[Repetitive content removed]*')
     // Strip inline agent tags that aren't at start of line (e.g. "[TL] [TL] [TL]")
     .replace(/(\[\s*(?:BA|SA|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*){3,}/gi, '')
+    // XML tool calls: <tool_call>...</tool_call>
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+    // Anthropic-style: <function=name>...</function> or self-closing <function=name>
+    .replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, '')
+    .replace(/<function=[^>]*\/?>/gi, '')
+    // Parameter blocks: <parameter=name>...</parameter>
+    .replace(/<parameter=[^>]*>[\s\S]*?<\/parameter>/gi, '')
+    // ChatML/Qwen: <|tool_call|>...<|end|>
+    .replace(/<\|tool_call\|>[\s\S]*?<\|end\|>/gi, '')
+    // [ACTION:...] inline markers
+    .replace(/\[ACTION:[^\]]*\]/gi, '')
     // Clean up whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -709,9 +720,9 @@ export default function ChatPage() {
                                         : [...prev, opt.text]
                                     );
                                   } else {
-                                    // Single-select: send full option text immediately
+                                    // Single-select: send label + text so LLM knows which option was picked
                                     // Use sendRef.current to avoid stale closure on sendMessage
-                                    sendRef.current(opt.text);
+                                    sendRef.current(`${opt.label}) ${opt.text}`);
                                   }
                                 }}
                                 className={cn(

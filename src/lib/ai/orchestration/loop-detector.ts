@@ -43,7 +43,7 @@ const TOOL_WINDOW_MS = 2 * 60 * 1000;
 const TOOL_WINDOW_MAX_CALLS = 10;
 
 /** Minimum number of identical tool calls to trigger a warning. */
-const TOOL_REPEAT_THRESHOLD = 2;
+const TOOL_REPEAT_THRESHOLD = 3;
 
 /** Number of recent responses to track for text repetition detection. */
 const RESPONSE_HISTORY_SIZE = 5;
@@ -188,6 +188,7 @@ function checkToolLoop(recentToolCalls: TrackedToolCall[]): LoopWarning | null {
   const HIGH_VOLUME_TOOLS = new Set([
     'create_card', 'write_file', 'edit_file', 'git_commit', 'run_command',
     'read_file', 'list_directory', 'glob', 'grep',
+    'create_decision', 'update_document', 'create_document',
   ]);
 
   for (const [toolName, count] of nameOnlyCounts) {
@@ -282,26 +283,53 @@ function checkQuestionReask(recentResponses: string[]): LoopWarning | null {
   }
 
   const responses = recentResponses.slice(-RESPONSE_HISTORY_SIZE);
-  const seenQuestions = new Map<string, number>();
+  const allQuestions: string[] = [];
 
   for (const response of responses) {
     const questions = extractQuestions(response);
     for (const q of questions) {
-      // Skip very short questions like "ok?" or "yes?"
       if (q.length < 10) continue;
-      const count = (seenQuestions.get(q) ?? 0) + 1;
-      seenQuestions.set(q, count);
+      allQuestions.push(q);
+    }
+  }
 
-      if (count >= 2) {
+  // Check for exact duplicate questions
+  const seenQuestions = new Map<string, number>();
+  for (const q of allQuestions) {
+    const count = (seenQuestions.get(q) ?? 0) + 1;
+    seenQuestions.set(q, count);
+    if (count >= 2) {
+      console.warn(
+        `[LoopDetector] Question re-ask detected (exact): "${q.slice(0, 80)}..." asked ${count} times`,
+      );
+      return {
+        type: 'question_reask',
+        message:
+          'WARNING: You are asking a question that has already been asked before. ' +
+          'Check the conversation history — the user may have already answered this. ' +
+          'Ask a NEW question or proceed to the next step.',
+      };
+    }
+  }
+
+  // Check for semantically similar questions (fuzzy match)
+  // This catches rephrased questions like "Which devices?" vs "What devices should the site work on?"
+  for (let i = 0; i < allQuestions.length; i++) {
+    for (let j = i + 1; j < allQuestions.length; j++) {
+      const similarity = computeSimilarity(
+        normalizeText(allQuestions[i]),
+        normalizeText(allQuestions[j]),
+      );
+      if (similarity > 0.5) {
         console.warn(
-          `[LoopDetector] Question re-ask detected: "${q.slice(0, 80)}..." asked ${count} times`,
+          `[LoopDetector] Question re-ask detected (fuzzy ${(similarity * 100).toFixed(0)}%): "${allQuestions[j].slice(0, 60)}..." similar to "${allQuestions[i].slice(0, 60)}..."`,
         );
         return {
           type: 'question_reask',
           message:
-            'WARNING: You are asking a question that has already been asked before. ' +
-            'Check the conversation history — the user may have already answered this. ' +
-            'Ask a NEW question or proceed to the next step.',
+            'WARNING: You are asking a question very similar to one already asked. ' +
+            'The user has already answered a question about this topic. ' +
+            'Do NOT ask again. Move on to a NEW topic or proceed to the next phase.',
         };
       }
     }
