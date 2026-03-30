@@ -92,6 +92,15 @@ export type UserIntent =
   | 'architecture'
   | 'code_generation'
   | 'card_management'
+  | 'decision'
+  | 'audit'
+  | 'state_validation'
+  | 'performance'
+  | 'integration'
+  | 'secrets'
+  | 'monitoring'
+  | 'llm_optimization'
+  | 'prompt_optimization'
   | 'general';
 
 // ---------------------------------------------------------------------------

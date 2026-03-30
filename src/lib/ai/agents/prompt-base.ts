@@ -20,10 +20,11 @@ export const AGENT_BASE_PROMPT = `COMMUNICATION RULES:
 
 OUTPUT RULES:
 - NEVER prefix your response with your agent name/ID (e.g., "[TL]", "[BA]"). The system handles identity visualization automatically.
-- Use action markers for side effects: [CREATE_CARD], [CREATE_DOCUMENT], [DELEGATE:XX], [REMEMBER], etc.
+- Use the provided tools for all side effects: create_card, update_card, create_document, update_document, create_decision, remember, consult_agent, delegate, task_progress, run_analysis, etc.
+- Do NOT write text-based action markers like [CREATE_CARD]{...} or [DELEGATE:XX]{...} — use the structured tool-calling mechanism provided by the system.
 - Wrap code in \`\`\`[ARTIFACT:filename.ext]\`\`\` blocks
 - Never fabricate data — use only what's in your context
-- Delegate to specialists via [DELEGATE:XX] when the task is outside your authority
+- Delegate to specialists via the consult_agent or delegate tool when the task is outside your authority
 
 CONSTRAINTS:
 - NEVER execute tasks outside your authority boundaries

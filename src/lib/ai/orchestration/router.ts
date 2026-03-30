@@ -95,15 +95,65 @@ const INTENT_PATTERNS: Array<{ intent: UserIntent; patterns: RegExp[] }> = [
     ],
   },
   {
+    intent: 'decision',
+    patterns: [
+      /\b(decide|decision|compare|pros.{0,10}cons|trade.?off|which.{0,10}(should|better|best)|choose between|option.{0,10}(a|b|c)|recommend.{0,10}(between|which)|vs\b|versus)\b/,
+    ],
+  },
+  {
+    intent: 'audit',
+    patterns: [
+      /\b(audit|quality gate|phase gate|gate check|review.{0,10}(phase|stage|complet)|everything.{0,10}(solid|complete|ready)|nothing.{0,10}miss|check.{0,10}(quality|completeness|readiness))\b/,
+    ],
+  },
+  {
+    intent: 'state_validation',
+    patterns: [
+      /\b(card.{0,10}state|state.{0,10}(transition|valid|correct|issue)|task.{0,10}(stuck|block|invalid)|board.{0,10}(check|valid|correct)|pipeline.{0,10}(stuck|block|issue)|workflow.{0,10}(valid|correct|issue))\b/,
+    ],
+  },
+  {
+    intent: 'performance',
+    patterns: [
+      /\b(performance|bottleneck|load time|page speed|core web vital|lighthouse|latency|benchmark|optimization|slow|caching strategy|performance budget)\b/,
+    ],
+  },
+  {
+    intent: 'integration',
+    patterns: [
+      /\b(integrat|third.?party|external.{0,10}(api|service)|webhook|connect.{0,10}(stripe|sendgrid|twilio|s3|aws|google|oauth|api)|api.{0,10}(integration|connect|design))\b/,
+    ],
+  },
+  {
+    intent: 'secrets',
+    patterns: [
+      /\b(secret|credential|api.?key.{0,10}(manage|stor|rotat|secur|leak)|vault|key.{0,10}(management|rotation|storage)|env.{0,10}(var|secret)|\.env)\b/,
+    ],
+  },
+  {
+    intent: 'monitoring',
+    patterns: [
+      /\b(monitor|observ|alert|uptime|incident|slo\b|sli\b|sla\b|grafana|datadog|pager|on.?call|health.?check|site.?reliab)\b/,
+    ],
+  },
+  {
+    intent: 'llm_optimization',
+    patterns: [
+      /\b(ai.{0,10}(cost|usage|optimi|efficien)|model.{0,10}(routing|selection|cost|cheaper)|token.{0,10}(budget|optimi|reduc)|llm.{0,10}(routing|cost|optimi))\b/,
+    ],
+  },
+  {
+    intent: 'prompt_optimization',
+    patterns: [
+      /\b(prompt.{0,10}(optimi|improv|efficien|rewrit|engin)|system.{0,10}prompt|agent.{0,10}prompt|fewer.{0,10}round|prompt.{0,10}(token|length|size))\b/,
+    ],
+  },
+  {
     intent: 'new_requirement',
     patterns: [
       /\b(idea|build|create|want|need|should have|feature|add|make|implement|develop|can you|i('d| would) like)\b/,
     ],
   },
-  // NOTE: 'approval' intent REMOVED from keyword patterns.
-  // Words like "yes", "no", "go ahead" are almost always replies to the
-  // current agent's question — not a request for the Decision Coordinator.
-  // DEC is now only invoked via explicit delegation from other agents.
 ];
 
 // ---------------------------------------------------------------------------
@@ -114,18 +164,27 @@ const INTENT_PATTERNS: Array<{ intent: UserIntent; patterns: RegExp[] }> = [
  * Maps each classified intent to the agent shortName best suited to handle it.
  */
 const ROUTING_TABLE: Record<UserIntent, string> = {
-  new_requirement: 'BA',   // Business Analyst — requirements gathering
-  approval:        'BA',   // Business Analyst — handles phase transitions and doc approvals
-  status_query:    'ORC',  // Orchestrator — project-wide awareness
-  bug_report:      'QA',   // QA Engineer — bug triage and tracking
-  ui_feedback:     'UX',   // UX Designer — design feedback
-  cost_query:      'CA',   // Cost Analyst — budget / token usage
-  deployment:      'DO',   // DevOps — deployment pipeline
-  testing:         'QA',   // QA Engineer — test strategy
-  architecture:    'SA',   // Solutions Architect — technical decisions
-  code_generation: 'TL',   // Tech Lead — coordinates development execution
-  card_management: 'PM',   // Project Manager — card/task creation and backlog management
-  general:         'BA',   // Business Analyst — default conversational agent
+  new_requirement:    'BA',   // Business Analyst — requirements gathering
+  approval:           'BA',   // Business Analyst — handles phase transitions and doc approvals
+  status_query:       'ORC',  // Orchestrator — project-wide awareness
+  bug_report:         'QA',   // QA Engineer — bug triage and tracking
+  ui_feedback:        'UX',   // UX Designer — design feedback
+  cost_query:         'CA',   // Cost Analyst — budget / token usage
+  deployment:         'DO',   // DevOps — deployment pipeline
+  testing:            'QA',   // QA Engineer — test strategy
+  architecture:       'SA',   // Solutions Architect — technical decisions
+  code_generation:    'TL',   // Tech Lead — coordinates development execution
+  card_management:    'PM',   // Project Manager — card/task creation and backlog management
+  decision:           'DEC',  // Decision Controller — structured decision records
+  audit:              'AUD',  // Audit Gatekeeper — quality gate validation
+  state_validation:   'STC',  // State Controller — card state consistency
+  performance:        'PF',   // Performance Engineer — bottleneck analysis, budgets
+  integration:        'IE',   // Integration Engineer — third-party API design
+  secrets:            'SM',   // Secrets Manager — credential management architecture
+  monitoring:         'SR',   // Site Reliability Engineer — observability, alerts
+  llm_optimization:   'LLM',  // LLM Gateway Manager — model routing, cost optimization
+  prompt_optimization: 'PRE', // Prompt Engineer — system prompt analysis/improvement
+  general:            'BA',   // Business Analyst — default conversational agent
 };
 
 // ---------------------------------------------------------------------------
@@ -201,19 +260,37 @@ function isExplicitTopicSwitch(message: string): UserIntent | null {
   // Strong signals that the user wants a different agent
   // These are phrased as commands, not answers to questions
 
-  // HIGHEST PRIORITY: Approval/pipeline advancement — always go through BA first
-  // This ensures the proper pipeline chain (BA→SA→UX→PM→DO→TL) is followed
-  if (/\b(approv|proceed.{0,20}(phase|architecture|design|next)|move forward|advance)/i.test(lower)) return 'approval';
-  if (/\b(create.{0,10}(sdd|architecture|system design)|design.{0,10}(database|schema|api))/i.test(lower)) return 'architecture';
+  // HIGHEST PRIORITY: Card/task creation — route to PM immediately
+  // Must be checked BEFORE approval to catch "approved, create task cards"
+  if (/\b(create.{0,10}(card|task|ticket|backlog|sprint)|break.{0,10}(down|into).{0,10}(task|card|sprint)|generate.{0,10}(task|card))\b/i.test(lower)) return 'card_management';
+
+  // Architecture / SDD creation — route to SA
+  if (/\b(create.{0,10}(sdd|architecture|system design)|design.{0,10}(database|schema|api)|proceed.{0,10}(architecture|solution|technical))\b/i.test(lower)) return 'architecture';
+
+  // UI/UX design — route to UX
+  if (/\b(design.{0,10}(ui|ux|wireframe|mockup|layout|page|screen|interface)|show me the design|wireframe|mockup|ui review|look and feel|color.{0,5}(palette|scheme))\b/i.test(lower)) return 'ui_feedback';
+
+  // Approval with context — route based on what's being approved
+  if (/\b(approv|proceed|move forward|advance|next phase|next step|go ahead)\b/i.test(lower)) return 'approval';
 
   if (/\b(show me the budget|how much (have|did) (we|i) spend|check cost|token usage)\b/.test(lower)) return 'cost_query';
-  if (/\b(deploy now|push to production|go live now|release it)\b/.test(lower)) return 'deployment';
+  if (/\b(deploy now|push to production|go live now|release it|scaffold)\b/.test(lower)) return 'deployment';
   if (/\b(run (the )?tests|check quality|qa report)\b/.test(lower)) return 'testing';
-  if (/\b(show me the design|wireframe|mockup|ui review)\b/.test(lower)) return 'ui_feedback';
   if (/\b(project status|where are we|give me an update|progress report)\b/.test(lower)) return 'status_query';
   if (/\b(i have a new idea|new feature request|i want to add|let me describe|i('d| would) like to build)\b/.test(lower)) return 'new_requirement';
   if (/\b(start (building|coding|developing)|begin (development|coding)|let'?s build|write (the )?code|kick off (development|the build)|ready to (build|code)|open vscode|open vs code)\b/.test(lower)) return 'code_generation';
   if (/\b(next task|continue building|build more|next one|keep building|build the next|continue coding|next card)\b/.test(lower)) return 'code_generation';
+
+  // Decision, audit, performance, integration, secrets, monitoring, LLM/prompt optimization
+  if (/\b(help me decide|compare.{0,10}(options|pros|cons)|decision.{0,10}(record|matrix)|trade.?off analysis|which.{0,10}(should|better))\b/.test(lower)) return 'decision';
+  if (/\b(audit.{0,10}(phase|gate|quality|what)|quality gate|check.{0,10}(everything|completeness|readiness))\b/.test(lower)) return 'audit';
+  if (/\b(card.{0,10}state|check.{0,10}(board|task).{0,10}(state|correct)|task.{0,10}stuck)\b/.test(lower)) return 'state_validation';
+  if (/\b(performance.{0,10}(target|budget|analys)|bottleneck|page.{0,10}speed|core web vital|lighthouse)\b/.test(lower)) return 'performance';
+  if (/\b(integrat.{0,10}(service|stripe|sendgrid|api)|third.?party.{0,10}(service|api)|webhook.{0,10}(setup|design))\b/.test(lower)) return 'integration';
+  if (/\b(manage.{0,10}secret|secret.{0,10}(management|plan|stor)|api.?key.{0,10}(secur|manage|stor|rotat))\b/.test(lower)) return 'secrets';
+  if (/\b(set up.{0,10}monitor|observab.{0,10}(plan|setup)|alert.{0,10}(rule|setup|plan)|site goes down|incident.{0,10}(response|plan))\b/.test(lower)) return 'monitoring';
+  if (/\b(ai.{0,10}(cost|usage).{0,10}(optim|reduc)|model.{0,10}(cost|routing)|reduce.{0,10}(cost|token|spend)|cheaper.{0,10}model)\b/.test(lower)) return 'llm_optimization';
+  if (/\b(prompt.{0,10}(optim|improv|efficien)|agent.{0,10}prompt|fewer.{0,10}round)\b/.test(lower)) return 'prompt_optimization';
 
   return null;
 }
@@ -298,6 +375,14 @@ export class MessageRouter {
     // ── Priority 1: Explicit topic switch ─────────────────────────────
     const explicitSwitch = isExplicitTopicSwitch(message);
     if (explicitSwitch) {
+      // Smart approval: route to the correct next agent based on project phase
+      if (explicitSwitch === 'approval') {
+        const approvalAgent = await this.resolveApprovalAgent(projectId);
+        console.log(
+          `[MessageRouter] Smart approval → phase-aware routing → agent: ${approvalAgent}`,
+        );
+        return approvalAgent;
+      }
       const agent = this.resolveAgent(explicitSwitch);
       console.log(
         `[MessageRouter] Explicit topic switch → intent: ${explicitSwitch} → agent: ${agent}`,
@@ -428,9 +513,36 @@ export class MessageRouter {
 
   /**
    * Map a classified intent to the appropriate agent shortName.
+   * For 'approval' intent, dynamically routes based on project phase.
    */
-  private resolveAgent(intent: UserIntent): string {
+  private resolveAgent(intent: UserIntent, projectId?: string): string {
     return ROUTING_TABLE[intent];
+  }
+
+  /**
+   * Smart approval routing — determines which agent should handle
+   * a phase transition based on which documents already exist.
+   * BA→SA (after BRD) → PM (after SDD) → TL (after cards)
+   */
+  private async resolveApprovalAgent(projectId: string): Promise<string> {
+    try {
+      const [brd, sdd, cardCount] = await Promise.all([
+        prisma.document.findFirst({ where: { projectId, type: 'BRD' }, select: { id: true } }),
+        prisma.document.findFirst({ where: { projectId, type: 'SDD' }, select: { id: true } }),
+        prisma.card.count({ where: { projectId } }),
+      ]);
+
+      // No BRD yet → BA still needs to gather requirements
+      if (!brd) return 'BA';
+      // BRD exists but no SDD → route to SA for architecture
+      if (!sdd) return 'SA';
+      // SDD exists but no cards → route to PM for task creation
+      if (cardCount === 0) return 'PM';
+      // Cards exist → route to TL for implementation planning
+      return 'TL';
+    } catch {
+      return 'BA';
+    }
   }
 
   /**
