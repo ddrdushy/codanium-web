@@ -103,7 +103,7 @@ export async function dispatchTeam(params: {
         targetAgent: task.agentShortName,
         autoRouted: false,
         isBackground: true,
-        priority: task.priority ?? 0,
+        priority: task.priority ?? 10, // 10 = background task (lowest priority)
         parentRunId: parent.id,
         cardId: task.cardId,
       }),

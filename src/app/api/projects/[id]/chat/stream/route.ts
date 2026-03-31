@@ -36,6 +36,7 @@ export async function POST(
   const cardId = body.cardId ?? undefined;
 
   // Create tracking record
+  // Priority: 1 = interactive user message (highest), 5 = pipeline, 10 = background
   const runId = await taskQueue.enqueue({
     projectId,
     userId,
@@ -43,6 +44,7 @@ export async function POST(
     targetAgent,
     autoRouted: !body.agentShortName,
     isBackground,
+    priority: isBackground ? 10 : 1,
     cardId,
   });
 

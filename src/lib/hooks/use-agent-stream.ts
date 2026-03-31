@@ -72,6 +72,12 @@ export interface InfoData {
   message: string;
 }
 
+export interface PipelineNextData {
+  nextAgent: string;
+  context: string;
+  depth: number;
+}
+
 // ─── Stream Callbacks ───────────────────────────────────────────────────────
 
 export interface StreamCallbacks {
@@ -88,6 +94,7 @@ export interface StreamCallbacks {
   onPipelineProgress?: (data: PipelineProgressData) => void;
   onInfo?: (data: InfoData) => void;
   onVSCodeRequired?: (data: VSCodeRequiredData) => void;
+  onPipelineNext?: (data: PipelineNextData) => void;
 }
 
 // ─── SSE Parser ─────────────────────────────────────────────────────────────
@@ -209,6 +216,9 @@ function dispatchSSEEvent(
       break;
     case 'vscode_required':
       callbacks.onVSCodeRequired?.(parsed as VSCodeRequiredData);
+      break;
+    case 'pipeline_next':
+      callbacks.onPipelineNext?.(parsed as PipelineNextData);
       break;
     default:
       // Unknown event types are silently ignored per SSE spec
@@ -402,6 +412,8 @@ export function useAgentStream(): AgentStreamState {
   const pendingThinkingRef = useRef('');
   const contentFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thinkingFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Pipeline next — queued data for auto-continuing to the next agent
+  const pipelineNextRef = useRef<{ projectId: string; data: PipelineNextData } | null>(null);
 
   const stop = useCallback(() => {
     if (abortRef.current) {
@@ -439,6 +451,7 @@ export function useAgentStream(): AgentStreamState {
       setError(null);
       setPipelineProgress(null);
       setVscodeRequired(null);
+      pipelineNextRef.current = null;
 
       try {
         await streamChat(
@@ -535,6 +548,11 @@ export function useAgentStream(): AgentStreamState {
               setVscodeRequired(data);
               setIsStreaming(false);
             },
+            onPipelineNext: (data) => {
+              // Queue the pipeline_next data — the auto-continuation will be
+              // triggered in the finally block after this stream ends cleanly.
+              pipelineNextRef.current = { projectId, data };
+            },
           },
           controller.signal,
           cardId,
@@ -562,8 +580,20 @@ export function useAgentStream(): AgentStreamState {
         // Only update streaming state if this controller is still current
         // (prevents a race condition when a new send() replaces the old one)
         if (abortRef.current === controller) {
-          setIsStreaming(false);
-          abortRef.current = null;
+          // Check if pipeline_next was queued — if so, auto-continue to the
+          // next agent via a new POST instead of ending the stream.
+          const queued = pipelineNextRef.current as { projectId: string; data: PipelineNextData } | null;
+          pipelineNextRef.current = null;
+          if (queued) {
+            // Brief delay so the UI can show the delegation handoff
+            setTimeout(() => {
+              send(queued.projectId, queued.data.context, queued.data.nextAgent);
+            }, 500);
+            // Keep isStreaming=true so the UI stays in streaming mode
+          } else {
+            setIsStreaming(false);
+            abortRef.current = null;
+          }
         }
       }
     },

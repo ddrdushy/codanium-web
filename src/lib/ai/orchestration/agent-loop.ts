@@ -56,7 +56,10 @@ import type {
   LLMMessage,
   LLMToolCall,
   LLMToolDefinition,
+  LLMProvider,
+  ProviderConfig,
 } from '@/lib/ai/providers/types';
+import type { BillingType } from '@/generated/prisma/enums';
 import type { ToolResult } from '@/lib/ai/tools/tool-definitions';
 import type { TrackedToolCall, LoopWarning } from './loop-detector';
 
@@ -600,6 +603,9 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
     let toolLoopCount = 0;
     let consecutiveToolErrors = 0;
     let modelOverride: string | undefined;
+    // Full fallback provider config — when set, passed to llmGateway.stream()
+    // so the retry uses the correct API key, base URL, and provider adapter.
+    let fallbackConfig: { provider: LLMProvider; config: ProviderConfig; billingType: BillingType } | undefined;
 
     // Loop detection state
     const loopState: LoopState = {
@@ -689,7 +695,7 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             metadata: { userId: input.userId },
             tools: toolDefs.length > 0 ? toolDefs : undefined,
             toolChoice: toolDefs.length > 0 ? 'auto' : undefined,
-          })) {
+          }, fallbackConfig)) {
             if (chunk.thinking) {
               iterThinking += chunk.thinking;
               yield { type: 'thinking', data: { content: chunk.thinking } };
@@ -778,11 +784,12 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             || errMsg.toLowerCase().includes('rate limit') || errMsg.toLowerCase().includes('timeout');
           if (isRetryable && attempt < MAX_LLM_ATTEMPTS - 1) {
             try {
-              const nextProvider = await llmGateway.resolveFallback(
-                modelOverride || 'unknown',
-              );
+              const failedProviderName = fallbackConfig?.config.provider || modelOverride || 'unknown';
+              const nextProvider = await llmGateway.resolveFallback(failedProviderName);
               if (nextProvider) {
-                // Override the model to use the fallback provider's model
+                // Store the FULL provider config (API key, base URL, adapter)
+                // so the next retry uses the correct provider, not just a model name
+                fallbackConfig = nextProvider;
                 modelOverride = nextProvider.config.defaultModel;
                 yield { type: 'info', data: { message: `Switching to fallback provider: ${nextProvider.config.provider}` } };
               }
@@ -1112,25 +1119,8 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         // Auto-advance SDLC stages before delegating
         await autoAdvanceSDLC(input.projectId, currentAgent);
 
-        // Auto-move cards to IN_PROGRESS when dev agents take over
-        if (['JD', 'SD', 'TL'].includes(nextAgent)) {
-          try {
-            const plannedCards = await prisma.card.findMany({
-              where: { projectId: input.projectId, state: 'PLANNED' },
-              orderBy: { priority: 'desc' },
-              take: 1,
-            });
-            if (plannedCards.length > 0) {
-              await prisma.card.update({
-                where: { id: plannedCards[0].id },
-                data: { state: 'IN_PROGRESS' },
-              });
-              console.log(`[AgentLoop] Auto-moved card "${plannedCards[0].title}" to IN_PROGRESS`);
-            }
-          } catch (e) {
-            console.warn('[AgentLoop] Auto card state update failed:', e);
-          }
-        }
+        // Cards should only move to IN_PROGRESS when TL explicitly assigns them
+        // via the assign_card tool — no auto-moving here.
 
         console.log(`[AgentLoop] Pipeline: ${currentAgent} -> ${nextAgent} (depth ${pipelineDepth + 1})`);
 
@@ -1161,15 +1151,18 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
           },
         };
 
-        // Recurse into the next agent
-        yield* agentLoop({
-          projectId: input.projectId,
-          userId: input.userId,
-          userMessage: nextContext,
-          targetAgentShortName: nextAgent,
-          isPipeline: true,
-          pipelineDepth: pipelineDepth + 1,
-        });
+        // Instead of recursing, yield a pipeline_next event for the client to handle.
+        // The client will start the next agent via a new POST request, avoiding
+        // recursive generator calls that cause multiple agents streaming simultaneously.
+        yield {
+          type: 'pipeline_next',
+          data: {
+            nextAgent: nextAgent,
+            context: nextContext,
+            depth: pipelineDepth + 1,
+          },
+        };
+        // DO NOT recurse — let the client start the next agent via a new POST
       }
       } // end pipeline routing
 
@@ -1209,7 +1202,7 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
                   projectId: input.projectId,
                   userId: input.userId,
                 },
-                { delay: 2000 }, // 2s delay to avoid rate limits
+                { priority: 5, delay: 2000 }, // priority 5 = pipeline auto-triggered (medium)
               );
             } catch (err) {
               console.warn('[AgentLoop] Auto-continue queue failed:', err);

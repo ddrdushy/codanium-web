@@ -62,7 +62,7 @@ export function getOrchestrationQueue(): Queue<OrchestrationJobData> {
 export async function addOrchestrationJob(
   data: OrchestrationJobData,
   options?: {
-    priority?: number;  // Higher = higher priority
+    priority?: number;  // Lower = higher priority (1=interactive, 5=pipeline, 10=background)
     delay?: number;     // Delay in ms before processing
   },
 ): Promise<string> {

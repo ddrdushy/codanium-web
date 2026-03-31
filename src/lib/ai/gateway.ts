@@ -26,6 +26,7 @@ import { AnthropicAdapter } from './providers/anthropic-adapter';
 import { OllamaAdapter } from './providers/ollama-adapter';
 import { decrypt, isEncrypted } from './encryption';
 import { prisma } from '@/lib/prisma';
+import { redis, isRedisAvailable } from '@/lib/redis';
 import { BillingType } from '@/generated/prisma/enums';
 
 // ---------------------------------------------------------------------------
@@ -228,6 +229,9 @@ export class LLMGateway {
   // -------------------------------------------------------------------------
 
   async complete(options: LLMRequestOptions): Promise<LLMResponse> {
+    // Per-project rate limit check
+    await this.enforceRateLimit(options.projectId);
+
     const userId = options.metadata?.userId;
     const { provider, config, isMock, billingType } = await this.resolve(
       options.projectId,
@@ -263,13 +267,24 @@ export class LLMGateway {
   // Streaming Completion
   // -------------------------------------------------------------------------
 
-  async *stream(options: LLMRequestOptions): AsyncIterable<LLMStreamChunk> {
+  async *stream(
+    options: LLMRequestOptions,
+    configOverride?: { provider: LLMProvider; config: ProviderConfig; billingType: BillingType },
+  ): AsyncIterable<LLMStreamChunk> {
+    // Per-project rate limit check
+    await this.enforceRateLimit(options.projectId);
+
     const userId = options.metadata?.userId;
-    const { provider, config, isMock, billingType } = await this.resolve(
-      options.projectId,
-      options.agentId,
-      userId,
-    );
+    // When a configOverride is provided (e.g. from fallback retry), use it
+    // instead of resolving from the DB. This ensures the full provider config
+    // (API key, base URL, adapter) is used, not just the model name.
+    const { provider, config, isMock, billingType } = configOverride
+      ? { ...configOverride, isMock: false }
+      : await this.resolve(
+          options.projectId,
+          options.agentId,
+          userId,
+        );
 
     // Pre-flight credit check (only for PLATFORM path)
     if (userId && billingType === 'PLATFORM') {
@@ -575,6 +590,42 @@ export class LLMGateway {
     } catch (err) {
       if (err instanceof Error && err.message.includes('Insufficient credits')) throw err;
       console.warn('[LLMGateway] Credit check failed (non-blocking):', err);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Per-Project Rate Limiting
+  // -------------------------------------------------------------------------
+
+  /**
+   * Rate limit: max 30 LLM calls per project per minute.
+   * Uses Redis INCR + EXPIRE for a sliding window.
+   * Fails open if Redis is unavailable (non-blocking).
+   */
+  private async checkProjectRateLimit(projectId: string): Promise<boolean> {
+    try {
+      const redisUp = await isRedisAvailable();
+      if (!redisUp) return true; // Fail open if Redis is down
+
+      const key = `ratelimit:llm:${projectId}`;
+      const count = await redis.incr(key);
+      if (count === 1) await redis.expire(key, 60); // 60 second window
+      return count <= 30; // max 30 calls per minute per project
+    } catch {
+      return true; // Fail open on error
+    }
+  }
+
+  /**
+   * Enforce rate limit — throws if project exceeds 30 LLM calls/minute.
+   */
+  private async enforceRateLimit(projectId?: string): Promise<void> {
+    if (!projectId) return;
+    const allowed = await this.checkProjectRateLimit(projectId);
+    if (!allowed) {
+      throw new Error(
+        'Project rate limit exceeded. Please wait a moment before sending more messages.',
+      );
     }
   }
 }
