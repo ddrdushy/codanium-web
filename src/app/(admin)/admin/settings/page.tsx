@@ -172,6 +172,12 @@ export default function SettingsPage() {
   const [showFallbackForm, setShowFallbackForm] = useState(false);
   const [newFallback, setNewFallback] = useState({ provider: 'anthropic', apiKey: '', baseUrl: '', defaultModel: '', priority: 1 });
   const [savingFallback, setSavingFallback] = useState(false);
+  const [fbLoadingModels, setFbLoadingModels] = useState(false);
+  const [fbAvailableModels, setFbAvailableModels] = useState<string[]>([]);
+  const [fbShowApiKey, setFbShowApiKey] = useState(false);
+  const [fbTestStatus, setFbTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [fbTestMessage, setFbTestMessage] = useState('');
+  const [fbTestingLlm, setFbTestingLlm] = useState(false);
 
   // ─── Agent Override state ───
   const [agentOverrides, setAgentOverrides] = useState<Array<{ id?: string; agentShortName: string; provider: string; model: string; baseUrl: string }>>([]);
@@ -695,68 +701,184 @@ export default function SettingsPage() {
           )}
 
           {showFallbackForm && (
-            <div className="border border-border/50 rounded-lg p-4 space-y-3 bg-muted/20">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Provider</label>
-                  <select
-                    value={newFallback.provider}
-                    onChange={(e) => setNewFallback((prev) => ({ ...prev, provider: e.target.value }))}
-                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
-                  >
-                    <option value="anthropic">Anthropic</option>
-                    <option value="openai">OpenAI</option>
-                    <option value="ollama">Ollama</option>
-                    <option value="mistral">Mistral</option>
-                    <option value="nvidia">NVIDIA NIM</option>
-                    <option value="groq">Groq</option>
-                    <option value="together">Together AI</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Priority</label>
-                  <input
-                    type="number"
-                    value={newFallback.priority}
-                    onChange={(e) => setNewFallback((prev) => ({ ...prev, priority: parseInt(e.target.value) || 1 }))}
-                    min="1"
-                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">API Key</label>
+            <div className="border border-border/50 rounded-lg p-4 space-y-0 bg-muted/20">
+              <SettingField label="Provider">
+                <select
+                  value={newFallback.provider}
+                  onChange={(e) => {
+                    const p = e.target.value;
+                    setNewFallback((prev) => ({ ...prev, provider: p, defaultModel: '' }));
+                    setFbAvailableModels([]);
+                  }}
+                  className="h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
+                >
+                  <option value="anthropic">Anthropic</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="ollama">Ollama</option>
+                  <option value="mistral">Mistral</option>
+                  <option value="nvidia">NVIDIA NIM</option>
+                  <option value="groq">Groq</option>
+                  <option value="together">Together AI</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </SettingField>
+              <SettingField label="Base URL">
                 <input
-                  type="password"
-                  value={newFallback.apiKey}
-                  onChange={(e) => setNewFallback((prev) => ({ ...prev, apiKey: e.target.value }))}
-                  placeholder="sk-..."
-                  className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                  type="text"
+                  value={newFallback.baseUrl}
+                  onChange={(e) => setNewFallback((prev) => ({ ...prev, baseUrl: e.target.value }))}
+                  placeholder="https://api.example.com/v1"
+                  className="w-64 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Base URL (optional)</label>
-                  <input
-                    type="text"
-                    value={newFallback.baseUrl}
-                    onChange={(e) => setNewFallback((prev) => ({ ...prev, baseUrl: e.target.value }))}
-                    placeholder="https://api.example.com/v1"
-                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
-                  />
+              </SettingField>
+              {newFallback.provider !== 'ollama' && (
+                <SettingField label="API Key">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type={fbShowApiKey ? 'text' : 'password'}
+                      value={newFallback.apiKey}
+                      onChange={(e) => setNewFallback((prev) => ({ ...prev, apiKey: e.target.value }))}
+                      placeholder="sk-..."
+                      className="w-64 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                    />
+                    <Button variant="ghost" size="sm" onClick={() => setFbShowApiKey(!fbShowApiKey)}>
+                      {fbShowApiKey ? 'Hide' : 'Show'}
+                    </Button>
+                  </div>
+                </SettingField>
+              )}
+              <SettingField label="Default Model">
+                <div className="flex items-center gap-2">
+                  {fbAvailableModels.length > 0 ? (
+                    <select
+                      value={newFallback.defaultModel}
+                      onChange={(e) => setNewFallback((prev) => ({ ...prev, defaultModel: e.target.value }))}
+                      className="h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
+                    >
+                      {fbAvailableModels.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-sm text-muted-foreground italic">
+                      {newFallback.defaultModel || 'No models loaded'}
+                    </span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={fbLoadingModels}
+                    onClick={async () => {
+                      setFbLoadingModels(true);
+                      setFbAvailableModels([]);
+                      try {
+                        const res = await fetch('/api/llm/test', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            provider: newFallback.provider,
+                            apiKey: newFallback.apiKey || undefined,
+                            baseUrl: newFallback.baseUrl || undefined,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success && data.models?.length) {
+                          setFbAvailableModels(data.models);
+                          if (!newFallback.defaultModel || !data.models.includes(newFallback.defaultModel)) {
+                            setNewFallback((prev) => ({ ...prev, defaultModel: data.models[0] }));
+                          }
+                        } else {
+                          setFbTestStatus('error');
+                          setFbTestMessage(data.message || 'Could not load models');
+                          setTimeout(() => { setFbTestStatus('idle'); setFbTestMessage(''); }, 5000);
+                        }
+                      } catch {
+                        setFbTestStatus('error');
+                        setFbTestMessage('Network error loading models');
+                        setTimeout(() => { setFbTestStatus('idle'); setFbTestMessage(''); }, 5000);
+                      }
+                      setFbLoadingModels(false);
+                    }}
+                    className="gap-1 shrink-0"
+                  >
+                    {fbLoadingModels ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading...</>
+                    ) : (
+                      <><Cpu className="w-3.5 h-3.5" /> Load Models</>
+                    )}
+                  </Button>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Model</label>
-                  <input
-                    type="text"
-                    value={newFallback.defaultModel}
-                    onChange={(e) => setNewFallback((prev) => ({ ...prev, defaultModel: e.target.value }))}
-                    placeholder="e.g. gpt-4o, claude-sonnet-4"
-                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
-                  />
+              </SettingField>
+              <SettingField label="Priority">
+                <input
+                  type="number"
+                  value={newFallback.priority}
+                  onChange={(e) => setNewFallback((prev) => ({ ...prev, priority: parseInt(e.target.value) || 1 }))}
+                  min="1"
+                  className="w-20 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
+                />
+              </SettingField>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-sm text-muted-foreground">Test Connection</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={fbTestingLlm || !newFallback.defaultModel.trim()}
+                    onClick={async () => {
+                      setFbTestingLlm(true);
+                      setFbTestStatus('idle');
+                      setFbTestMessage('');
+                      try {
+                        const res = await fetch('/api/llm/test', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            provider: newFallback.provider,
+                            apiKey: newFallback.apiKey || undefined,
+                            baseUrl: newFallback.baseUrl || undefined,
+                            defaultModel: newFallback.defaultModel.trim(),
+                          }),
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                          setFbTestStatus('success');
+                          setFbTestMessage(data.message || 'Connected!');
+                        } else {
+                          setFbTestStatus('error');
+                          setFbTestMessage(data.message || 'Connection failed');
+                        }
+                      } catch {
+                        setFbTestStatus('error');
+                        setFbTestMessage('Network error');
+                      }
+                      setFbTestingLlm(false);
+                      setTimeout(() => { setFbTestStatus('idle'); setFbTestMessage(''); }, 8000);
+                    }}
+                    className="gap-1.5"
+                    style={{
+                      borderColor: fbTestStatus === 'success' ? '#10b981' : fbTestStatus === 'error' ? '#ef4444' : undefined,
+                      color: fbTestStatus === 'success' ? '#10b981' : fbTestStatus === 'error' ? '#ef4444' : undefined,
+                    }}
+                  >
+                    {fbTestingLlm ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Testing...</>
+                    ) : fbTestStatus === 'success' ? (
+                      <><CheckCircle2 className="w-3.5 h-3.5" /> Connected</>
+                    ) : fbTestStatus === 'error' ? (
+                      <><AlertTriangle className="w-3.5 h-3.5" /> Failed</>
+                    ) : (
+                      'Test Connection'
+                    )}
+                  </Button>
+                  {fbTestMessage && fbTestStatus !== 'idle' && (
+                    <span className={`text-[11px] max-w-[200px] truncate ${fbTestStatus === 'success' ? 'text-emerald-500' : 'text-red-400'}`}>
+                      {fbTestMessage}
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-2 pt-2 border-t border-border/30">
                 <Button
                   variant="outline"
                   size="sm"
@@ -773,6 +895,9 @@ export default function SettingsPage() {
                       if (res.ok && data.id) {
                         setFallbackProviders((prev) => [...prev, data].sort((a, b) => a.priority - b.priority));
                         setNewFallback({ provider: 'anthropic', apiKey: '', baseUrl: '', defaultModel: '', priority: fallbackProviders.length + 2 });
+                        setFbAvailableModels([]);
+                        setFbTestStatus('idle');
+                        setFbTestMessage('');
                         setShowFallbackForm(false);
                       }
                     } catch { /* silent */ }
@@ -789,7 +914,7 @@ export default function SettingsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setShowFallbackForm(false)}
+                  onClick={() => { setShowFallbackForm(false); setFbAvailableModels([]); setFbTestStatus('idle'); }}
                 >
                   Cancel
                 </Button>
