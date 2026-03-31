@@ -1,0 +1,60 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Codanium Platform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to server
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ${USER}@${HOST}"
+
+          # First deployment: install Docker + clone repo
+          $SSH_CMD << 'FIRST_DEPLOY'
+          if ! command -v docker &> /dev/null; then
+            echo "=== Installing Docker ==="
+            curl -fsSL https://get.docker.com | sh
+            apt-get update && apt-get install -y docker-compose-plugin git
+          fi
+
+          if [ ! -d /opt/codanium ]; then
+            echo "=== Cloning repository ==="
+            git clone https://github.com/AiSenseiMY/Ai-Team_studio.git /opt/codanium
+            cd /opt/codanium
+            cp .env.example .env
+          fi
+          FIRST_DEPLOY
+
+          # Pull latest code and rebuild
+          $SSH_CMD << 'DEPLOY'
+          cd /opt/codanium
+          echo "=== Pulling latest code ==="
+          git pull origin main
+
+          echo "=== Building and deploying ==="
+          docker compose build --no-cache
+          docker compose up -d
+
+          echo "=== Checking status ==="
+          docker compose ps
+          echo "=== Deployment complete ==="
+          DEPLOY
