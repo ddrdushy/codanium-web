@@ -178,32 +178,8 @@ export function AdminSidebar() {
         ))}
       </nav>
 
-      {/* Footer - Back to Projects */}
-      <div className="px-3 py-3 border-t border-border">
-        {collapsed ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                href="/projects"
-                className="flex items-center justify-center w-full p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-[var(--sidebar-accent)] transition-all"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="font-medium">
-              Back to Projects
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <Link
-            href="/projects"
-            className="flex items-center gap-2 px-2.5 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-[var(--sidebar-accent)] transition-all"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Projects</span>
-          </Link>
-        )}
-      </div>
+      {/* Footer spacer */}
+      <div className="px-3 py-3 border-t border-border" />
 
       {/* Collapse Toggle */}
       <button
