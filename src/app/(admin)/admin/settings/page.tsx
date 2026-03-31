@@ -169,6 +169,21 @@ export default function SettingsPage() {
 
   // ─── LLM Fallback Chain state ───
   const [fallbackProviders, setFallbackProviders] = useState<Array<{ id?: string; provider: string; displayName: string; defaultModel: string; baseUrl: string; priority: number; isActive: boolean }>>([]);
+  // Provider → default base URL mapping
+  const PROVIDER_URLS: Record<string, string> = {
+    openai: 'https://api.openai.com/v1',
+    anthropic: '',
+    ollama: 'http://localhost:11434',
+    mistral: 'https://api.mistral.ai/v1',
+    nvidia: 'https://integrate.api.nvidia.com/v1',
+    groq: 'https://api.groq.com/openai/v1',
+    together: 'https://api.together.xyz/v1',
+    openrouter: 'https://openrouter.ai/api/v1',
+    deepseek: 'https://api.deepseek.com/v1',
+    byteplus: 'https://ark.ap-southeast.bytepluses.com/api/v3',
+    custom: '',
+  };
+
   const [showFallbackForm, setShowFallbackForm] = useState(false);
   const [newFallback, setNewFallback] = useState({ provider: 'anthropic', apiKey: '', baseUrl: '', defaultModel: '', priority: 1 });
   const [savingFallback, setSavingFallback] = useState(false);
@@ -392,7 +407,13 @@ export default function SettingsPage() {
           <SettingField label="Default Provider">
             <select
               value={defaultProvider}
-              onChange={(e) => setDefaultProvider(e.target.value)}
+              onChange={(e) => {
+                const p = e.target.value;
+                setDefaultProvider(p);
+                setBaseUrl(PROVIDER_URLS[p] || '');
+                setAvailableModels([]);
+                setDefaultModel('');
+              }}
               className="h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
             >
               <option value="anthropic">Anthropic</option>
@@ -710,7 +731,7 @@ export default function SettingsPage() {
                   value={newFallback.provider}
                   onChange={(e) => {
                     const p = e.target.value;
-                    setNewFallback((prev) => ({ ...prev, provider: p, defaultModel: '' }));
+                    setNewFallback((prev) => ({ ...prev, provider: p, defaultModel: '', baseUrl: PROVIDER_URLS[p] || '' }));
                     setFbAvailableModels([]);
                   }}
                   className="h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
