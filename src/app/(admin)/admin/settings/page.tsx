@@ -721,6 +721,8 @@ export default function SettingsPage() {
                   <option value="nvidia">NVIDIA NIM</option>
                   <option value="groq">Groq</option>
                   <option value="together">Together AI</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="deepseek">DeepSeek</option>
                   <option value="custom">Custom</option>
                 </select>
               </SettingField>
@@ -1065,6 +1067,8 @@ export default function SettingsPage() {
                             <option value="nvidia">NVIDIA NIM</option>
                             <option value="groq">Groq</option>
                             <option value="together">Together AI</option>
+                            <option value="openrouter">OpenRouter</option>
+                            <option value="deepseek">DeepSeek</option>
                             <option value="custom">Custom</option>
                           </select>
                         </td>

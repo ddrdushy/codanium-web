@@ -772,6 +772,22 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
               yield { type: 'info', data: { message: `Model downgraded to ${fallback} due to error` } };
             }
           }
+
+          // Try next provider in the fallback chain on rate limit or server errors
+          const isRetryable = errMsg.includes('429') || errMsg.includes('500') || errMsg.includes('503')
+            || errMsg.toLowerCase().includes('rate limit') || errMsg.toLowerCase().includes('timeout');
+          if (isRetryable && attempt < MAX_LLM_ATTEMPTS - 1) {
+            try {
+              const nextProvider = await llmGateway.resolveFallback(
+                modelOverride || 'unknown',
+              );
+              if (nextProvider) {
+                // Override the model to use the fallback provider's model
+                modelOverride = nextProvider.config.defaultModel;
+                yield { type: 'info', data: { message: `Switching to fallback provider: ${nextProvider.config.provider}` } };
+              }
+            } catch { /* continue with current provider */ }
+          }
         }
       }
 

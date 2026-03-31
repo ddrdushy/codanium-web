@@ -120,6 +120,8 @@ export class LLMGateway {
     }
 
     // ── 4. Platform-level fallback chain (scope=PLATFORM, ordered by priority) ──
+    // Try the primary (lowest priority number) first. If it fails at the stream/complete
+    // level, the caller can call resolveFallback() to get the next provider.
     try {
       const platformConfigs = await prisma.lLMProviderConfig.findMany({
         where: { scope: 'PLATFORM', isActive: true },
@@ -310,6 +312,39 @@ export class LLMGateway {
 
   getProvider(name: string): LLMProvider | undefined {
     return this.providers.get(name);
+  }
+
+  /**
+   * Get the next fallback provider after the given one fails.
+   * Queries the PLATFORM fallback chain and returns the next config
+   * with a higher priority number than the failed provider.
+   */
+  async resolveFallback(
+    failedProvider: string,
+    failedPriority?: number,
+  ): Promise<{ provider: LLMProvider; config: ProviderConfig; billingType: BillingType } | null> {
+    try {
+      const platformConfigs = await prisma.lLMProviderConfig.findMany({
+        where: { scope: 'PLATFORM', isActive: true },
+        orderBy: { priority: 'asc' },
+      });
+
+      // Find configs after the failed one
+      let found = false;
+      for (const cfg of platformConfigs) {
+        if (cfg.provider === failedProvider && (failedPriority === undefined || cfg.priority === failedPriority)) {
+          found = true;
+          continue;
+        }
+        if (found && this.providers.has(cfg.provider)) {
+          console.log(`[LLMGateway] ↪ Fallback: ${failedProvider} failed → trying ${cfg.provider} (priority ${cfg.priority})`);
+          return { ...this.resolveConfig(cfg), billingType: 'PLATFORM' as BillingType };
+        }
+      }
+    } catch (err) {
+      console.warn('[LLMGateway] Fallback resolution failed:', err);
+    }
+    return null;
   }
 
   // -------------------------------------------------------------------------
