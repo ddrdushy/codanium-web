@@ -29,6 +29,8 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   mistral: 'https://api.mistral.ai/v1',
   groq: 'https://api.groq.com/openai/v1',
   together: 'https://api.together.xyz/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  deepseek: 'https://api.deepseek.com/v1',
 };
 
 // Chat-capable model prefixes (used to filter the models list)

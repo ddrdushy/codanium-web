@@ -56,6 +56,8 @@ export class LLMGateway {
     this.providers.set('nvidia', new OpenAIAdapter());
     this.providers.set('groq', new OpenAIAdapter());
     this.providers.set('together', new OpenAIAdapter());
+    this.providers.set('openrouter', new OpenAIAdapter());
+    this.providers.set('deepseek', new OpenAIAdapter());
   }
 
   // -------------------------------------------------------------------------
@@ -412,7 +414,9 @@ export class LLMGateway {
       mistral:   { prompt: 0.000001,   completion: 0.000003  },
       nvidia:    { prompt: 0,          completion: 0         },
       groq:      { prompt: 0.00000059, completion: 0.00000079},
-      together:  { prompt: 0.0000009,  completion: 0.0000009 },
+      together:    { prompt: 0.0000009,  completion: 0.0000009 },
+      openrouter:  { prompt: 0.000003,   completion: 0.000015  },
+      deepseek:    { prompt: 0.00000014, completion: 0.00000028},
     };
 
     const modelLower = (response.model ?? '').toLowerCase();
