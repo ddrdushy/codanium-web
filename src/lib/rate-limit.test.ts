@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RATE_LIMITS } from './rate-limit';
 
 // Mock the checkRateLimit dependency
-vi.mock('@/lib/ai/orchestration/graph/guardrails', () => ({
+vi.mock('@/lib/ai/orchestration/guardrails', () => ({
   checkRateLimit: vi.fn(),
 }));
 
 // Import after mock is set up
 import { rateLimit } from './rate-limit';
-import { checkRateLimit } from '@/lib/ai/orchestration/graph/guardrails';
+import { checkRateLimit } from '@/lib/ai/orchestration/guardrails';
 
 const mockedCheckRateLimit = vi.mocked(checkRateLimit);
 

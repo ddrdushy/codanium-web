@@ -104,6 +104,79 @@ export type UserIntent =
   | 'general';
 
 // ---------------------------------------------------------------------------
+// Guardrail Result Types
+// ---------------------------------------------------------------------------
+
+/**
+ * Result from input guardrail checks on a user message.
+ */
+export interface InputGuardrailResult {
+  /** Whether the input was blocked by guardrails. */
+  blocked: boolean;
+  /** Reason the input was blocked, if applicable. */
+  reason?: string;
+  /** The sanitized user message (PII redacted, etc.). */
+  sanitizedMessage: string;
+  /** Flags raised during input validation (informational, not blocking). */
+  flags: string[];
+}
+
+/**
+ * Result from output guardrail checks on an LLM response.
+ */
+export interface OutputGuardrailResult {
+  /** Flags raised during output validation (logged but typically non-blocking). */
+  flags: string[];
+  /** Whether any critical output issue was detected. */
+  hasCriticalIssues: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Graph State Type (plain interface, replaces former LangGraph Annotation)
+// ---------------------------------------------------------------------------
+
+import type { LLMMessage, LLMToolCall } from '@/lib/ai/providers/types';
+import type { ParsedResponse } from '@/lib/ai/agents/response-parser';
+import type { ToolResult } from '@/lib/ai/tools/tool-definitions';
+import type { TrackedToolCall } from './loop-detector';
+
+/**
+ * Plain TypeScript interface for the orchestration state.
+ * Formerly derived from LangGraph Annotation; kept as a standalone type.
+ */
+export interface GraphStateType {
+  projectId: string;
+  userId: string;
+  userMessage: string;
+  targetAgentShortName?: string;
+  inputGuardrailResult: InputGuardrailResult | null;
+  routedAgent: string;
+  routedIntent: string;
+  systemMessage: string;
+  recentHistory: LLMMessage[];
+  llmMessages: LLMMessage[];
+  tokenBudgetRemaining: number | null;
+  rawContent: string;
+  rawThinking: string;
+  tokensUsed: { prompt: number; completion: number; total: number } | null;
+  parsedResponse: ParsedResponse | null;
+  savedMessageId: string;
+  outputGuardrailResult: OutputGuardrailResult | null;
+  toolCalls: LLMToolCall[];
+  toolResults: ToolResult[];
+  toolLoopCount: number;
+  toolErrorCount: number;
+  recentToolCalls: TrackedToolCall[];
+  recentResponses: string[];
+  llmRetryCount: number;
+  modelDowngraded: boolean;
+  modelDowngradedTo?: string;
+  shouldDelegate: boolean;
+  delegationDepth: number;
+  completedToolSignals: string[];
+}
+
+// ---------------------------------------------------------------------------
 // System Events
 // ---------------------------------------------------------------------------
 

@@ -38,7 +38,7 @@
 //   return
 // =============================================================================
 
-import { runInputGuardrails } from './graph/guardrails';
+import { runInputGuardrails } from './guardrails';
 import { messageRouter, VSCODE_REQUIRED_SENTINEL } from './router';
 import { contextBuilder } from '@/lib/ai/context/context-builder';
 import { getAgentDefinition } from '@/lib/ai/agents/registry';

@@ -1,19 +1,17 @@
 // =============================================================================
 // AI Team Studio — Orchestration Telemetry
 // =============================================================================
-// Lightweight tracing module for the LangGraph orchestration pipeline.
+// Lightweight tracing module for the orchestration pipeline.
 // Tracks node transitions, LLM call metrics, tool execution metrics, and
 // persists a summary to the OrchestrationRun table at the end of each run.
 //
 // Design principles:
 //   - Zero external dependencies (uses built-in console + Date)
-//   - Non-blocking: telemetry errors never fail the graph
+//   - Non-blocking: telemetry errors never fail the pipeline
 //   - Structured JSON logs for easy grep/parsing
 //   - Minimal overhead: just timestamps and state snapshots
 // =============================================================================
 
-import { RunnableConfig } from '@langchain/core/runnables';
-import type { GraphStateType } from './graph/state';
 import { prisma } from '@/lib/prisma';
 
 // ---------------------------------------------------------------------------
@@ -293,178 +291,3 @@ export function createTraceCollector(): TraceCollector {
   return new TraceCollector();
 }
 
-// ---------------------------------------------------------------------------
-// withTelemetry — Node Wrapper
-// ---------------------------------------------------------------------------
-
-/**
- * Extracts a compact snapshot of state changes relevant to telemetry.
- */
-function snapshotState(node: string, state: GraphStateType): Record<string, unknown> {
-  const snap: Record<string, unknown> = {};
-
-  switch (node) {
-    case 'inputGuardrail':
-      snap.blocked = state.inputGuardrailResult?.blocked ?? false;
-      if (state.inputGuardrailResult?.reason) {
-        snap.blockReason = state.inputGuardrailResult.reason;
-      }
-      break;
-
-    case 'route':
-      snap.routedAgent = state.routedAgent;
-      snap.routedIntent = state.routedIntent;
-      break;
-
-    case 'context':
-      snap.tokenBudgetRemaining = state.tokenBudgetRemaining;
-      snap.messageCount = state.llmMessages?.length ?? 0;
-      break;
-
-    case 'llm':
-      snap.hasToolCalls = (state.toolCalls?.length ?? 0) > 0;
-      snap.toolCallCount = state.toolCalls?.length ?? 0;
-      snap.toolLoopCount = state.toolLoopCount ?? 0;
-      if (state.tokensUsed) {
-        snap.tokensPrompt = state.tokensUsed.prompt;
-        snap.tokensCompletion = state.tokensUsed.completion;
-        snap.tokensTotal = state.tokensUsed.total;
-      }
-      break;
-
-    case 'executeTools':
-      snap.toolCallCount = state.toolCalls?.length ?? 0;
-      snap.toolResultCount = state.toolResults?.length ?? 0;
-      snap.toolLoopCount = state.toolLoopCount ?? 0;
-      snap.toolErrorCount = state.toolErrorCount ?? 0;
-      snap.completedSignals = state.completedToolSignals ?? [];
-      break;
-
-    case 'parseAndExecute':
-      snap.hasParsedResponse = state.parsedResponse !== null;
-      snap.savedMessageId = state.savedMessageId ?? null;
-      break;
-
-    case 'pipelineRouter':
-      snap.shouldDelegate = state.shouldDelegate ?? false;
-      snap.delegationDepth = state.delegationDepth ?? 0;
-      snap.routedAgent = state.routedAgent;
-      snap.completedSignals = state.completedToolSignals ?? [];
-      break;
-
-    default:
-      break;
-  }
-
-  return snap;
-}
-
-/** Type for a LangGraph node function. */
-type GraphNodeFn = (
-  state: GraphStateType,
-  config: RunnableConfig,
-) => Promise<Partial<GraphStateType>>;
-
-/**
- * Wraps a graph node function with automatic telemetry tracking.
- *
- * Usage in build-graph.ts:
- *   .addNode('llm', withTelemetry('llm', llmNode, collector))
- *
- * Captures:
- *   - Entry/exit timing
- *   - Agent shortName
- *   - Node-specific state snapshots
- *   - LLM call metrics (for 'llm' node)
- *   - Tool call metrics (for 'executeTools' node)
- *   - Errors (logged but re-thrown so graph routing still works)
- */
-export function withTelemetry(
-  nodeName: string,
-  nodeFunction: GraphNodeFn,
-  collector: TraceCollector,
-): GraphNodeFn {
-  return async (state: GraphStateType, config: RunnableConfig): Promise<Partial<GraphStateType>> => {
-    const startTime = Date.now();
-
-    // Initialize run context on first node
-    if (collector['projectId'] === '' && state.projectId) {
-      collector.setRunContext(state.projectId, state.userId, state.userMessage);
-    }
-
-    try {
-      // Execute the actual node
-      const result = await nodeFunction(state, config);
-
-      const endTime = Date.now();
-      const durationMs = endTime - startTime;
-
-      // Merge result into state for snapshotting
-      const mergedState = { ...state, ...result } as GraphStateType;
-
-      // Record node span
-      collector.recordNodeSpan({
-        node: nodeName,
-        agent: mergedState.routedAgent ?? state.routedAgent ?? 'unknown',
-        startedAt: startTime,
-        endedAt: endTime,
-        durationMs,
-        stateSnapshot: snapshotState(nodeName, mergedState),
-      });
-
-      // Record LLM-specific metrics (after 'llm' node)
-      if (nodeName === 'llm' && mergedState.tokensUsed) {
-        const tokens = mergedState.tokensUsed;
-        const toolCallCount = mergedState.toolCalls?.length ?? 0;
-        // Model is not directly available in state; use agent as proxy
-        const model = mergedState.routedAgent ?? 'unknown';
-
-        collector.recordLLMCall({
-          model,
-          agent: mergedState.routedAgent ?? 'unknown',
-          tokensPrompt: tokens.prompt,
-          tokensCompletion: tokens.completion,
-          tokensTotal: tokens.total,
-          latencyMs: durationMs,
-          hasToolCalls: toolCallCount > 0,
-          toolCallCount,
-          costEstimate: estimateCost(model, tokens),
-        });
-      }
-
-      // Record tool execution metrics (after 'executeTools' node)
-      if (nodeName === 'executeTools' && mergedState.toolResults) {
-        for (const tr of mergedState.toolResults) {
-          collector.recordToolCall({
-            toolName: tr.name,
-            agent: mergedState.routedAgent ?? 'unknown',
-            success: tr.success,
-            durationMs, // per-batch duration (individual tool timing not available)
-            error: tr.success ? undefined : (tr.error ?? 'Unknown error'),
-          });
-        }
-      }
-
-      return result;
-    } catch (err: any) {
-      const endTime = Date.now();
-
-      // Record the failed span
-      collector.recordNodeSpan({
-        node: nodeName,
-        agent: state.routedAgent ?? 'unknown',
-        startedAt: startTime,
-        endedAt: endTime,
-        durationMs: endTime - startTime,
-        stateSnapshot: snapshotState(nodeName, state),
-        error: err?.message ?? 'Unknown error',
-      });
-
-      // Mark the overall run as failed
-      collector.markFailed(`Node "${nodeName}" failed: ${err?.message}`);
-
-      // Re-throw so graph error handling still works
-      throw err;
-    }
-  };
-}

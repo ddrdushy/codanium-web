@@ -15,7 +15,7 @@
 // is returned, append it as a system message so the LLM can self-correct.
 // =============================================================================
 
-import type { GraphStateType } from './graph/state';
+import type { GraphStateType } from './types';
 
 // ---------------------------------------------------------------------------
 // Types

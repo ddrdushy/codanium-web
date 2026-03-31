@@ -18,7 +18,7 @@
 //   - Response length guard (configurable limit)
 // =============================================================================
 
-import type { InputGuardrailResult, OutputGuardrailResult } from './state';
+import type { InputGuardrailResult, OutputGuardrailResult } from './types';
 import type { ParsedResponse } from '@/lib/ai/agents/response-parser';
 import { prisma } from '@/lib/prisma';
 import { redis, isRedisAvailable } from '@/lib/redis';

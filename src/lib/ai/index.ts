@@ -27,7 +27,7 @@ export { agentStateManager } from './orchestration/state-manager';
 export { eventBus } from './orchestration/event-bus';
 export { agentLoop, runAgentSilent } from './orchestration/agent-loop';
 export type { AgentLoopInput, SSEEvent } from './orchestration/agent-loop';
-export { createTraceCollector, withTelemetry, TraceCollector } from './orchestration/telemetry';
+export { createTraceCollector, TraceCollector } from './orchestration/telemetry';
 export * from './orchestration/types';
 
 // Tool system

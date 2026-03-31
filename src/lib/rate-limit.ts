@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/ai/orchestration/graph/guardrails';
+import { checkRateLimit } from '@/lib/ai/orchestration/guardrails';
 
 // ---------------------------------------------------------------------------
 // Rate-Limit Configuration
@@ -30,7 +30,7 @@ type RateLimitCategory = keyof typeof RATE_LIMITS;
  * Returns a `429 Too Many Requests` NextResponse if blocked.
  *
  * Reuses the Redis-backed sliding-window implementation from
- * `src/lib/ai/orchestration/graph/guardrails.ts` with per-endpoint keys.
+ * `src/lib/ai/orchestration/guardrails.ts` with per-endpoint keys.
  *
  * @param identifier — userId or IP address
  * @param category — rate limit tier (read, mutation, auth, webhook)
