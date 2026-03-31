@@ -31,6 +31,7 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   together: 'https://api.together.xyz/v1',
   openrouter: 'https://openrouter.ai/api/v1',
   deepseek: 'https://api.deepseek.com/v1',
+  byteplus: 'https://ark.ap-southeast.bytepluses.com/api/v3',
 };
 
 // Chat-capable model prefixes (used to filter the models list)

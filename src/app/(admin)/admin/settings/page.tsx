@@ -404,6 +404,7 @@ export default function SettingsPage() {
               <option value="together">Together AI</option>
               <option value="openrouter">OpenRouter</option>
               <option value="deepseek">DeepSeek</option>
+              <option value="byteplus">BytePlus ModelArk</option>
               <option value="custom">Custom</option>
             </select>
           </SettingField>

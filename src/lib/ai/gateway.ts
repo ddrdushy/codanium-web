@@ -58,6 +58,7 @@ export class LLMGateway {
     this.providers.set('together', new OpenAIAdapter());
     this.providers.set('openrouter', new OpenAIAdapter());
     this.providers.set('deepseek', new OpenAIAdapter());
+    this.providers.set('byteplus', new OpenAIAdapter());
   }
 
   // -------------------------------------------------------------------------
@@ -452,6 +453,7 @@ export class LLMGateway {
       together:    { prompt: 0.0000009,  completion: 0.0000009 },
       openrouter:  { prompt: 0.000003,   completion: 0.000015  },
       deepseek:    { prompt: 0.00000014, completion: 0.00000028},
+      byteplus:    { prompt: 0.000002,   completion: 0.000008  },
     };
 
     const modelLower = (response.model ?? '').toLowerCase();
