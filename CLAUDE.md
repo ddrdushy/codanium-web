@@ -1,44 +1,46 @@
-# AI Team Studio
+# Codanium — Your Vibe, Multiplied
 
 ## Product Vision
 
-AI Team Studio is a **full-service AI software delivery platform**. Users describe what they want built — even as a vague idea — and our AI agents handle the entire development lifecycle: requirements analysis, architecture, design, coding, testing, and deployment.
+Codanium is a **full-service AI software delivery platform**. Users describe what they want built — even as a vague idea — and our AI agents handle the entire development lifecycle: requirements analysis, architecture, design, coding, testing, and deployment.
 
-**The user is the stakeholder/client, not a developer.** They may have no technical background. The platform acts as their Business Analyst first (guiding them to clarify what they need), then orchestrates a team of 23 specialized AI agents that autonomously do all the work — from refining requirements to deploying a production system.
+**The user is the stakeholder/client, not a developer.** They may have no technical background. The platform acts as their Business Analyst first (guiding them to clarify what they need), then orchestrates a team of 20+ specialized AI agents that autonomously do all the work.
 
 ### Core Principle
 > "Tell us what you need. Our AI team will build and deliver it."
 
-### Target Users
-- Non-technical founders with a product idea
-- Business stakeholders who need software built
-- Anyone who wants software delivered without hiring a development team
-
-### What This Is NOT
-- Not a developer productivity tool ("ship faster with AI help")
-- Not a project management platform where humans manage work
-- Not an IDE or coding assistant
+### Branding
+- **Product Name**: Codanium
+- **Tagline**: "Your Vibe, Multiplied"
+- **Domain**: https://codanium.com
+- **Desktop App**: Codanium Desktop (Tauri v2)
+- **GitHub Repos**:
+  - Web: https://github.com/AiSenseiMY/Ai-Team_studio
+  - Desktop: https://github.com/AiSenseiMY/Codanium
 
 ## Tech Stack
 - **Framework**: Next.js 16 (Turbopack, React 19, App Router)
 - **Database**: PostgreSQL via Docker (port 14000), Prisma 7.x ORM
-- **Auth**: NextAuth.js (dev mode auto-login)
+- **Auth**: NextAuth.js (credentials + OAuth)
 - **Styling**: Tailwind CSS 4, custom dark theme (amber accent)
-- **State**: Zustand stores, framer-motion transitions
+- **State**: Zustand stores
 - **Components**: Radix UI primitives, Recharts, cmdk command palette, @dnd-kit
-- **AI Backend**: Admin-managed LLM provider — raw fetch adapters for OpenAI, Anthropic, Ollama
+- **AI Backend**: Multi-provider LLM with fallback chain (NVIDIA, Ollama, Mistral, Groq, OpenRouter, BytePlus)
 - **Encryption**: AES-256-GCM for API keys at rest
+- **Desktop**: Tauri v2 (Rust + React 19) — cross-platform Mac/Win/Linux
+- **Deployment**: Hetzner VPS (46.62.165.151), Docker Compose, Nginx, Let's Encrypt SSL
+- **CI/CD**: GitHub Actions — auto deploy on push to main
 
 ## Architecture
-- `src/app/(marketing)/` — Landing page, auth (with guided onboarding)
+- `src/app/(marketing)/` — Landing page with Codanium branding + desktop download section
+- `src/app/(auth)/` — Login/signup pages
 - `src/app/(platform)/` — Authenticated app (12 pages, all wired to real DB)
-- `src/app/api/` — REST routes (projects, cards, agents, decisions, git, wireframes, admin, llm)
+- `src/app/(admin)/` — Admin console (dashboard, users, agents, billing, analytics, settings, guardrails)
+- `src/app/api/` — REST routes (projects, cards, agents, decisions, git, wireframes, admin, llm, desktop)
 - `src/lib/ai/` — AI orchestration engine (providers, agents, context, orchestration)
-- `prisma/schema.prisma` — 24+ models with enums (incl. LLMProviderConfig, Event, Artifact, OrchestrationRun)
-- `prisma/seed.ts` — Full seed data for all models
-- `src/lib/api.ts` — Client-side fetch helpers
-- `src/lib/hooks/` — React hooks (useAgentStream for SSE streaming)
-- `src/components/` — Shared UI (command palette, modals, sidebar)
+- `prisma/schema.prisma` — 24+ models with enums
+- `nginx.conf` — Nginx reverse proxy (HTTP, with SSL config in nginx-ssl.conf)
+- `docker-compose.yml` — PostgreSQL + Redis + Next.js + BullMQ Worker + Nginx + Certbot
 
 ## Key Commands
 ```bash
@@ -49,61 +51,39 @@ npx prisma db seed   # Seed database
 npx prisma generate  # Regenerate Prisma client
 ```
 
+## Production Deployment
+```bash
+# Auto-deploys via GitHub Actions on push to main
+# Manual: ssh root@46.62.165.151
+cd /opt/codanium
+docker compose build --no-cache
+docker compose up -d
+docker compose exec -T app npx prisma migrate deploy
+docker compose restart app nginx
+```
+
 ## Database
 - Docker PostgreSQL on port 14000, database: `ai_team_studio`
 - Prisma client output: `src/generated/prisma`
-- Connection: `DATABASE_URL` in `.env.local`
+- Production: PostgreSQL inside Docker Compose network (`db:5432`)
+- Admin credentials (seed): `admin@demo.com` / `admin123`
 
 ## LLM Configuration
 - **Multi-provider fallback**: Configure multiple LLM providers with priority order in Admin Settings
-- **Supported providers**: OpenAI, Anthropic, Ollama, NVIDIA, Mistral, Groq, Together, Custom
+- **Supported providers**: OpenAI, Anthropic, Ollama, NVIDIA, Mistral, Groq, Together, OpenRouter, DeepSeek, BytePlus
 - **Resolution priority**: User BYOK → Agent override → Project override → Platform fallback chain → Admin default
-- **Platform fallback**: Stored in `llm_provider_configs` table with `scope=PLATFORM`, ordered by `priority`
-- **Admin default**: Last-resort fallback via `admin_settings` key-value store
+- **Platform fallback chain** (current production):
+  | Priority | Provider | Model |
+  |----------|----------|-------|
+  | 0 | NVIDIA | codestral-22b-instruct |
+  | 1 | Ollama | qwen3-coder-next:cloud |
+  | 2 | Mistral | mistral-vibe-cli |
+  | 3 | Groq | kimi-k2-instruct |
+  | 4 | OpenRouter | nemotron-3-super (free) |
+  | 5 | BytePlus | deepseek-r1-distill |
 - **API keys**: AES-256-GCM encrypted at rest in `apiKeyEncrypted` column
 
-## Development Patterns
-- **Graceful fallback**: `useState(mockData)` + `useEffect(fetch.then(set).catch(noop))` — pages always render, even if API fails
-- **DB enum mapping**: Prisma enums (`ACTIVE`, `OPEN`) mapped to frontend strings (`active`, `open`) via lookup objects
-- **Parallel fetches**: `Promise.all` for pages needing multiple API calls
-- **Seed-first**: Always add Prisma models, seed data, then API routes, then wire pages
-
-## Current Status — Frontend Complete
-
-### Data Layer ✅
-All 12 platform pages wired to real PostgreSQL — zero mock-only pages remain.
-
-### UX Copy Rework ✅
-All user-facing text reframed from developer-centric to client-centric language across 25+ files (marketing, sidebar, dashboard, all platform pages, modals, auth, command palette).
-
-### Alignment Gaps — All Closed ✅
-
-| Gap | Solution | File(s) |
-|-----|----------|---------|
-| **Project creation** was name+description only | 4-step guided wizard: Idea → Audience → Priorities → Review | `create-project-modal.tsx` |
-| **Onboarding** was standard signup | Post-signup welcome with Preferences setup (3 steps: Welcome → Preferences → Done) | `onboarding-wizard.tsx` |
-| **Settings** exposed LLM providers & agent configs | Simplified to: Budget & Spending, Approval Level, Communication Style, Notifications, API Keys | `platform-settings-drawer.tsx` |
-| **Board** was developer-only kanban | Drag-and-drop kanban with user card movement + milestones view | `board-view.tsx` |
-| **Agents** showed technical capabilities | Added human-readable role descriptions + "What I Do" section per agent | `agents/page.tsx` |
-| **Decisions** had small approve buttons | Added "Your AI Team Recommends" banner, prominent Choose Recommended CTA, Ask for more options | `decisions/page.tsx` |
-
-### Backend AI Orchestration Engine ✅
-
-| Component | Description | Files |
-|-----------|-------------|-------|
-| **LLM Provider Layer** | OpenAI, Anthropic, Ollama adapters with raw fetch (no SDK deps) | `src/lib/ai/providers/*.ts` |
-| **15+3 Agent Definitions** | 15 pipeline agents (PM gatekeeper) + 3 internal, system prompts, authority | `src/lib/ai/agents/definitions/*.ts` |
-| **Context Builder** | Injects project state (cards, decisions, SDLC, agents) into agent prompts | `src/lib/ai/context/*.ts` |
-| **Orchestration Engine** | Intent routing, agent execution, delegation chains, side effects | `src/lib/ai/orchestration/*.ts` |
-| **SSE Streaming** | Token-by-token streaming via `/api/projects/[id]/chat/stream` | `src/app/api/projects/[id]/chat/stream/route.ts` |
-| **Admin LLM Config** | Admin-level LLM provider configuration via Admin Settings | `src/app/(admin)/admin/settings/page.tsx` |
-| **Frontend Streaming** | `useAgentStream` hook with real-time token rendering | `src/lib/hooks/use-agent-stream.ts` |
-| **Chat Page** | Wired to real orchestration engine (replaces setTimeout mock) | `chat/page.tsx` |
-| **API Key Encryption** | AES-256-GCM for API keys at rest | `src/lib/ai/encryption.ts` |
-| **Loop Detection** | Fuzzy tool-loop + text-repetition + question-reask detectors | `src/lib/ai/orchestration/loop-detector.ts` |
-| **Card Lifecycle** | State transition validation in both API routes and tool executor | `src/lib/ai/orchestration/card-lifecycle.ts` |
-
-### SDLC Pipeline — PM Gatekeeper
+## SDLC Pipeline — PM Gatekeeper
 
 ```
 PROJECT CREATED → PM activated (gatekeeper)
@@ -116,25 +96,53 @@ PROJECT CREATED → PM activated (gatekeeper)
   → TL picks next card → repeat → PM validates all DONE → deploy
 ```
 
-### AI Architecture
+## Codanium Desktop (Tauri v2)
+- **Repo**: https://github.com/AiSenseiMY/Codanium
+- **Stack**: Tauri v2 (Rust) + React 19 + TypeScript + Tailwind CSS
+- **Features**: Login screen, file explorer, code viewer, agent panel, terminal
+- **Releases**: GitHub Releases with Mac (.dmg ARM64/x64), Windows (.msi/.exe), Linux (.deb/.AppImage/.rpm)
+- **CI**: Build & Release workflow triggered on v* tags
+- **Config**: `src-tauri/tauri.conf.json` — empty `plugins: {}`, permissions in `capabilities/default.json`
+- **Mac Gatekeeper**: Users need to run `xattr -cr /Applications/Codanium.app` after install
 
-```
-User Message → Chat API → Orchestration Engine
-  ├── MessageRouter (classify intent → pick agent)
-  ├── ContextBuilder (fetch project data → system prompt)
-  ├── AgentExecutor (call LLM via Gateway)
-  └── LLM Gateway (resolve admin config → provider adapter)
-      ├── Multi-provider fallback (try primary → fallback 1 → fallback 2)
-      ├── OpenAI/Anthropic/Ollama/NVIDIA/Mistral/Groq (raw fetch adapters)
-      ├── Model-agnostic sanitization (strips tool call syntax from all providers)
-      └── Response Parser (extract actions, artifacts, delegations)
-```
+## Current Status
 
-### What's Next — Production Readiness
+### Completed ✅
 
-- Custom desktop app (replacing VS Code extension) — Electron/Tauri cross-platform
-- Production authentication (currently demo mode)
-- Payment/billing integration (Stripe)
-- Cloud deployment pipeline
-- GitHub/GitLab PR creation
-- WebSocket for real-time agent status updates on dashboard
+| Area | Status | Details |
+|------|--------|---------|
+| **Landing Page** | ✅ Live | Codanium branding, hero section, download section, pricing, footer |
+| **SSL/HTTPS** | ✅ Live | Let's Encrypt via Certbot, auto-renewal |
+| **CI/CD Pipeline** | ✅ Working | GitHub Actions → SSH deploy → Docker build → Prisma migrate → Nginx restart |
+| **Desktop App v0.1.0** | ✅ Released | Mac/Win/Linux installers on GitHub Releases |
+| **Database Seeded** | ✅ Done | 20 users, 15 projects, 30 LLM usage records, 12 transactions, admin settings |
+| **LLM Fallback Chain** | ✅ Configured | 6 providers with encrypted API keys in production DB |
+| **Admin Console** | ✅ Functional | Dashboard, users, agents, billing, analytics, settings, guardrails |
+| **Desktop Login API** | ✅ Created | `/api/desktop/login` endpoint for Codanium Desktop auth |
+| **Framer-motion SSR Fix** | ✅ Done | CSS override forces opacity:1 on all motion elements in production |
+| **Auth Flow** | ✅ Fixed | Login page no longer redirects to /projects with stale cookies |
+
+### Known Issues / In Progress 🔧
+
+| Issue | Status | Details |
+|-------|--------|---------|
+| **Admin settings save** | Fixed (deploy pending) | Model field now text input, save shows errors, blocks without auth |
+| **Demo Data badge** | Needs login | Shows when API calls fail (401). Login as admin@demo.com to see real data |
+| **Full rebrand** | Partial | Marketing + admin settings rebranded. 99 internal files still say "AI Team Studio" |
+| **SA hardcoded Node.js** | Open | SA always suggests Node.js stack — should detect project type (Issue #23) |
+| **Desktop Monaco editor** | Planned | Port Monaco editor + xterm.js terminal to Codanium Desktop |
+| **Semantic card dedup** | Open | Cards can be duplicated |
+| **SDD persistence** | Open | SDD content may not persist fully |
+| **BRD full content** | Open | BRD may truncate |
+| **UX in pipeline** | Open | UX designer flow needs verification |
+
+### Infrastructure
+
+| Component | Details |
+|-----------|---------|
+| **Server** | Hetzner CPX22 (4 vCPU, 8GB RAM, 80GB SSD) |
+| **IP** | 46.62.165.151 |
+| **Domain** | codanium.com (DNS A record → 46.62.165.151) |
+| **SSL** | Let's Encrypt (auto-renewing via Certbot container) |
+| **Docker Services** | nginx, app, worker, db (PostgreSQL 17), redis, certbot |
+| **Ports** | 80 (HTTP→HTTPS redirect), 443 (HTTPS), 14000 (Postgres), 14001 (Next.js direct), 14003 (Redis) |
