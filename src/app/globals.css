@@ -308,6 +308,14 @@
   animation: float-slow 8s ease-in-out infinite;
 }
 
+/* ─── Force framer-motion elements visible (SSR hydration fix) ─── */
+/* framer-motion sets inline opacity:0 via initial={} but animations may not fire in production SSR */
+[style*="opacity: 0"][style*="transform"] {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+
 /* ─── Landing page animations (CSS, not framer-motion for SSR compat) ─── */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(20px); }
