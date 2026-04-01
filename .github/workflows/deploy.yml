@@ -62,10 +62,16 @@ jobs:
             echo "=== Seeding database ==="
             docker compose exec -T app npx prisma db seed || echo "Seed skipped (may already exist)"
 
-            echo "=== Restarting app with fresh schema ==="
+            echo "=== Restarting app + nginx ==="
             docker compose restart app
             sleep 5
+            docker compose restart nginx
+            sleep 3
 
+            echo "=== Verifying site is up ==="
+            curl -s -o /dev/null -w "%{http_code}" http://localhost || true
+
+            echo ""
             echo "=== Final status ==="
             docker compose ps
             echo "=== Deployment complete ==="
