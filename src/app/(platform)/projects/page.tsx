@@ -201,7 +201,7 @@ export default function ProjectsPage() {
                       <button
                         onClick={() => {
                           setUserMenuOpen(false);
-                          signOut({ callbackUrl: '/login' });
+                          signOut({ callbackUrl: '/' });
                         }}
                         className="flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-500/[0.06] transition-all w-full text-left"
                       >
