@@ -16,10 +16,13 @@ jobs:
 
       - name: Deploy to server
         uses: appleboy/ssh-action@master
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: GH_TOKEN
           script: |
             # Install Docker if not present
             if ! command -v docker &> /dev/null; then
@@ -28,16 +31,17 @@ jobs:
               apt-get update && apt-get install -y docker-compose-plugin git
             fi
 
-            # Clone repo on first deploy
+            # Clone repo on first deploy (using token for auth)
             if [ ! -d /opt/codanium ]; then
               echo "=== Cloning repository ==="
-              git clone https://github.com/AiSenseiMY/Ai-Team_studio.git /opt/codanium
+              git clone https://x-access-token:${GH_TOKEN}@github.com/AiSenseiMY/Ai-Team_studio.git /opt/codanium
               cd /opt/codanium
               cp .env.example .env
             fi
 
             echo "=== Pulling latest code ==="
             cd /opt/codanium
+            git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/AiSenseiMY/Ai-Team_studio.git
             git pull origin main
 
             echo "=== Building and deploying ==="
