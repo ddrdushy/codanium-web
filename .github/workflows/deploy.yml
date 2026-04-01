@@ -46,6 +46,19 @@ jobs:
             git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/AiSenseiMY/Ai-Team_studio.git
             git pull origin main
 
+            echo "=== Setting production .env ==="
+            cat > .env << 'ENVEOF'
+            DATABASE_URL=postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
+            REDIS_URL=redis://redis:6379
+            NEXTAUTH_URL=https://codanium.com
+            NEXTAUTH_SECRET=codanium-prod-secret-2026-x9k2m
+            AUTH_SECRET=codanium-prod-secret-2026-x9k2m
+            AUTH_TRUST_HOST=true
+            APP_URL=https://codanium.com
+            NODE_ENV=production
+            ENVEOF
+            sed -i 's/^            //' .env
+
             echo "=== Building containers ==="
             docker compose build --no-cache
 
