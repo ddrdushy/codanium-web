@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, Play, Bot, CheckCircle2, Zap, GitBranch, BarChart3 } from 'lucide-react';
+import { ArrowRight, Play, Bot, CheckCircle2, Zap, GitBranch, BarChart3, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const stagger = {
@@ -18,17 +18,17 @@ const fadeUp = {
 };
 
 const agentAvatars = [
+  { name: 'PM', color: 'bg-amber-500' },
   { name: 'BA', color: 'bg-emerald-500' },
   { name: 'SA', color: 'bg-blue-500' },
-  { name: 'FE', color: 'bg-purple-500' },
+  { name: 'UX', color: 'bg-purple-500' },
   { name: 'QA', color: 'bg-rose-500' },
-  { name: 'PM', color: 'bg-amber-500' },
 ];
 
 const miniCards = [
-  { title: 'Login System', status: 'In Progress', color: 'text-amber-400 bg-amber-400/10' },
-  { title: 'Backend Setup', status: 'Review', color: 'text-blue-400 bg-blue-400/10' },
-  { title: 'Database Design', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
+  { title: 'Requirements BRD', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
+  { title: 'Architecture SDD', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
+  { title: 'Auth Module', status: 'In Progress', color: 'text-amber-400 bg-amber-400/10' },
 ];
 
 export function HeroSection() {
@@ -50,7 +50,7 @@ export function HeroSection() {
             <motion.div variants={fadeUp}>
               <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber mb-6">
                 <Zap className="h-3.5 w-3.5" />
-                Now in Public Beta
+                Your Vibe, Multiplied
               </span>
             </motion.div>
 
@@ -68,9 +68,9 @@ export function HeroSection() {
               variants={fadeUp}
               className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl"
             >
-              Tell us what you need — even a rough idea. Our team of 23 AI agents
-              handles everything: clarifying requirements, designing, coding, testing,
-              and deploying your software.
+              Tell us what you need — even a rough idea. Codanium&apos;s team of AI agents
+              handles everything: requirements, architecture, design, coding, testing,
+              and deployment.
             </motion.p>
 
             <motion.div variants={fadeUp} className="mt-10 flex flex-wrap items-center gap-4">
@@ -83,21 +83,21 @@ export function HeroSection() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <a href="#how-it-works">
+              <a href="#download">
                 <Button
                   variant="outline"
                   size="lg"
-                  className="font-semibold text-base h-12 px-8"
+                  className="font-semibold text-base h-12 px-8 gap-2"
                 >
-                  <Play className="mr-2 h-4 w-4" />
-                  See How It Works
+                  <Download className="h-4 w-4" />
+                  Download Desktop App
                 </Button>
               </a>
             </motion.div>
 
             <motion.div
               variants={fadeUp}
-              className="mt-8 flex items-center gap-6 text-sm text-muted-foreground"
+              className="mt-8 flex flex-wrap items-center gap-6 text-sm text-muted-foreground"
             >
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -106,6 +106,10 @@ export function HeroSection() {
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 No coding skills needed
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                Mac · Windows · Linux
               </span>
             </motion.div>
           </motion.div>
@@ -127,7 +131,7 @@ export function HeroSection() {
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Zap className="h-3 w-3 text-amber" />
-                  <span>AI Team Studio</span>
+                  <span className="font-semibold">Codanium</span>
                 </div>
                 <div className="w-16" />
               </div>
@@ -136,7 +140,7 @@ export function HeroSection() {
               <div className="grid grid-cols-4 gap-3 mb-4">
                 {[
                   { label: 'Active Tasks', value: '47', icon: GitBranch, color: 'text-blue-400' },
-                  { label: 'Team', value: '8', icon: Bot, color: 'text-emerald-400' },
+                  { label: 'AI Agents', value: '20', icon: Bot, color: 'text-emerald-400' },
                   { label: 'Your Approvals', value: '3', icon: CheckCircle2, color: 'text-purple-400' },
                   { label: 'Progress', value: '94%', icon: BarChart3, color: 'text-amber-400' },
                 ].map((stat) => (
@@ -157,7 +161,7 @@ export function HeroSection() {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-medium text-muted-foreground">Build Progress</span>
-                  <span className="text-[10px] text-amber font-semibold">Step 6 of 10</span>
+                  <span className="text-[10px] text-amber font-semibold">Phase 5 — Development</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-[var(--surface-overlay)]">
                   <div className="h-2 w-[60%] rounded-full bg-gradient-to-r from-amber-500 to-orange-500" />

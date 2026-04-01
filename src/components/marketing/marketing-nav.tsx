@@ -3,15 +3,32 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Menu, X } from 'lucide-react';
+import { Menu, X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const navLinks = [
   { label: 'Features', href: '#features' },
   { label: 'How it Works', href: '#how-it-works' },
+  { label: 'Download', href: '#download' },
   { label: 'Pricing', href: '#pricing' },
 ];
+
+function CodaniumLogo() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="url(#grad)" />
+      <path d="M9 16C9 12.134 12.134 9 16 9V9C19.866 9 23 12.134 23 16V16C23 19.866 19.866 23 16 23V23" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="16" cy="16" r="3" fill="white"/>
+      <defs>
+        <linearGradient id="grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#F59E0B"/>
+          <stop offset="1" stopColor="#EA580C"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
 
 export function MarketingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -38,11 +55,9 @@ export function MarketingNav() {
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber/10 border border-amber/20 transition-colors group-hover:bg-amber/20">
-            <Zap className="h-5 w-5 text-amber" />
-          </div>
+          <CodaniumLogo />
           <span className="text-lg font-bold tracking-tight text-foreground">
-            AI Team Studio
+            Codanium
           </span>
         </Link>
 
@@ -61,8 +76,14 @@ export function MarketingNav() {
 
         {/* Right actions — desktop */}
         <div className="hidden md:flex items-center gap-3">
+          <a href="#download">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Download className="h-3.5 w-3.5" />
+              Get Desktop App
+            </Button>
+          </a>
           <Link href="/login">
-            <Button variant="outline" size="sm">
+            <Button variant="ghost" size="sm">
               Login
             </Button>
           </Link>
@@ -71,7 +92,7 @@ export function MarketingNav() {
               size="sm"
               className="bg-amber text-background hover:bg-amber/90 font-semibold"
             >
-              Start a Project
+              Start Free
             </Button>
           </Link>
         </div>
@@ -113,13 +134,11 @@ export function MarketingNav() {
               ))}
               <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
                 <Link href="/login" onClick={() => setMobileOpen(false)}>
-                  <Button variant="outline" className="w-full">
-                    Login
-                  </Button>
+                  <Button variant="outline" className="w-full">Login</Button>
                 </Link>
                 <Link href="/signup" onClick={() => setMobileOpen(false)}>
                   <Button className="w-full bg-amber text-background hover:bg-amber/90 font-semibold">
-                    Start a Project
+                    Start Free
                   </Button>
                 </Link>
               </div>

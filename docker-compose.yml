@@ -1,7 +1,20 @@
-# ─── AI Team Studio — Docker Compose ───
-# PostgreSQL + Redis + Next.js App + BullMQ Worker
+# ─── Codanium Platform — Docker Compose ───
+# Nginx + PostgreSQL + Redis + Next.js App + BullMQ Worker
 
 services:
+  # ─── Nginx Reverse Proxy (port 80 → Next.js) ─────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: codanium-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+
+
   # ─── PostgreSQL Database ─────────────────────────────────────────────────────
   db:
     image: postgres:17-alpine
@@ -51,9 +64,9 @@ services:
     environment:
       DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
       REDIS_URL: redis://redis:6379
-      NEXTAUTH_URL: http://localhost:14001
-      NEXTAUTH_SECRET: docker-dev-secret-change-in-production
-      AUTH_SECRET: docker-dev-secret-change-in-production
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://46.62.165.151}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-docker-dev-secret-change-in-production}
+      AUTH_SECRET: ${AUTH_SECRET:-docker-dev-secret-change-in-production}
       AUTH_TRUST_HOST: "true"
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
@@ -61,7 +74,7 @@ services:
       STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
       STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
       STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
-      APP_URL: http://localhost:14001
+      APP_URL: ${APP_URL:-http://46.62.165.151}
       NODE_ENV: production
     depends_on:
       db:
