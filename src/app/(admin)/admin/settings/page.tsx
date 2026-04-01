@@ -140,7 +140,7 @@ export default function SettingsPage() {
   const [emailMailjetApiKey, setEmailMailjetApiKey] = useState('');
   const [emailMailjetSecretKey, setEmailMailjetSecretKey] = useState('');
   const [emailFromAddress, setEmailFromAddress] = useState('noreply@yourdomain.com');
-  const [emailFromName, setEmailFromName] = useState('AI Team Studio');
+  const [emailFromName, setEmailFromName] = useState('Codanium');
   const [emailWebhookToken, setEmailWebhookToken] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailStatus, setTestEmailStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -332,9 +332,17 @@ export default function SettingsPage() {
   };
 
   // ─── Save handler ───
+  const [saveError, setSaveError] = useState('');
+
   const handleSave = async () => {
+    if (!isLiveData) {
+      setSaveError('Cannot save — not authenticated. Please log in as admin first.');
+      setSaveStatus('error');
+      return;
+    }
     setSaving(true);
     setSaveStatus('idle');
+    setSaveError('');
     try {
       await saveAdminSettings({
         'llm.defaultProvider': defaultProvider,
@@ -361,10 +369,12 @@ export default function SettingsPage() {
         'billing.freeCreditsExpiryDays': Number(freeCreditsExpiryDays),
       });
       setSaveStatus('saved');
+      setSaveError('');
       setTimeout(() => setSaveStatus('idle'), 3000);
-    } catch {
+    } catch (err: any) {
       setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      setSaveError(err?.message?.includes('401') ? 'Session expired — please log in again' : 'Failed to save settings');
+      setTimeout(() => setSaveStatus('idle'), 5000);
     } finally {
       setSaving(false);
     }
@@ -465,7 +475,7 @@ export default function SettingsPage() {
                 <select
                   value={defaultModel}
                   onChange={(e) => setDefaultModel(e.target.value)}
-                  className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
+                  className="w-64 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 cursor-pointer"
                 >
                   <option value="">Select a model...</option>
                   {availableModels.map((m) => (
@@ -473,9 +483,13 @@ export default function SettingsPage() {
                   ))}
                 </select>
               ) : (
-                <span className="text-sm text-muted-foreground italic">
-                  {defaultModel || 'No models loaded'}
-                </span>
+                <input
+                  type="text"
+                  value={defaultModel}
+                  onChange={(e) => setDefaultModel(e.target.value)}
+                  placeholder="e.g. gpt-4o, claude-3-opus, codestral-22b"
+                  className="w-64 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50 font-mono"
+                />
               )}
               <Button
                 variant="outline"
@@ -1305,7 +1319,7 @@ export default function SettingsPage() {
               type="text"
               value={emailFromName}
               onChange={(e) => setEmailFromName(e.target.value)}
-              placeholder="AI Team Studio"
+              placeholder="Codanium"
               className="w-52 h-8 px-2 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--admin-accent)]/50"
             />
           </SettingField>
@@ -1688,14 +1702,20 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Save Button */}
-      <motion.div variants={itemVariants} className="flex justify-end pb-6">
+      <motion.div variants={itemVariants} className="flex items-center justify-end gap-4 pb-6">
+        {saveError && (
+          <span className="text-sm text-red-400 flex items-center gap-1.5">
+            <AlertTriangle className="w-4 h-4" />
+            {saveError}
+          </span>
+        )}
         <Button
           onClick={handleSave}
           disabled={saving}
           className="px-6 gap-2"
           style={{
             backgroundColor:
-              saveStatus === 'saved' ? '#10b981' : undefined,
+              saveStatus === 'saved' ? '#10b981' : saveStatus === 'error' ? '#ef4444' : undefined,
           }}
         >
           {saving ? (
@@ -1705,6 +1725,8 @@ export default function SettingsPage() {
               <Check className="w-4 h-4" />
               Saved
             </>
+          ) : saveStatus === 'error' ? (
+            'Save Failed'
           ) : (
             'Save Changes'
           )}
