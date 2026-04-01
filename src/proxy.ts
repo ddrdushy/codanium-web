@@ -16,12 +16,8 @@ export async function proxy(request: NextRequest) {
   const isPublic = publicPaths.some(p => pathname === p);
   const isAuthPage = ['/login', '/signup'].includes(pathname);
 
-  // Allow public routes
+  // Allow public routes (let auth pages always render — client handles redirect after login)
   if (isPublic) {
-    // If logged in and on auth pages, redirect to projects
-    if (isLoggedIn && isAuthPage) {
-      return NextResponse.redirect(new URL('/projects', request.url));
-    }
     return NextResponse.next();
   }
 
