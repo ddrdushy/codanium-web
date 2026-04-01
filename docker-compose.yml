@@ -64,7 +64,7 @@ services:
     environment:
       DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
       REDIS_URL: redis://redis:6379
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://46.62.165.151}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://codanium.com}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-docker-dev-secret-change-in-production}
       AUTH_SECRET: ${AUTH_SECRET:-docker-dev-secret-change-in-production}
       AUTH_TRUST_HOST: "true"
@@ -74,7 +74,7 @@ services:
       STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
       STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
       STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
-      APP_URL: ${APP_URL:-http://46.62.165.151}
+      APP_URL: ${APP_URL:-https://codanium.com}
       NODE_ENV: production
     depends_on:
       db:
