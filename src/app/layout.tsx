@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Team Studio",
-  description: "AI-Powered Product Delivery Operating System",
+  title: "Codanium — Your Vibe, Multiplied",
+  description: "Describe what you need. Codanium's AI team builds, tests, and ships your software.",
 };
 
 export default function RootLayout({
