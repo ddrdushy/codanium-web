@@ -72,8 +72,14 @@ jobs:
             docker compose exec -T app npx prisma migrate deploy || \
               docker compose exec -T app npx prisma db push --accept-data-loss
 
-            echo "=== Seeding database ==="
-            docker compose exec -T app npx prisma db seed || echo "Seed skipped (may already exist)"
+            echo "=== Seeding database (first deploy only) ==="
+            USER_COUNT=$(docker compose exec -T db psql -U ats_user -d ai_team_studio -t -A -c "SELECT COUNT(*) FROM users;" 2>/dev/null || echo "0")
+            if [ "$USER_COUNT" -lt "2" ]; then
+              echo "  No users found — running seed..."
+              docker compose exec -T app npx prisma db seed || echo "  Seed failed (non-critical)"
+            else
+              echo "  Database already has $USER_COUNT users — skipping seed"
+            fi
 
             echo "=== Restarting app + nginx ==="
             docker compose restart app
