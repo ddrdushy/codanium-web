@@ -9,6 +9,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Deploy Codanium Platform
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -23,6 +24,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GH_TOKEN
+          command_timeout: 10m
           script: |
             # Install Docker if not present
             if ! command -v docker &> /dev/null; then
@@ -31,7 +33,7 @@ jobs:
               apt-get update && apt-get install -y docker-compose-plugin git
             fi
 
-            # Clone repo on first deploy (using token for auth)
+            # Clone repo on first deploy
             if [ ! -d /opt/codanium ]; then
               echo "=== Cloning repository ==="
               git clone https://x-access-token:${GH_TOKEN}@github.com/AiSenseiMY/Ai-Team_studio.git /opt/codanium
@@ -44,10 +46,26 @@ jobs:
             git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/AiSenseiMY/Ai-Team_studio.git
             git pull origin main
 
-            echo "=== Building and deploying ==="
+            echo "=== Building containers ==="
             docker compose build --no-cache
+
+            echo "=== Starting services ==="
             docker compose up -d
 
-            echo "=== Checking status ==="
+            echo "=== Waiting for DB to be healthy ==="
+            sleep 10
+
+            echo "=== Running database migrations ==="
+            docker compose exec -T app npx prisma migrate deploy || \
+              docker compose exec -T app npx prisma db push --accept-data-loss
+
+            echo "=== Seeding database ==="
+            docker compose exec -T app npx prisma db seed || echo "Seed skipped (may already exist)"
+
+            echo "=== Restarting app with fresh schema ==="
+            docker compose restart app
+            sleep 5
+
+            echo "=== Final status ==="
             docker compose ps
             echo "=== Deployment complete ==="
