@@ -2,17 +2,29 @@
 # Nginx + PostgreSQL + Redis + Next.js App + BullMQ Worker
 
 services:
-  # ─── Nginx Reverse Proxy (port 80 → Next.js) ─────────────────────────────────
+  # ─── Nginx Reverse Proxy (80 + 443 with SSL) ────────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: codanium-nginx
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_conf:/etc/letsencrypt:ro
     depends_on:
       - app
+
+  # ─── Certbot (SSL cert issuance + auto-renewal) ──────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: codanium-certbot
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done'"
 
 
   # ─── PostgreSQL Database ─────────────────────────────────────────────────────
@@ -132,4 +144,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  certbot_www:
+    driver: local
+  certbot_conf:
     driver: local
