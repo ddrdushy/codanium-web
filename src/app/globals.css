@@ -308,6 +308,24 @@
   animation: float-slow 8s ease-in-out infinite;
 }
 
+/* ─── Landing page animations (CSS, not framer-motion for SSR compat) ─── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.8s ease-out forwards;
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(40px) scale(0.95); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.8s ease-out 0.3s forwards;
+  opacity: 0;
+}
+
 /* ─── Glass Card (admin panels) ─── */
 .glass-card {
   background: rgba(255, 255, 255, 0.8);

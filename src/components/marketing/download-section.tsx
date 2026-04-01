@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { Download, Monitor, Apple, Terminal, CheckCircle2, Zap, GitBranch, Code2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -56,13 +55,7 @@ export function DownloadSection() {
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-amber/3 to-transparent" />
       <div className="relative mx-auto max-w-7xl px-6">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-16"
-        >
+        <div className="text-center mb-16 animate-fade-in">
           <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber mb-4">
             <Download className="h-3.5 w-3.5" />
             Codanium Desktop v0.1.0
@@ -77,33 +70,23 @@ export function DownloadSection() {
             Download Codanium Desktop — a cross-platform IDE built for working alongside your AI team.
             No VS Code extension needed.
           </p>
-        </motion.div>
+        </div>
 
         {/* Features strip */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-14"
-        >
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-14">
           {features.map((f) => (
             <div key={f.text} className="flex items-start gap-3 rounded-xl border border-border bg-[var(--surface)] p-4">
               <f.icon className="h-4 w-4 text-amber mt-0.5 shrink-0" />
               <span className="text-sm text-muted-foreground leading-snug">{f.text}</span>
             </div>
           ))}
-        </motion.div>
+        </div>
 
         {/* Platform cards */}
         <div className="grid gap-6 md:grid-cols-3">
-          {platforms.map((platform, i) => (
-            <motion.div
+          {platforms.map((platform) => (
+            <div
               key={platform.name}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.1 }}
               className="rounded-2xl border border-border bg-[var(--surface)] p-6"
             >
               {/* Platform header */}
@@ -145,18 +128,12 @@ export function DownloadSection() {
                   ? 'Requires Windows 10 or later (64-bit)'
                   : 'Requires glibc 2.17+ (most modern distros)'}
               </p>
-            </motion.div>
+            </div>
           ))}
         </div>
 
         {/* All releases link */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="mt-10 text-center"
-        >
+        <div className="mt-10 text-center">
           <a
             href="https://github.com/AiSenseiMY/Codanium/releases"
             target="_blank"
@@ -169,7 +146,7 @@ export function DownloadSection() {
           <p className="mt-3 text-xs text-muted-foreground">
             Open source · Free to download · v0.1.0
           </p>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

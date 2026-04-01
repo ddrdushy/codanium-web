@@ -1,21 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
-import { ArrowRight, Play, Bot, CheckCircle2, Zap, GitBranch, BarChart3, Download } from 'lucide-react';
+import { ArrowRight, Bot, CheckCircle2, Zap, GitBranch, BarChart3, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-const stagger = {
-  hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.12, delayChildren: 0.2 },
-  },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' as const } },
-};
 
 const agentAvatars = [
   { name: 'PM', color: 'bg-amber-500' },
@@ -41,39 +28,28 @@ export function HeroSection() {
       <div className="relative mx-auto max-w-7xl px-6">
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
           {/* Left — Copy */}
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            animate="visible"
-            className="max-w-2xl"
-          >
-            <motion.div variants={fadeUp}>
+          <div className="max-w-2xl animate-fade-in">
+            <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber mb-6">
                 <Zap className="h-3.5 w-3.5" />
                 Your Vibe, Multiplied
               </span>
-            </motion.div>
+            </div>
 
-            <motion.h1
-              variants={fadeUp}
-              className="mt-4 text-5xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-6xl lg:text-7xl"
-            >
+            <h1 className="mt-4 text-5xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
               Describe Your Idea.{' '}
               <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
                 We&apos;ll Build It.
               </span>
-            </motion.h1>
+            </h1>
 
-            <motion.p
-              variants={fadeUp}
-              className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl"
-            >
+            <p className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl">
               Tell us what you need — even a rough idea. Codanium&apos;s team of AI agents
               handles everything: requirements, architecture, design, coding, testing,
               and deployment.
-            </motion.p>
+            </p>
 
-            <motion.div variants={fadeUp} className="mt-10 flex flex-wrap items-center gap-4">
+            <div className="mt-10 flex flex-wrap items-center gap-4">
               <Link href="/signup">
                 <Button
                   size="lg"
@@ -93,12 +69,9 @@ export function HeroSection() {
                   Download Desktop App
                 </Button>
               </a>
-            </motion.div>
+            </div>
 
-            <motion.div
-              variants={fadeUp}
-              className="mt-8 flex flex-wrap items-center gap-6 text-sm text-muted-foreground"
-            >
+            <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 No credit card required
@@ -111,16 +84,11 @@ export function HeroSection() {
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 Mac · Windows · Linux
               </span>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
 
           {/* Right — Dashboard Mockup */}
-          <motion.div
-            initial={{ opacity: 0, x: 40, scale: 0.95 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' as const }}
-            className="relative hidden lg:block"
-          >
+          <div className="relative hidden lg:block animate-slide-in-right">
             <div className="animate-float-slow rounded-2xl border border-border bg-[var(--surface)] p-5 shadow-2xl">
               {/* Mockup top bar */}
               <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
@@ -170,7 +138,6 @@ export function HeroSection() {
 
               {/* Agent avatars + mini cards */}
               <div className="grid grid-cols-2 gap-3">
-                {/* Active Agents */}
                 <div className="rounded-lg border border-border bg-[var(--surface-raised)] p-3">
                   <span className="text-[10px] font-medium text-muted-foreground mb-2 block">
                     Your AI Team
@@ -190,7 +157,6 @@ export function HeroSection() {
                   </div>
                 </div>
 
-                {/* Mini task cards */}
                 <div className="rounded-lg border border-border bg-[var(--surface-raised)] p-3">
                   <span className="text-[10px] font-medium text-muted-foreground mb-2 block">
                     Current Work
@@ -209,9 +175,8 @@ export function HeroSection() {
               </div>
             </div>
 
-            {/* Glow effect behind mockup */}
             <div className="absolute -inset-4 -z-10 rounded-3xl bg-amber/5 blur-3xl" />
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>
