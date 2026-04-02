@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Loop Detector
+// Codanium — Loop Detector
 // =============================================================================
 // Detects three types of loops in the orchestration graph:
 //

@@ -172,7 +172,7 @@ export async function POST(
       if (await isRedisAvailable()) {
         await addEmailJob({
           to: normalizedEmail,
-          subject: `${inviterName} invited you to ${project?.name ?? 'a project'} — AI Team Studio`,
+          subject: `${inviterName} invited you to ${project?.name ?? 'a project'} — Codanium`,
           template: 'team-invitation',
           props: {
             inviterName,

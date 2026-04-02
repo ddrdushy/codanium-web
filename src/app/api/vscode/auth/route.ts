@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     // Build VS Code callback URI
     // Format: vscode://<publisher>.<extension-name>/<path>
-    const callbackUri = `vscode://ai-team-studio.ai-team-studio/auth/callback?key=${encodeURIComponent(raw)}&prefix=${encodeURIComponent(prefix)}&user=${encodeURIComponent(userName)}`;
+    const callbackUri = `vscode://codanium.codanium/auth/callback?key=${encodeURIComponent(raw)}&prefix=${encodeURIComponent(prefix)}&user=${encodeURIComponent(userName)}`;
 
     // Return HTML page that redirects to VS Code and shows success message
     const html = `
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Team Studio — VS Code Connected</title>
+  <title>Codanium — VS Code Connected</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {

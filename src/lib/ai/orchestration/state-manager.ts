@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Agent State Manager
+// Codanium — Agent State Manager
 // =============================================================================
 // Manages agent lifecycle status transitions in the database.
 // Each agent has a status (IDLE, WORKING, WAITING, BLOCKED) and an optional

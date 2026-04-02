@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Email Verification Template
+// Codanium — Email Verification Template
 // =============================================================================
 
 import { Text, Button, Section } from '@react-email/components';
@@ -13,8 +13,8 @@ interface VerificationEmailProps {
 
 export function VerificationEmail({ name, verificationUrl }: VerificationEmailProps) {
   return (
-    <EmailLayout preview="Verify your email address for AI Team Studio">
-      <Text style={headingStyle}>Welcome to AI Team Studio</Text>
+    <EmailLayout preview="Verify your email address for Codanium">
+      <Text style={headingStyle}>Welcome to Codanium</Text>
 
       <Text style={textStyle}>
         Hi {name},
@@ -33,7 +33,7 @@ export function VerificationEmail({ name, verificationUrl }: VerificationEmailPr
 
       <Text style={subtextStyle}>
         This link expires in 24 hours. If you didn&apos;t create an account with
-        AI Team Studio, you can safely ignore this email.
+        Codanium, you can safely ignore this email.
       </Text>
 
       <Text style={linkFallbackStyle}>

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Default Project Constitution
+// Codanium — Default Project Constitution
 // =============================================================================
 // A governance document that ALL AI agents must respect. Defines architectural
 // rules, coding standards, and constraints that agents cannot violate.

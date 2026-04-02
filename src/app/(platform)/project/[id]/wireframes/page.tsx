@@ -36,7 +36,7 @@ const samplePenDoc: PenDocument = {
   name: 'Login Screen',
   width: 375,
   height: 667,
-  variables: { 'app.name': 'AI Team Studio' },
+  variables: { 'app.name': 'Codanium' },
   components: {
     'btn-primary': {
       id: 'btn-primary', type: 'frame', layout: 'horizontal', justifyContent: 'center', alignItems: 'center',

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Payment Failed Email Template
+// Codanium — Payment Failed Email Template
 // =============================================================================
 
 import { Text, Button, Section } from '@react-email/components';
@@ -25,7 +25,7 @@ export function PaymentFailedEmail({
 
       <Text style={textStyle}>
         We were unable to process your payment of <strong>${amount}</strong> for
-        your AI Team Studio subscription.
+        your Codanium subscription.
       </Text>
 
       <Section style={warningBoxStyle}>

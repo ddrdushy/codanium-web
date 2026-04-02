@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Card Lifecycle & Definition of Done (DoD)
+// Codanium — Card Lifecycle & Definition of Done (DoD)
 // =============================================================================
 // Defines state transition rules and completion criteria for cards.
 //

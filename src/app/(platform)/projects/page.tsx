@@ -100,7 +100,7 @@ export default function ProjectsPage() {
               <Zap className="w-5 h-5 text-amber" />
             </div>
             <div>
-              <h1 className="text-base font-bold tracking-tight">AI Team Studio</h1>
+              <h1 className="text-base font-bold tracking-tight">Codanium</h1>
               <p className="text-[10px] text-muted-foreground -mt-0.5">Your AI Development Team</p>
             </div>
           </div>

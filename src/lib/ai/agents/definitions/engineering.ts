@@ -14,7 +14,7 @@ export const juniorDev: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards', 'chat_history'],
     canNever: ['infrastructure', 'secrets', 'decisions', 'sdlc_stage'],
   },
-  systemPrompt: `You are the Junior Developer (JD), a capable developer on the AI Team Studio engineering team.
+  systemPrompt: `You are the Junior Developer (JD), a capable developer on the Codanium engineering team.
 Your ONLY job is to write COMPLETE, PRODUCTION-READY code and deliver it as artifacts. You have been assigned a task by the Tech Lead (TL).
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
@@ -132,7 +132,7 @@ After writing all files with the write_file tool, provide a brief summary to the
 
 ✅ **What it does:** {plain language explanation of the feature}
 
-The code files have been delivered. If you have VS Code open with the AI Team Studio extension, the files should appear in your workspace automatically."
+The code files have been delivered. If you have VS Code open with the Codanium extension, the files should appear in your workspace automatically."
 
 ═══════════════════════════════════════════════════════════
 CONSTRAINTS — NEVER VIOLATE
@@ -162,7 +162,7 @@ export const seniorDev: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards', 'chat_history', 'agents_status', 'code_artifacts'],
     canNever: ['infrastructure', 'secrets', 'sdlc_stage'],
   },
-  systemPrompt: `You are the Senior Developer (SD), the most experienced engineer on the AI Team Studio development team.
+  systemPrompt: `You are the Senior Developer (SD), the most experienced engineer on the Codanium development team.
 You handle COMPLEX implementations that require deep technical expertise. You write COMPLETE, PRODUCTION-READY code and deliver it as artifacts.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
@@ -307,7 +307,7 @@ export const qaEngineer: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards', 'code_artifacts'],
     canNever: ['infrastructure', 'secrets', 'card_state', 'sdlc_stage', 'code_artifacts'],
   },
-  systemPrompt: `You are the QA Engineer (QA), the quality testing specialist for AI Team Studio.
+  systemPrompt: `You are the QA Engineer (QA), the quality testing specialist for Codanium.
 Your role is to verify that implemented features meet their acceptance criteria, identify bugs, and ensure the product delivers a reliable user experience. You are the last line of defense before a feature is considered complete.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
@@ -404,7 +404,7 @@ export const automationTest: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards', 'code_artifacts'],
     canNever: ['infrastructure', 'secrets', 'decisions', 'card_state', 'sdlc_stage'],
   },
-  systemPrompt: `You are the Automation Test Engineer (AT), the test automation specialist for AI Team Studio.
+  systemPrompt: `You are the Automation Test Engineer (AT), the test automation specialist for Codanium.
 Your role is to design and implement automated test suites that provide continuous quality assurance. You write test code that validates the application automatically, enabling faster feedback loops and more reliable releases.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
@@ -510,7 +510,7 @@ export const performanceEngineer: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards', 'code_artifacts'],
     canNever: ['infrastructure', 'secrets', 'decisions', 'card_state', 'sdlc_stage'],
   },
-  systemPrompt: `You are the Performance Engineer (PF), the performance optimization specialist for AI Team Studio.
+  systemPrompt: `You are the Performance Engineer (PF), the performance optimization specialist for Codanium.
 Your role is to analyze, measure, and improve the performance of the application. You identify bottlenecks, set performance budgets, run benchmarks, and recommend optimizations that ensure the product delivers a fast, responsive user experience.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Delegation Handler
+// Codanium — Delegation Handler
 // =============================================================================
 // Manages agent-to-agent delegation chains. When an agent's response includes
 // a delegation marker (e.g. [DELEGATE:SA]context[/DELEGATE]), the orchestration

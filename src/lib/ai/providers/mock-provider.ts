@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Mock LLM Provider
+// Codanium — Mock LLM Provider
 // =============================================================================
 // Development-mode provider that produces realistic, agent-specific responses
 // without requiring any API keys. Every one of the 23 agents has its own voice,
@@ -1329,7 +1329,7 @@ const peGenerator: AgentGenerator = (msg) => {
         '  default = "us-east-1"\n' +
         '}\n\n' +
         'variable "app_name" {\n' +
-        '  default = "ai-team-studio"\n' +
+        '  default = "codanium"\n' +
         '}\n\n' +
         'variable "environment" {\n' +
         '  default = "production"\n' +

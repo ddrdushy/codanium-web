@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Git Sync Logic
+// Codanium — Git Sync Logic
 // =============================================================================
 // Orchestrates a full sync: fetch branches, PRs, and releases from GitHub
 // and upsert them into existing Prisma models. Called by the git-sync worker.

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Redis Client Singleton
+// Codanium — Redis Client Singleton
 // =============================================================================
 // Shared ioredis client for caching, BullMQ queue, rate limiting, and pub/sub.
 // Follows the same singleton pattern as src/lib/prisma.ts.

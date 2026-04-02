@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Event Bus with Redis Pub/Sub
+// Codanium — Event Bus with Redis Pub/Sub
 // =============================================================================
 // Lightweight pub/sub for system events (agent transitions, action execution,
 // delegation chains, errors, etc.) with optional Redis pub/sub for cross-

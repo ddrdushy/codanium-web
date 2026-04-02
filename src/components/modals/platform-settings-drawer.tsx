@@ -460,7 +460,7 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
                 </div>
 
                 <p className="text-[10px] text-muted-foreground/60">
-                  API keys let you connect the VS Code extension or external tools to AI Team Studio.
+                  API keys let you connect the VS Code extension or external tools to Codanium.
                   {' '}{apiKeys.length}/{apiKeyLimit} keys used.
                 </p>
 
@@ -541,7 +541,7 @@ export function PlatformSettingsDrawer({ open, onOpenChange }: PlatformSettingsD
                   <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0" />
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
                     <span className="font-medium text-blue-400">Quick connect:</span>{' '}
-                    Install the AI Team Studio VS Code extension, click "Login", and you'll be redirected here to auto-connect.
+                    Install the Codanium VS Code extension, click "Login", and you'll be redirected here to auto-connect.
                   </p>
                 </div>
               </section>

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Email Job Queue (BullMQ)
+// Codanium — Email Job Queue (BullMQ)
 // =============================================================================
 // Mirrors orchestration-queue.ts pattern. Dispatches email jobs to the worker
 // for async delivery via SendGrid.

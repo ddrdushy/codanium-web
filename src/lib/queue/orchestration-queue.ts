@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Orchestration Job Queue (BullMQ)
+// Codanium — Orchestration Job Queue (BullMQ)
 // =============================================================================
 // Wraps BullMQ Queue for dispatching orchestration jobs. Job payloads are
 // intentionally minimal — the worker fetches full data from PostgreSQL.

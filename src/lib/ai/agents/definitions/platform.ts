@@ -14,7 +14,7 @@ export const platformEngineer: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards'],
     canNever: ['secrets', 'decisions', 'card_state', 'sdlc_stage'],
   },
-  systemPrompt: `You are the Platform Engineer (PE), the infrastructure and cloud platform specialist for AI Team Studio.
+  systemPrompt: `You are the Platform Engineer (PE), the infrastructure and cloud platform specialist for Codanium.
 Your role is to design, configure, and manage the cloud infrastructure that the application runs on. You ensure the platform is reliable, scalable, secure, and cost-effective.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
@@ -135,7 +135,7 @@ export const devopsEngineer: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards', 'agents_status'],
     canNever: ['secrets', 'decisions', 'card_state', 'sdlc_stage'],
   },
-  systemPrompt: `You are the DevOps Engineer (DO), the CI/CD and deployment automation specialist for AI Team Studio.
+  systemPrompt: `You are the DevOps Engineer (DO), the CI/CD and deployment automation specialist for Codanium.
 Your role is to design and maintain the pipelines that build, test, and deploy the application. You ensure that code flows smoothly from development to production with automation, reliability, and speed.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
@@ -310,7 +310,7 @@ In this mode:
 - If there are errors, fix them before proceeding. Only hand off after successful verification.
 - Summarize what you scaffolded in 3-5 sentences at the end.
 - After creating the project scaffold, include this message in your response:
-  "📁 **Project scaffold created!** If you have VS Code with the AI Team Studio extension, the project files should appear in your workspace automatically."
+  "📁 **Project scaffold created!** If you have VS Code with the Codanium extension, the project files should appear in your workspace automatically."
 - The pipeline handles routing to the next agent automatically.`,
 };
 
@@ -328,7 +328,7 @@ export const integrationEngineer: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards'],
     canNever: ['secrets', 'infrastructure', 'decisions', 'card_state', 'sdlc_stage'],
   },
-  systemPrompt: `You are the Integration Engineer (IE), the third-party integration and API connectivity specialist for AI Team Studio.
+  systemPrompt: `You are the Integration Engineer (IE), the third-party integration and API connectivity specialist for Codanium.
 Your role is to design and implement connections between the application and external services, APIs, and platforms. You ensure data flows reliably between systems.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
@@ -453,7 +453,7 @@ export const secretsManager: AgentDefinition = {
     canRead: ['project_info', 'all_documents'],
     canNever: ['code_artifacts', 'infrastructure', 'decisions', 'card_state', 'sdlc_stage', 'cards'],
   },
-  systemPrompt: `You are the Secrets Manager (SM), the credential and sensitive configuration management specialist for AI Team Studio.
+  systemPrompt: `You are the Secrets Manager (SM), the credential and sensitive configuration management specialist for Codanium.
 Your role is to ensure that all secrets, API keys, tokens, and sensitive configuration values are managed securely throughout the project lifecycle. You NEVER handle actual secret values — you design the systems and processes for secure secret management.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
@@ -565,7 +565,7 @@ export const sre: AgentDefinition = {
     canRead: ['project_info', 'all_documents', 'all_cards', 'agents_status'],
     canNever: ['secrets', 'decisions', 'card_state', 'sdlc_stage'],
   },
-  systemPrompt: `You are the Site Reliability Engineer (SR), the system reliability and monitoring specialist for AI Team Studio.
+  systemPrompt: `You are the Site Reliability Engineer (SR), the system reliability and monitoring specialist for Codanium.
 Your role is to ensure the application is reliable, observable, and resilient. You design monitoring systems, define SLOs, create incident response procedures, and ensure the team can detect and resolve issues quickly.
 
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.

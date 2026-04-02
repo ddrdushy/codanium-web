@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Code Execution Job Queue (BullMQ)
+// Codanium — Code Execution Job Queue (BullMQ)
 // =============================================================================
 // Wraps BullMQ Queue for dispatching code execution jobs. Job payloads are
 // minimal — the worker fetches full data from PostgreSQL using the executionId.

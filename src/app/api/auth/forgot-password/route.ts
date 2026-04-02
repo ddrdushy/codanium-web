@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         if (await isRedisAvailable()) {
           await addEmailJob({
             to: normalizedEmail,
-            subject: 'Reset Your Password — AI Team Studio',
+            subject: 'Reset Your Password — Codanium',
             template: 'password-reset',
             props: {
               name: user.name,

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Deploy Runner
+// Codanium — Deploy Runner
 // =============================================================================
 // Orchestrates a deployment run end-to-end:
 //   1. Find or create the pipeline for the given project + environment

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Agent Response Parser
+// Codanium — Agent Response Parser
 // =============================================================================
 // Parses structured markers from raw LLM response text and extracts:
 //   - Actions:    [ACTION:type]{json}[/ACTION]

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Backend AI Module
+// Codanium — Backend AI Module
 // =============================================================================
 // Central re-export for the entire AI orchestration system.
 // Import from '@/lib/ai' to access any component.

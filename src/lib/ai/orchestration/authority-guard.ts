@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Agent Authority Enforcement
+// Codanium — Agent Authority Enforcement
 // =============================================================================
 // Runtime validation of agent actions against their authority definitions.
 // Each agent has canWrite/canRead/canNever arrays that define what resources

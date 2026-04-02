@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Context Builder
+// Codanium — Context Builder
 // =============================================================================
 // Assembles the full LLM context for an agent invocation:
 //   1. Parallel-fetches all ContextSources the agent needs

@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     const latencyMs = Date.now() - startTime;
 
     // ── Model Capability Assessment ────────────────────────────────────
-    // Evaluate how well the selected model will perform for AI Team Studio's
+    // Evaluate how well the selected model will perform for Codanium's
     // agent tasks: code generation, tool calling, structured output, reasoning.
     const modelName = (body.defaultModel || '').toLowerCase();
     const assessment = assessModelCapabilities(body.provider, modelName);
@@ -201,10 +201,10 @@ function assessModelCapabilities(provider: string, model: string): ModelAssessme
   const capabilities = buildCapabilities(tier, provider, model);
 
   const overallMessages: Record<string, string> = {
-    excellent: 'This model is an excellent fit for AI Team Studio. It can handle code generation, tool calling, and complex reasoning tasks reliably.',
+    excellent: 'This model is an excellent fit for Codanium. It can handle code generation, tool calling, and complex reasoning tasks reliably.',
     good: 'This model is a good fit. It should handle most tasks well, though complex multi-step code generation may occasionally need retries.',
     fair: 'This model can work but may struggle with complex code generation and tool calling. Expect some inconsistencies in agent output quality.',
-    poor: 'This model is too small for AI Team Studio. Agents need strong reasoning, code generation, and tool calling capabilities. We recommend upgrading to a larger model.',
+    poor: 'This model is too small for Codanium. Agents need strong reasoning, code generation, and tool calling capabilities. We recommend upgrading to a larger model.',
   };
 
   const recommendations: Record<string, string | undefined> = {

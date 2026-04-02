@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Message Router
+// Codanium — Message Router
 // =============================================================================
 // Classifies the user's message intent and routes to the appropriate agent.
 //

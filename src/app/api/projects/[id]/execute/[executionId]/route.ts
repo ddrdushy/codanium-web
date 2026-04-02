@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Single Code Execution API
+// Codanium — Single Code Execution API
 // =============================================================================
 // GET /api/projects/:id/execute/:executionId — Get execution details + output
 // =============================================================================

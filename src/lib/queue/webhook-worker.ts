@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Webhook Delivery Worker (BullMQ)
+// Codanium — Webhook Delivery Worker (BullMQ)
 // =============================================================================
 // Processes webhook delivery jobs by POSTing signed payloads to registered
 // external endpoints. Records delivery results in the WebhookDelivery table.

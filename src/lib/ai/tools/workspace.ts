@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Project Workspace Manager
+// Codanium — Project Workspace Manager
 // =============================================================================
 // Each project gets an isolated workspace directory where agents read/write
 // real source code files. All filesystem operations are sandboxed to the
@@ -260,7 +260,7 @@ export async function gitCommitInWorkspace(
   try {
     await execAsync('git rev-parse --is-inside-work-tree', { cwd: workspace });
   } catch {
-    await execAsync('git init && git config user.email "agent@ai-team-studio.dev" && git config user.name "AI Agent"', { cwd: workspace });
+    await execAsync('git init && git config user.email "agent@codanium.dev" && git config user.name "AI Agent"', { cwd: workspace });
   }
 
   // Stage files

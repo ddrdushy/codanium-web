@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Ollama Provider Adapter
+// Codanium — Ollama Provider Adapter
 // =============================================================================
 // Raw fetch-based adapter for the Ollama local inference API.
 // No SDK dependency — uses standard `fetch` for all HTTP calls.

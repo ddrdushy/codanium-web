@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Team Invitation Email Template
+// Codanium — Team Invitation Email Template
 // =============================================================================
 
 import { Text, Button, Section } from '@react-email/components';
@@ -20,12 +20,12 @@ export function TeamInvitationEmail({
   acceptUrl,
 }: TeamInvitationEmailProps) {
   return (
-    <EmailLayout preview={`${inviterName} invited you to ${projectName} on AI Team Studio`}>
+    <EmailLayout preview={`${inviterName} invited you to ${projectName} on Codanium`}>
       <Text style={headingStyle}>You&apos;ve Been Invited!</Text>
 
       <Text style={textStyle}>
         <strong>{inviterName}</strong> has invited you to join the project{' '}
-        <strong>{projectName}</strong> on AI Team Studio.
+        <strong>{projectName}</strong> on Codanium.
       </Text>
 
       <Section style={detailsBoxStyle}>

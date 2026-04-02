@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Tool Definitions (JSON Schema)
+// Codanium — Tool Definitions (JSON Schema)
 // =============================================================================
 // Structured tool schemas for all agent capabilities. Compatible with
 // OpenAI function calling, Anthropic tool_use, and Ollama tools API.

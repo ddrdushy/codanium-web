@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Git Sync Job Queue (BullMQ)
+// Codanium — Git Sync Job Queue (BullMQ)
 // =============================================================================
 // Mirrors email-queue.ts pattern. Dispatches git sync jobs to the worker
 // for periodic or manual repository synchronization.

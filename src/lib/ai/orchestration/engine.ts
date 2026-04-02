@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Orchestration Engine
+// Codanium — Orchestration Engine
 // =============================================================================
 // The single entry point for all AI processing in the platform. Every user
 // message flows through this engine, which coordinates:

@@ -29,8 +29,8 @@ export class TaskProcessor {
             type: 'vscode_required',
             data: {
               agent: task.routedTo,
-              message: `Development agent ${task.routedTo} is waiting for VS Code. Open VS Code with the AI Team Studio extension to continue.`,
-              deepLink: `vscode://ai-team-studio/resume?projectId=${task.projectId}`,
+              message: `Development agent ${task.routedTo} is waiting for VS Code. Open VS Code with the Codanium extension to continue.`,
+              deepLink: `vscode://codanium/resume?projectId=${task.projectId}`,
             },
           },
         });

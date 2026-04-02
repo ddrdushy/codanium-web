@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Git Pull from GitHub (Bidirectional Sync)
+// Codanium — Git Pull from GitHub (Bidirectional Sync)
 // =============================================================================
 // Pulls files from a GitHub branch and upserts them as Artifacts in the DB.
 // Called by the /git/pull API route and the GitHub webhook receiver.

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — LLM Gateway
+// Codanium — LLM Gateway
 // =============================================================================
 // Central singleton that routes every LLM request to the correct provider.
 // Handles provider config resolution, dispatch, latency measurement, usage

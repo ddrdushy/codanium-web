@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Guardrail Functions
+// Codanium — Guardrail Functions
 // =============================================================================
 // Input and output safety validation with admin-configurable settings.
 // Config is loaded from the AdminSetting table (key: 'guardrails.config')

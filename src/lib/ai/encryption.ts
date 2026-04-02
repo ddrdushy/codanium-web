@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — API Key Encryption Utility
+// Codanium — API Key Encryption Utility
 // =============================================================================
 // AES-256-GCM encryption for storing API keys at rest. Keys are encrypted
 // before being persisted to the database and decrypted only when needed to

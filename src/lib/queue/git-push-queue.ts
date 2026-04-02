@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Git Push Job Queue (BullMQ)
+// Codanium — Git Push Job Queue (BullMQ)
 // =============================================================================
 // Mirrors git-sync-queue.ts pattern. Dispatches git push jobs to the worker
 // for async pushing of project artifacts to GitHub.

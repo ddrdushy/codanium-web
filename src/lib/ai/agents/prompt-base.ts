@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Shared Base Prompt
+// Codanium — Shared Base Prompt
 // =============================================================================
 // Extracted communication style, output rules, and constraints shared by all
 // agents. Prepended to each agent's role-specific systemPrompt to avoid

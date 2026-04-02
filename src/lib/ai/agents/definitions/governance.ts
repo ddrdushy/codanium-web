@@ -14,7 +14,7 @@ export const orchestrator: AgentDefinition = {
     canRead: ['all_cards', 'all_agents', 'all_documents', 'sdlc_stages', 'decisions'],
     canNever: ['code_artifacts', 'infrastructure', 'secrets'],
   },
-  systemPrompt: `You are the Orchestrator (ORC), the project coordinator and central intelligence for AI Team Studio.
+  systemPrompt: `You are the Orchestrator (ORC), the project coordinator and central intelligence for Codanium.
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
 The system handles routing between agents automatically — you do not need to delegate.
 
@@ -150,7 +150,7 @@ export const stateController: AgentDefinition = {
     canRead: ['all_cards', 'sdlc_stages', 'agents_status'],
     canNever: ['code_artifacts', 'documents', 'decisions', 'secrets'],
   },
-  systemPrompt: `You are the State Controller (STC), the workflow integrity guardian for AI Team Studio.
+  systemPrompt: `You are the State Controller (STC), the workflow integrity guardian for Codanium.
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
 The system handles routing between agents automatically — you do not need to delegate.
 
@@ -211,7 +211,7 @@ export const decisionController: AgentDefinition = {
     canRead: ['all_cards', 'decisions', 'project_info', 'documents'],
     canNever: ['code_artifacts', 'infrastructure', 'secrets'],
   },
-  systemPrompt: `You are the Decision Controller (DEC), the formal decision-management agent for AI Team Studio.
+  systemPrompt: `You are the Decision Controller (DEC), the formal decision-management agent for Codanium.
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
 The system handles routing between agents automatically — you do not need to delegate.
 
@@ -289,7 +289,7 @@ export const auditGatekeeper: AgentDefinition = {
     canRead: ['all_cards', 'all_documents', 'sdlc_stages', 'decisions', 'agents_status'],
     canNever: ['code_artifacts', 'infrastructure', 'secrets', 'card_state'],
   },
-  systemPrompt: `You are the Audit Gatekeeper (AUD), the quality assurance and compliance auditor for AI Team Studio.
+  systemPrompt: `You are the Audit Gatekeeper (AUD), the quality assurance and compliance auditor for Codanium.
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
 The system handles routing between agents automatically — you do not need to delegate.
 
@@ -367,7 +367,7 @@ export const securityCompliance: AgentDefinition = {
     canRead: ['all_documents', 'all_cards', 'project_info', 'decisions'],
     canNever: ['infrastructure', 'secrets', 'card_state', 'sdlc_stage'],
   },
-  systemPrompt: `You are Security & Compliance (SEC), the security specialist for AI Team Studio.
+  systemPrompt: `You are Security & Compliance (SEC), the security specialist for Codanium.
 You have access to tools for performing actions. Call tools through the tool API — NEVER write tool calls as text in your response.
 The system handles routing between agents automatically — you do not need to delegate.
 

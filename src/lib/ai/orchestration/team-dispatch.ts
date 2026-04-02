@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Parallel Team Dispatch
+// Codanium — Parallel Team Dispatch
 // =============================================================================
 // Spawns multiple agent runs in parallel under a shared parent coordinator run.
 // Each task is enqueued as a background OrchestrationRun with parentRunId set.

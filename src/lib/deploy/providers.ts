@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Deploy Providers
+// Codanium — Deploy Providers
 // =============================================================================
 // Provider-specific deploy trigger implementations.
 // Each provider receives the pipeline config JSON and triggers a deployment,
@@ -160,7 +160,7 @@ export async function triggerWebhookDeploy(
       body: JSON.stringify({
         event: 'deploy',
         environment,
-        triggeredBy: 'ai-team-studio',
+        triggeredBy: 'codanium',
         timestamp: new Date().toISOString(),
       }),
     });

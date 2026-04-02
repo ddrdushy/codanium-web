@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Quality Gate Enforcement
+// Codanium — Quality Gate Enforcement
 // =============================================================================
 // Defines prerequisite rules for SDLC stage advancement and agent delegation.
 // Gates ensure that artifacts (BRD, SDD, wireframes) are approved by the user

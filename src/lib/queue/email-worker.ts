@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Email Worker (BullMQ)
+// Codanium — Email Worker (BullMQ)
 // =============================================================================
 // Processes email jobs by rendering React Email templates to HTML and sending
 // via the email service (Mailjet or console fallback).

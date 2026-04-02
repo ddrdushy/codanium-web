@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Orchestration Type System
+// Codanium — Orchestration Type System
 // =============================================================================
 // Shared types for the orchestration engine, message router, event bus,
 // delegation handler, and SSE streaming layer.

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Context Sources
+// Codanium — Context Sources
 // =============================================================================
 // Individual Prisma query functions for each ContextSource type.
 // Each function fetches project-scoped data with minimal field selection

@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       if (await isRedisAvailable()) {
         await addEmailJob({
           to: normalizedEmail,
-          subject: 'Verify Your Email — AI Team Studio',
+          subject: 'Verify Your Email — Codanium',
           template: 'verification',
           props: {
             name: user.name,

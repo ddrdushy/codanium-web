@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Email Service (Mailjet)
+// Codanium — Email Service (Mailjet)
 // =============================================================================
 // Singleton email service that reads config from admin settings (Redis-cached)
 // with env var fallback. If no API key is configured, emails are logged to
@@ -94,7 +94,7 @@ export async function getEmailConfig(): Promise<EmailConfig> {
       mailjetApiKey: settingsMap['email.mailjetApiKey'] ?? process.env.MAILJET_API_KEY ?? '',
       mailjetSecretKey: settingsMap['email.mailjetSecretKey'] ?? process.env.MAILJET_SECRET_KEY ?? '',
       fromAddress: settingsMap['email.fromAddress'] ?? 'noreply@yourdomain.com',
-      fromName: settingsMap['email.fromName'] ?? 'AI Team Studio',
+      fromName: settingsMap['email.fromName'] ?? 'Codanium',
     };
 
     // Cache in Redis
@@ -118,7 +118,7 @@ export async function getEmailConfig(): Promise<EmailConfig> {
       mailjetApiKey: process.env.MAILJET_API_KEY ?? '',
       mailjetSecretKey: process.env.MAILJET_SECRET_KEY ?? '',
       fromAddress: 'noreply@yourdomain.com',
-      fromName: 'AI Team Studio',
+      fromName: 'Codanium',
     };
   }
 }

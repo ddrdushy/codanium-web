@@ -13,8 +13,8 @@ export const dynamic = 'force-dynamic';
  * Queue a git push job to push project artifacts to GitHub.
  *
  * Body: {
- *   branchName?: string;     // defaults to "ai-team-studio/delivery-{timestamp}"
- *   commitMessage?: string;  // defaults to "AI Team Studio: deliver project artifacts"
+ *   branchName?: string;     // defaults to "codanium/delivery-{timestamp}"
+ *   commitMessage?: string;  // defaults to "Codanium: deliver project artifacts"
  *   createPR?: boolean;      // defaults to true
  *   prTitle?: string;        // defaults to commitMessage
  * }
@@ -83,8 +83,8 @@ export async function POST(
     if (validationError) return validationError;
 
     const timestamp = Date.now();
-    const branchName = pushData.branchName || `ai-team-studio/delivery-${timestamp}`;
-    const commitMessage = pushData.commitMessage || 'AI Team Studio: deliver project artifacts';
+    const branchName = pushData.branchName || `codanium/delivery-${timestamp}`;
+    const commitMessage = pushData.commitMessage || 'Codanium: deliver project artifacts';
     const createPR = pushData.createPR;
     const prTitle = body.prTitle?.trim() || undefined;
 

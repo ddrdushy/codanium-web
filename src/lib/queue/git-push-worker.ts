@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Git Push Worker (BullMQ)
+// Codanium — Git Push Worker (BullMQ)
 // =============================================================================
 // Processes git push jobs by calling pushProjectToGitHub() to create a branch,
 // commit artifacts, and optionally create a PR on GitHub.

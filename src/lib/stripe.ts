@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Stripe Billing Service
+// Codanium — Stripe Billing Service
 // =============================================================================
 // Singleton Stripe client + helper functions for subscriptions, checkout,
 // and customer portal. Config reads from AdminSetting (DB → env fallback),

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Context Cache
+// Codanium — Context Cache
 // =============================================================================
 // Simple in-memory TTL cache for frequently-accessed context sources.
 // Stable sources like project_info, sdlc_stages, and agents_status rarely

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Docker Sandbox Runner
+// Codanium — Docker Sandbox Runner
 // =============================================================================
 // Executes user/agent code in isolated Docker containers with strict security:
 //   - No network access (--network=none)

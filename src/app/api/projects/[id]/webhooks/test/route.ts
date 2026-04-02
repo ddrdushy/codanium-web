@@ -65,7 +65,7 @@ export async function POST(
       actor: 'admin',
       projectId: id,
       data: {
-        message: 'This is a test webhook from AI Team Studio',
+        message: 'This is a test webhook from Codanium',
         project: { id, name: project?.name ?? 'Unknown' },
       },
     });

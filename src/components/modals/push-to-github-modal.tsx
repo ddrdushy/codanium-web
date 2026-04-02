@@ -61,7 +61,7 @@ export function PushToGitHubModal({
   // Form state
   const [branchName, setBranchName] = useState('');
   const [commitMessage, setCommitMessage] = useState(
-    'AI Team Studio: deliver project artifacts',
+    'Codanium: deliver project artifacts',
   );
   const [createPR, setCreatePR] = useState(true);
 
@@ -77,8 +77,8 @@ export function PushToGitHubModal({
   // Reset form when modal opens
   const handleOpenChange = (v: boolean) => {
     if (v) {
-      setBranchName(`ai-team-studio/delivery-${Date.now()}`);
-      setCommitMessage('AI Team Studio: deliver project artifacts');
+      setBranchName(`codanium/delivery-${Date.now()}`);
+      setCommitMessage('Codanium: deliver project artifacts');
       setCreatePR(true);
       setStatus('idle');
       setErrorMessage('');
@@ -164,7 +164,7 @@ export function PushToGitHubModal({
                     id="branch"
                     value={branchName}
                     onChange={(e) => setBranchName(e.target.value)}
-                    placeholder="ai-team-studio/delivery-..."
+                    placeholder="codanium/delivery-..."
                     className="font-mono text-xs"
                   />
                 </div>

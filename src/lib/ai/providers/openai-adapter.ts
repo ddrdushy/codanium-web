@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — OpenAI Provider Adapter
+// Codanium — OpenAI Provider Adapter
 // =============================================================================
 // Raw fetch-based adapter for the OpenAI Chat Completions API.
 // No SDK dependency — uses standard `fetch` for all HTTP calls.

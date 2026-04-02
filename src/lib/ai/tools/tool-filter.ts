@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Tool Filter
+// Codanium — Tool Filter
 // =============================================================================
 // Filters the full tool registry to only include tools an agent is authorized
 // to use, based on their canWrite authority from agent definitions.

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Code Execution API
+// Codanium — Code Execution API
 // =============================================================================
 // POST /api/projects/:id/execute — Submit code for sandboxed execution
 // GET  /api/projects/:id/execute — List recent executions

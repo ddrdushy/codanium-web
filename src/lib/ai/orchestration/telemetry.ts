@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Orchestration Telemetry
+// Codanium — Orchestration Telemetry
 // =============================================================================
 // Lightweight tracing module for the orchestration pipeline.
 // Tracks node transitions, LLM call metrics, tool execution metrics, and

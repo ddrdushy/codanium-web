@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Context Pruner
+// Codanium — Context Pruner
 // =============================================================================
 // Manages LLM context window by summarizing old conversation history.
 // Inspired by Cloudflare VibeSDK's conversation compactification:

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Outbound Webhook Dispatcher
+// Codanium — Outbound Webhook Dispatcher
 // =============================================================================
 // When an EventBus event fires, this module finds all matching webhook
 // endpoints for the project and queues delivery jobs via BullMQ.

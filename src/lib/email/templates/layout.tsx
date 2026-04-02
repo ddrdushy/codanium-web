@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Shared Email Layout
+// Codanium — Shared Email Layout
 // =============================================================================
 
 import {
@@ -28,7 +28,7 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
         <Container style={containerStyle}>
           {/* Header */}
           <Section style={headerStyle}>
-            <Text style={logoStyle}>AI Team Studio</Text>
+            <Text style={logoStyle}>Codanium</Text>
           </Section>
 
           {/* Content */}
@@ -40,7 +40,7 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
           <Hr style={hrStyle} />
           <Section style={footerStyle}>
             <Text style={footerTextStyle}>
-              AI Team Studio — AI-Powered Product Delivery OS
+              Codanium — AI-Powered Product Delivery OS
             </Text>
             <Text style={footerSubTextStyle}>
               This is an automated message. Please do not reply directly to this email.

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Webhook Signature Verification
+// Codanium — Webhook Signature Verification
 // =============================================================================
 // HMAC-SHA256 utilities for:
 //   - Verifying inbound GitHub webhook signatures

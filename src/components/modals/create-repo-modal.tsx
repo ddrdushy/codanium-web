@@ -331,7 +331,7 @@ export function CreateRepoModal({
                   id="repo-desc"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Built by AI Team Studio"
+                  placeholder="Built by Codanium"
                   className="text-xs"
                 />
               </div>

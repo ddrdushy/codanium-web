@@ -159,7 +159,7 @@ export async function POST(
       const inviter = session.user as any;
       await addEmailJob({
         to: email.toLowerCase(),
-        subject: `You're invited to join ${org.name} on AI Team Studio`,
+        subject: `You're invited to join ${org.name} on Codanium`,
         template: 'team-invitation',
         props: {
           inviterName: inviter.name ?? 'Someone',

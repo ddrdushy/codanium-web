@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Code Execution Worker (BullMQ)
+// Codanium — Code Execution Worker (BullMQ)
 // =============================================================================
 // BullMQ Worker that processes sandboxed code execution jobs.
 //

@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Webhook Delivery Job Queue (BullMQ)
+// Codanium — Webhook Delivery Job Queue (BullMQ)
 // =============================================================================
 // Mirrors email-queue.ts pattern. Dispatches outbound webhook delivery jobs
 // to the worker for async HTTP delivery to registered endpoints.

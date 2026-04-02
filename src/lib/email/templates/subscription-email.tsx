@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Subscription Change Email Template
+// Codanium — Subscription Change Email Template
 // =============================================================================
 
 import { Text, Section } from '@react-email/components';

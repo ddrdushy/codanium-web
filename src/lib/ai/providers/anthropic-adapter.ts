@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Anthropic Provider Adapter
+// Codanium — Anthropic Provider Adapter
 // =============================================================================
 // Raw fetch-based adapter for the Anthropic Messages API.
 // No SDK dependency — uses standard `fetch` for all HTTP calls.

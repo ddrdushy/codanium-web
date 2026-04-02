@@ -1026,7 +1026,7 @@ export default function ChatPage() {
                     </p>
                     <div className="flex items-center gap-2">
                       <a
-                        href={`vscode://aisensei.ai-team-studio/open?projectId=${projectId}`}
+                        href={`vscode://aisensei.codanium/open?projectId=${projectId}`}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-colors"
                       >
                         <Code2 className="w-3 h-3" /> Open in VS Code
@@ -1118,7 +1118,7 @@ export default function ChatPage() {
                     All coding, testing, and deployment runs through VS Code. You can continue using this chat for requirements, planning, and design discussions.
                   </p>
                   <p className="text-xs text-muted-foreground/60 mb-3">
-                    Open VS Code and connect the AI Team Studio extension, then retry your request.
+                    Open VS Code and connect the Codanium extension, then retry your request.
                   </p>
                   <a
                     href={vscodeRequired.deepLink}

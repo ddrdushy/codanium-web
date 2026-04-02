@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — BullMQ Redis Connection Factory
+// Codanium — BullMQ Redis Connection Factory
 // =============================================================================
 // BullMQ manages its own ioredis connections internally. This module provides
 // a ConnectionOptions factory that both Queue and Worker instances share.

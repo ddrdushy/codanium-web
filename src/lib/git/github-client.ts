@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — GitHub Client (Octokit Wrapper)
+// Codanium — GitHub Client (Octokit Wrapper)
 // =============================================================================
 // Provides typed GitHub API methods for fetching branches, pull requests, and
 // releases from a connected repository. Uses AES-256-GCM encrypted PATs stored

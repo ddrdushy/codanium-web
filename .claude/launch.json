@@ -2,17 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev",
+      "name": "codanium-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 3000,
-      "autoPort": true
-    },
-    {
-      "name": "docker",
-      "runtimeExecutable": "docker",
-      "runtimeArgs": ["compose", "logs", "-f", "app"],
-      "port": 14001
+      "port": 3000
     }
   ]
 }

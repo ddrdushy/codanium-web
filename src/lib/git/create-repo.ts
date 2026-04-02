@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — GitHub Repository Creation
+// Codanium — GitHub Repository Creation
 // =============================================================================
 // Orchestrates creating a new GitHub repository for a project, saving the
 // config, initializing the DB-backed repo, and optionally pushing initial
@@ -88,7 +88,7 @@ export async function createProjectRepo(
 
   const repo = await createRepository(client, {
     name: repoName,
-    description: description ?? project.description ?? `${project.name} — built by AI Team Studio`,
+    description: description ?? project.description ?? `${project.name} — built by Codanium`,
     isPrivate,
     autoInit: true,
     org,
@@ -135,8 +135,8 @@ export async function createProjectRepo(
       if (artifactCount > 0 && (await isRedisAvailable())) {
         pushJobId = await addGitPushJob({
           projectId,
-          branchName: `ai-team-studio/initial-delivery-${Date.now()}`,
-          commitMessage: 'Initial delivery from AI Team Studio',
+          branchName: `codanium/initial-delivery-${Date.now()}`,
+          commitMessage: 'Initial delivery from Codanium',
           createPR: true,
           prTitle: `🚀 Initial delivery: ${project.name}`,
           triggeredBy,

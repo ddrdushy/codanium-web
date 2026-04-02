@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — API Key Service
+// Codanium — API Key Service
 // =============================================================================
 // Generate, hash, and validate API keys. Keys use SHA-256 hashing (same
 // pattern as email tokens in src/lib/email/index.ts).

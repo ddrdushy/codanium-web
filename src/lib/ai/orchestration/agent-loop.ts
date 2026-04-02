@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Agent Loop
+// Codanium — Agent Loop
 // =============================================================================
 // Custom async-generator orchestration loop that replaces LangGraph.
 // Implements the full pipeline: guardrails -> routing -> context -> LLM streaming
@@ -524,8 +524,8 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         type: 'vscode_required',
         data: {
           agent: agentLabel,
-          message: `Development requires VS Code. Please open VS Code with the AI Team Studio extension connected to this project, then try again.`,
-          deepLink: `vscode://ai-team-studio/resume?projectId=${input.projectId}`,
+          message: `Development requires VS Code. Please open VS Code with the Codanium extension connected to this project, then try again.`,
+          deepLink: `vscode://codanium/resume?projectId=${input.projectId}`,
         },
       };
       if (currentAgent !== VSCODE_REQUIRED_SENTINEL) {
@@ -1159,9 +1159,9 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             type: 'info',
             data: {
               title: 'Development Starting',
-              message: 'Install the AI Team Studio VS Code extension to see generated code in real-time.',
+              message: 'Install the Codanium VS Code extension to see generated code in real-time.',
               action: 'Open VS Code',
-              actionUrl: 'vscode:extension/ai-team-studio.ai-team-studio',
+              actionUrl: 'vscode:extension/codanium.codanium',
             },
           };
         }

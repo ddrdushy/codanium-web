@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — DB-Backed Repository Manager
+// Codanium — DB-Backed Repository Manager
 // =============================================================================
 // Manages Git-like version control using PostgreSQL tables instead of
 // filesystem Git repos. Each project has a "main" branch, and each Kanban

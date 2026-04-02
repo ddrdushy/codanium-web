@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Orchestration Worker (BullMQ)
+// Codanium — Orchestration Worker (BullMQ)
 // =============================================================================
 // BullMQ Worker that processes background orchestration jobs. Mirrors the logic
 // in task-processor.ts but is driven by BullMQ instead of PostgreSQL polling.

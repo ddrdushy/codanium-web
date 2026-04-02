@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Tool Executor
+// Codanium — Tool Executor
 // =============================================================================
 // Central execution engine for all tool calls. Takes a ToolCall, validates
 // the agent's authority, executes the tool, and returns a structured result.
@@ -268,7 +268,7 @@ async function executeToolInternal(
       if (!project?.gitTokenEncrypted || !project?.gitRepoOwner || !project?.gitRepoName) {
         return { error: 'Git integration is not configured for this project. Ask the user to connect a GitHub repository in Project Settings.' };
       }
-      const branchName = `ai-team-studio/agent-${Date.now()}`;
+      const branchName = `codanium/agent-${Date.now()}`;
       const result = await pushProjectToGitHub({
         projectId,
         branchName,
@@ -404,10 +404,11 @@ async function handleCreateCard(
     if (agent) ownerAgentId = agent.id;
   }
 
-  // ── Semantic dedup: check for cards with similar titles (>70% word overlap) ────
+  // ── Semantic dedup: check for cards with similar titles ────
   const normalizeCardTitle = (title: string): string =>
     title
-      .replace(/^(EPIC|Feature|Task|Bug|Story)\s*:\s*/i, '')
+      .replace(/^(EPIC|Feature|Task|Bug|Story|Card|Implement|Create|Add|Build|Setup|Set up)\s*[:—-]?\s*/i, '')
+      .replace(/[^a-z0-9\s]/gi, '')
       .toLowerCase()
       .trim();
 
@@ -425,18 +426,21 @@ async function handleCreateCard(
       const existingWords = normalizedExisting.split(/\s+/).filter(w => w.length > 2);
       if (existingWords.length === 0) continue;
 
-      // Calculate word overlap
+      // Strategy 1: Word overlap (Jaccard similarity)
       const newSet = new Set(newWords);
       const existingSet = new Set(existingWords);
       let overlap = 0;
       for (const word of newSet) {
         if (existingSet.has(word)) overlap++;
       }
-      const maxLen = Math.max(newSet.size, existingSet.size);
-      const similarity = maxLen > 0 ? overlap / maxLen : 0;
+      const unionSize = new Set([...newSet, ...existingSet]).size;
+      const jaccardSimilarity = unionSize > 0 ? overlap / unionSize : 0;
 
-      if (similarity > 0.7) {
-        console.log(`[ToolExecutor] Semantic dedup: "${args.title}" ~= "${card.title}" (${(similarity * 100).toFixed(0)}% overlap)`);
+      // Strategy 2: Substring containment (catches "User Auth" vs "User Authentication Module")
+      const containsMatch = normalizedNewTitle.includes(normalizedExisting) || normalizedExisting.includes(normalizedNewTitle);
+
+      if (jaccardSimilarity > 0.5 || containsMatch) {
+        console.log(`[ToolExecutor] Semantic dedup: "${args.title}" ~= "${card.title}" (jaccard=${(jaccardSimilarity * 100).toFixed(0)}%, contains=${containsMatch})`);
         return { cardId: card.id, title: card.title, state: card.state, requirementIds, deduplicated: true };
       }
     }

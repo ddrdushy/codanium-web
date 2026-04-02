@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Worker Entrypoint
+// Codanium — Worker Entrypoint
 // =============================================================================
 // Standalone Node.js process that runs BullMQ workers for background job
 // processing. This is NOT a Next.js application — it is a plain Node script
@@ -24,7 +24,7 @@ import { createWebhookWorker } from './webhook-worker';
 import { createCodeExecutionWorker } from './code-execution-worker';
 
 async function main() {
-  console.log('AI Team Studio — Worker starting...');
+  console.log('Codanium — Worker starting...');
 
   // Initialize Redis pub/sub for cross-container event propagation
   await eventBus.initRedisSubscriber();
@@ -63,7 +63,7 @@ async function main() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
-  console.log('AI Team Studio — Worker running, listening for jobs...');
+  console.log('Codanium — Worker running, listening for jobs...');
 }
 
 main().catch((err) => {

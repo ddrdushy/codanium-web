@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — LLM Provider Type System
+// Codanium — LLM Provider Type System
 // =============================================================================
 // Core interfaces for the multi-provider LLM architecture.
 // Every LLM adapter (OpenAI, Anthropic, Ollama, mock, etc.)

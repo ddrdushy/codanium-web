@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Password Reset Email Template
+// Codanium — Password Reset Email Template
 // =============================================================================
 
 import { Text, Button, Section } from '@react-email/components';
@@ -13,7 +13,7 @@ interface PasswordResetEmailProps {
 
 export function PasswordResetEmail({ name, resetUrl }: PasswordResetEmailProps) {
   return (
-    <EmailLayout preview="Reset your AI Team Studio password">
+    <EmailLayout preview="Reset your Codanium password">
       <Text style={headingStyle}>Password Reset Request</Text>
 
       <Text style={textStyle}>
@@ -21,7 +21,7 @@ export function PasswordResetEmail({ name, resetUrl }: PasswordResetEmailProps) 
       </Text>
 
       <Text style={textStyle}>
-        We received a request to reset your password for your AI Team Studio
+        We received a request to reset your password for your Codanium
         account. Click the button below to set a new password.
       </Text>
 

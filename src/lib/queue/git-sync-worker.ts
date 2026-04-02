@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Git Sync Worker (BullMQ)
+// Codanium — Git Sync Worker (BullMQ)
 // =============================================================================
 // Processes git sync jobs by calling the sync logic to fetch from GitHub
 // and upsert into Prisma models.

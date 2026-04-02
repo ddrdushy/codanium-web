@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Team Studio — Cross-Artifact Consistency Analyzer
+// Codanium — Cross-Artifact Consistency Analyzer
 // =============================================================================
 // Validates consistency across BRD, SDD, constitution, task cards, and SDLC
 // stages BEFORE implementation begins. Inspired by spec-kit /speckit.analyze.

@@ -78,7 +78,7 @@ export function AuthIllustration() {
 
       {/* Brand text at bottom */}
       <div className="absolute bottom-8 left-8 right-8">
-        <p className="text-lg font-bold text-foreground/80">AI Team Studio</p>
+        <p className="text-lg font-bold text-foreground/80">Codanium</p>
         <p className="text-sm text-muted-foreground/60 mt-1">
           Ship products 10x faster with 23 AI agents working alongside your team.
         </p>
