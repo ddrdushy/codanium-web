@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   Bot,
   ScanEye,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -52,6 +53,7 @@ const navSections: NavSection[] = [
       { label: 'Audit Log', icon: ScrollText, href: '/admin/audit' },
       { label: 'System Health', icon: Activity, href: '/admin/health' },
       { label: 'Guardrails', icon: ShieldAlert, href: '/admin/guardrails' },
+      { label: 'Feedback', icon: MessageSquare, href: '/admin/feedback' },
       { label: 'Settings', icon: Settings, href: '/admin/settings' },
     ],
   },

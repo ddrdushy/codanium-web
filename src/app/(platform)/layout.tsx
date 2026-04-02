@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useNotificationStream } from '@/lib/hooks/use-notification-stream';
+import { FeedbackButton } from '@/components/feedback/FeedbackButton';
 
 function NotificationStreamProvider({ children }: { children: React.ReactNode }) {
   // Connect to SSE notification stream — runs silently in background
@@ -80,6 +81,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   return (
     <NotificationStreamProvider>
       {children}
+      <FeedbackButton />
     </NotificationStreamProvider>
   );
 }

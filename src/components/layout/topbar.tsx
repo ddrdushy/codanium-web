@@ -201,6 +201,7 @@ export function Topbar() {
         {/* User Avatar + Dropdown */}
         <div className="relative" ref={menuRef}>
           <button
+            data-tour="user-menu"
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-foreground/[0.04] transition-all"
           >

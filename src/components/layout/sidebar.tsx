@@ -21,15 +21,15 @@ import { CreateProjectModal } from '@/components/modals/create-project-modal';
 import { usePreviewStore } from '@/hooks/use-preview';
 
 const getNavItems = (projectId: string) => [
-  { label: 'Chat', icon: MessageSquare, href: `/project/${projectId}/chat`, section: 'main' },
+  { label: 'Chat', icon: MessageSquare, href: `/project/${projectId}/chat`, section: 'main', tourId: 'chat' },
   { label: 'Overview', icon: LayoutDashboard, href: `/project/${projectId}`, section: 'main' },
-  { label: 'Work Board', icon: Kanban, href: `/project/${projectId}/board`, section: 'main' },
+  { label: 'Work Board', icon: Kanban, href: `/project/${projectId}/board`, section: 'main', tourId: 'board' },
   { label: 'My Decisions', icon: Scale, href: `/project/${projectId}/decisions`, section: 'main' },
-  { label: 'AI Team', icon: Bot, href: `/project/${projectId}/agents`, section: 'main' },
+  { label: 'AI Team', icon: Bot, href: `/project/${projectId}/agents`, section: 'main', tourId: 'agents' },
   { label: 'Team Office', icon: Building2, href: `/project/${projectId}/office`, section: 'main' },
   { label: 'Live Preview', icon: Play, href: `__preview__`, section: 'deliverables' },
   { label: 'Generated Code', icon: Code2, href: `/project/${projectId}/code`, section: 'deliverables' },
-  { label: 'Documents', icon: FileText, href: `/project/${projectId}/docs`, section: 'deliverables' },
+  { label: 'Documents', icon: FileText, href: `/project/${projectId}/docs`, section: 'deliverables', tourId: 'documents' },
   { label: 'Designs', icon: PenTool, href: `/project/${projectId}/wireframes`, section: 'deliverables' },
   { label: 'Delivery Progress', icon: Workflow, href: `/project/${projectId}/pipeline`, section: 'reports' },
   { label: 'Code & Releases', icon: GitBranch, href: `/project/${projectId}/git`, section: 'reports' },
@@ -295,6 +295,7 @@ export function Sidebar() {
                 ) : (
                   <Link
                     href={item.href}
+                    {...((item as any).tourId ? { 'data-tour': (item as any).tourId } : {})}
                     className={cn(
                       'flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150 group relative',
                       isActive

@@ -58,6 +58,7 @@ model User {
   preferences     UserPreferences?
   creditWallet    CreditWallet?
   llmUsages       LLMUsage[]
+  feedback        Feedback[]
 
   @@map("users")
 }
@@ -142,12 +143,35 @@ model UserPreferences {
   notifyAttention     Boolean  @default(true)
   notifyDailySummary  Boolean  @default(false)
   notifyBudgetAlerts  Boolean  @default(true)
+  tutorialCompleted   Boolean  @default(false)
+  tutorialStep        Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_preferences")
+}
+
+// ─── Feedback ──────────────────────────────────────────────────────────────
+
+model Feedback {
+  id          String   @id @default(cuid())
+  userId      String
+  category    String   // BUG, FEATURE, IMPROVEMENT, GENERAL
+  rating      Int?     // 1-5
+  title       String
+  description String
+  pageUrl     String?
+  projectId   String?
+  status      String   @default("NEW") // NEW, IN_REVIEW, RESOLVED, CLOSED
+  adminReply  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("feedback")
 }
 
 // ─── Projects ───────────────────────────────────────────────────────────────

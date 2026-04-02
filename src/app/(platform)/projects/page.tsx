@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { TourGuide } from '@/components/tutorial/TourGuide';
 import {
   Plus, Search, Zap, Bot, Kanban, Clock, CheckCircle2,
   Pause, Archive, TrendingUp, ArrowRight, BarChart3,
@@ -217,6 +218,9 @@ export default function ProjectsPage() {
         </div>
       </header>
 
+      {/* Tutorial Tour Guide */}
+      <TourGuide />
+
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Page Header */}
         <motion.div
@@ -230,7 +234,7 @@ export default function ProjectsPage() {
               {projects.length} projects · {activeCount} active · {totalAgents} AI specialists assigned
             </p>
           </div>
-          <Button onClick={() => setShowCreateModal(true)} className="bg-amber text-background hover:bg-amber/90 font-semibold h-10 px-5">
+          <Button data-tour="new-project" onClick={() => setShowCreateModal(true)} className="bg-amber text-background hover:bg-amber/90 font-semibold h-10 px-5">
             <Plus className="w-4 h-4 mr-2" />
             New Project
           </Button>
