@@ -389,7 +389,7 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     if (!isLiveData) {
-      setSaveError('Cannot save — not authenticated. Please log in as admin first.');
+      setSaveError('Cannot save — data not loaded. Please refresh or check your session.');
       setSaveStatus('error');
       return;
     }

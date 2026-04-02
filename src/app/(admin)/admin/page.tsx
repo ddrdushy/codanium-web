@@ -95,8 +95,9 @@ export default function AdminDashboardPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [activities, setActivities] = useState<any[]>(mockRecentActivity);
   const [billingMetrics, setBillingMetrics] = useState(mockBillingMetrics);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [isLiveData, setIsLiveData] = useState(false);
+  const [apiError, setApiError] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [emailAnalytics, setEmailAnalytics] = useState<any>(null);
 
@@ -123,7 +124,12 @@ export default function AdminDashboardPage() {
       ),
       fetchRecentActivity(10).then(setActivities),
       refreshEmailAnalytics(),
-    ]).finally(() => setLoading(false));
+    ]).then((results) => {
+      // If ALL API calls failed, mark as error
+      if (results.every((r) => r.status === 'rejected')) {
+        setApiError(true);
+      }
+    }).finally(() => setLoading(false));
   }, []);
 
   // ─── Revenue trend: aggregate transactions by week ───
@@ -198,14 +204,14 @@ export default function AdminDashboardPage() {
       <motion.div variants={itemVariants}>
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          {!isLiveData && (
+          {!isLiveData && !loading && (
             <span className="text-[10px] font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
-              Demo Data
+              {apiError ? 'API Error' : 'Demo Data'}
             </span>
           )}
         </div>
         <p className="text-sm text-muted-foreground mt-1">
-          {isLiveData ? 'Platform overview and key performance indicators' : 'Showing sample data — log in as admin for live metrics'}
+          {loading ? 'Loading dashboard data...' : isLiveData ? 'Platform overview and key performance indicators' : apiError ? 'Could not load data from API. Check server logs.' : 'Showing sample data — log in as admin for live metrics'}
         </p>
       </motion.div>
 
