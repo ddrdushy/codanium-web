@@ -969,12 +969,6 @@ export default function ChatPage() {
                       </div>
                     )}
 
-                    {/* Live Activity Log — shows tool calls in real-time */}
-                    <LiveActivityLog
-                      activities={activeToolActivities}
-                      pipelineProgress={activePipelineProgress}
-                    />
-
                     {activeArtifacts.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {activeArtifacts.map((art, j) => (
