@@ -82,11 +82,17 @@ jobs:
             fi
 
             echo "=== Issuing SSL certificate ==="
-            timeout 120 docker compose run --rm certbot certonly --webroot \
+            # Use standalone certbot with docker (not compose) to avoid volume issues
+            timeout 120 docker run --rm \
+              -v codanium_certbot_www:/var/www/certbot \
+              -v codanium_certbot_conf:/etc/letsencrypt \
+              certbot/certbot:latest certonly --webroot \
               -w /var/www/certbot \
               -d codanium.com -d www.codanium.com -d app.codanium.com \
               --email admin@codanium.com --agree-tos --no-eff-email \
-              --keep-until-expiring --non-interactive 2>&1 || echo "Certbot: skipped or failed (non-critical)"
+              --force-renewal --non-interactive 2>&1 \
+              && echo "Certbot: success" \
+              || echo "Certbot: skipped or failed (non-critical)"
 
             echo "=== Checking for SSL cert ==="
             if docker compose exec -T nginx test -f /etc/letsencrypt/live/codanium.com/fullchain.pem 2>/dev/null; then
