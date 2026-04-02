@@ -63,6 +63,18 @@ jobs:
             ENVEOF
             sed -i 's/^            //' .env
 
+            echo "=== Removing orphan containers ==="
+            # Stop any leftover containers from old compose configs (e.g. ats-app)
+            docker compose down --remove-orphans 2>/dev/null || true
+            # Also force-remove the specific known orphan that blocks port 14001
+            docker rm -f ats-app 2>/dev/null || true
+
+            echo "=== Starting infrastructure services ==="
+            docker compose up -d db redis
+
+            echo "=== Waiting for DB and Redis to be healthy ==="
+            sleep 5
+
             echo "=== Building new image ==="
             docker compose build --no-cache
 
