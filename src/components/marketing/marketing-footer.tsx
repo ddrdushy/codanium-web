@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Zap, Heart } from 'lucide-react';
+import Image from 'next/image';
+import { Heart } from 'lucide-react';
 
 interface FooterLink {
   label: string;
@@ -127,10 +128,18 @@ export function MarketingFooter() {
           {/* Brand column */}
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-2.5 mb-4 group">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber/20 group-hover:shadow-amber/30 transition-shadow">
-                <Zap className="h-4.5 w-4.5 text-white" />
+              <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg">
+                <div className="absolute inset-0 -bottom-[65%]">
+                  <Image
+                    src="/codanium-icon.png"
+                    alt="Codanium"
+                    width={128}
+                    height={128}
+                    className="h-full w-full object-cover object-top"
+                  />
+                </div>
               </div>
-              <span className="text-lg font-bold tracking-tight text-foreground">Codanium</span>
+              <span className="text-lg font-extrabold tracking-tight text-foreground uppercase" style={{ fontFamily: 'var(--font-brand), system-ui' }}>Codanium</span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed mb-6">
               Your Vibe, Multiplied. Describe what you need — AI agents build, test, and launch it.

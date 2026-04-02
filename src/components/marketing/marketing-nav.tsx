@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Download, ChevronDown, BookOpen, HelpCircle, Users, Map } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,17 +24,19 @@ const resourceLinks = [
 
 function CodaniumLogo() {
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="32" height="32" rx="8" fill="url(#grad)" />
-      <path d="M9 16C9 12.134 12.134 9 16 9V9C19.866 9 23 12.134 23 16V16C23 19.866 19.866 23 16 23V23" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-      <circle cx="16" cy="16" r="3" fill="white"/>
-      <defs>
-        <linearGradient id="grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#F59E0B"/>
-          <stop offset="1" stopColor="#EA580C"/>
-        </linearGradient>
-      </defs>
-    </svg>
+    <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg">
+      {/* Crop to show only the head mark (top ~60% of the image) */}
+      <div className="absolute inset-0 -bottom-[65%]">
+        <Image
+          src="/codanium-icon.png"
+          alt="Codanium"
+          width={128}
+          height={128}
+          className="h-full w-full object-cover object-top"
+          priority
+        />
+      </div>
+    </div>
   );
 }
 
@@ -119,7 +122,7 @@ export function MarketingNav() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
           <CodaniumLogo />
-          <span className="text-lg font-bold tracking-tight text-foreground">
+          <span className="text-lg font-extrabold tracking-tight text-foreground uppercase" style={{ fontFamily: 'var(--font-brand), system-ui' }}>
             Codanium
           </span>
         </Link>
