@@ -152,7 +152,7 @@ export default function SettingsPage() {
   const [registeringWebhooks, setRegisteringWebhooks] = useState(false);
   const [registerWebhookStatus, setRegisterWebhookStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [registerWebhookMessage, setRegisterWebhookMessage] = useState('');
-  const [emailAnalytics, setEmailAnalytics] = useState<any>(null);
+  // emailAnalytics moved to Admin Dashboard
 
   // ─── Stripe Configuration state ───
   const [stripeEnabled, setStripeEnabled] = useState(false);
@@ -397,9 +397,8 @@ export default function SettingsPage() {
     setSaveStatus('idle');
     setSaveError('');
     try {
-      await saveAdminSettings({
+      const settingsToSave: Record<string, unknown> = {
         'llm.defaultProvider': defaultProvider,
-        'llm.defaultModel': defaultModel,
         'llm.baseUrl': baseUrl,
         'llm.apiKey': llmApiKey,
         'llm.maxTokens': Number(maxTokens),
@@ -420,7 +419,12 @@ export default function SettingsPage() {
         'billing.markupPercent': Number(markupPercent),
         'billing.freeCreditsAmount': Number(freeCreditsAmount),
         'billing.freeCreditsExpiryDays': Number(freeCreditsExpiryDays),
-      });
+      };
+      // Only save model if it's not empty — prevents accidental clearing
+      if (defaultModel.trim()) {
+        settingsToSave['llm.defaultModel'] = defaultModel;
+      }
+      await saveAdminSettings(settingsToSave);
       setSaveStatus('saved');
       setSaveError('');
       setTimeout(() => setSaveStatus('idle'), 3000);
@@ -1551,138 +1555,7 @@ export default function SettingsPage() {
         </div>
       </motion.div>
 
-      {/* Email Analytics */}
-      <motion.div
-        variants={itemVariants}
-        className="glass-card rounded-xl border border-border/50 p-6"
-      >
-        <SectionHeader
-          icon={<Mail className="w-4 h-4" />}
-          title="Email Delivery Analytics"
-          subtitle="Real-time event tracking from Mailjet"
-          color="#8b5cf6"
-        />
-        {!emailAnalytics ? (
-          <div className="flex justify-center py-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  const res = await fetch('/api/admin/email/analytics?days=30');
-                  if (res.ok) {
-                    const data = await res.json();
-                    setEmailAnalytics(data);
-                  }
-                } catch {}
-              }}
-              className="gap-1.5"
-            >
-              Load Analytics
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Summary stats */}
-            <div className="grid grid-cols-4 gap-3">
-              {[
-                { label: 'Sent', key: 'SENT', color: '#10b981' },
-                { label: 'Opened', key: 'OPEN', color: '#3b82f6' },
-                { label: 'Clicked', key: 'CLICK', color: '#8b5cf6' },
-                { label: 'Bounced', key: 'BOUNCE', color: '#ef4444' },
-              ].map(({ label, key, color }) => (
-                <div
-                  key={key}
-                  className="p-3 rounded-lg border border-border/30 bg-foreground/[0.02] text-center"
-                >
-                  <div className="text-2xl font-bold" style={{ color }}>
-                    {emailAnalytics.summary[key] ?? 0}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Additional stats row */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: 'Spam', key: 'SPAM', color: '#f59e0b' },
-                { label: 'Blocked', key: 'BLOCKED', color: '#ef4444' },
-                { label: 'Unsub', key: 'UNSUB', color: '#6b7280' },
-              ].map(({ label, key, color }) => (
-                <div
-                  key={key}
-                  className="p-2.5 rounded-lg border border-border/30 bg-foreground/[0.02] text-center"
-                >
-                  <div className="text-lg font-bold" style={{ color }}>
-                    {emailAnalytics.summary[key] ?? 0}
-                  </div>
-                  <div className="text-xs text-muted-foreground">{label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Recent events */}
-            {emailAnalytics.recentEvents?.length > 0 && (
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-medium text-muted-foreground">Recent Events</h4>
-                <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-border/30 p-2">
-                  {emailAnalytics.recentEvents.slice(0, 20).map((evt: any) => (
-                    <div
-                      key={evt.id}
-                      className="flex items-center justify-between text-xs py-1.5 px-2 rounded hover:bg-foreground/[0.02]"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
-                          style={{
-                            backgroundColor:
-                              evt.event === 'SENT' ? '#10b98120' :
-                              evt.event === 'OPEN' ? '#3b82f620' :
-                              evt.event === 'CLICK' ? '#8b5cf620' :
-                              evt.event === 'BOUNCE' ? '#ef444420' :
-                              evt.event === 'SPAM' ? '#f59e0b20' : '#6b728020',
-                            color:
-                              evt.event === 'SENT' ? '#10b981' :
-                              evt.event === 'OPEN' ? '#3b82f6' :
-                              evt.event === 'CLICK' ? '#8b5cf6' :
-                              evt.event === 'BOUNCE' ? '#ef4444' :
-                              evt.event === 'SPAM' ? '#f59e0b' : '#6b7280',
-                          }}
-                        >
-                          {evt.event}
-                        </span>
-                        <span className="truncate text-muted-foreground">{evt.email}</span>
-                        {evt.bounceError && (
-                          <span className="text-red-400 truncate text-[10px]">{evt.bounceError}</span>
-                        )}
-                      </div>
-                      <span className="text-muted-foreground/50 shrink-0 ml-2">
-                        {new Date(evt.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Refresh button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={async () => {
-                try {
-                  const res = await fetch('/api/admin/email/analytics?days=30');
-                  if (res.ok) setEmailAnalytics(await res.json());
-                } catch {}
-              }}
-              className="text-xs text-muted-foreground"
-            >
-              Refresh
-            </Button>
-          </div>
-        )}
-      </motion.div>
+      {/* Email Analytics — moved to Admin Dashboard */}
 
       {/* Stripe Billing */}
       <motion.div

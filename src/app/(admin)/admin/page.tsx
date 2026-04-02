@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { DollarSign, Users, Cpu, Bot, Database, ListChecks, Sparkles } from 'lucide-react';
+import { DollarSign, Users, Cpu, Bot, Database, ListChecks, Sparkles, Mail, RefreshCw } from 'lucide-react';
 import {
   AreaChart,
   Area,
@@ -97,6 +97,15 @@ export default function AdminDashboardPage() {
   const [billingMetrics, setBillingMetrics] = useState(mockBillingMetrics);
   const [, setLoading] = useState(true);
   const [isLiveData, setIsLiveData] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [emailAnalytics, setEmailAnalytics] = useState<any>(null);
+
+  const refreshEmailAnalytics = async () => {
+    try {
+      const res = await fetch('/api/admin/email/analytics?days=30');
+      if (res.ok) setEmailAnalytics(await res.json());
+    } catch { /* silent */ }
+  };
 
   useEffect(() => {
     const thirtyDaysAgo = new Date();
@@ -113,6 +122,7 @@ export default function AdminDashboardPage() {
         ({ usage }) => setLlmUsage(usage)
       ),
       fetchRecentActivity(10).then(setActivities),
+      refreshEmailAnalytics(),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -524,6 +534,68 @@ export default function AdminDashboardPage() {
               </motion.div>
             ))}
           </div>
+        </motion.div>
+
+        {/* Email Delivery Analytics */}
+        <motion.div variants={itemVariants} className="glass-card rounded-xl border border-border/50 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-500/10">
+                <Mail className="w-4 h-4 text-violet-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Email Delivery</h3>
+                <p className="text-xs text-muted-foreground">Last 30 days via Mailjet</p>
+              </div>
+            </div>
+            <button
+              onClick={refreshEmailAnalytics}
+              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {emailAnalytics ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: 'Sent', key: 'SENT', color: '#10b981' },
+                  { label: 'Opened', key: 'OPEN', color: '#3b82f6' },
+                  { label: 'Clicked', key: 'CLICK', color: '#8b5cf6' },
+                  { label: 'Bounced', key: 'BOUNCE', color: '#ef4444' },
+                ].map(({ label, key, color }) => (
+                  <div key={key} className="p-2.5 rounded-lg border border-border/30 bg-foreground/[0.02] text-center">
+                    <div className="text-xl font-bold" style={{ color }}>{emailAnalytics.summary[key] ?? 0}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{label}</div>
+                  </div>
+                ))}
+              </div>
+              {emailAnalytics.recentEvents?.length > 0 && (
+                <div className="max-h-36 overflow-y-auto space-y-0.5 rounded-lg border border-border/30 p-1.5">
+                  {emailAnalytics.recentEvents.slice(0, 10).map((evt: any) => (
+                    <div key={evt.id} className="flex items-center justify-between text-[11px] py-1 px-1.5 rounded hover:bg-foreground/[0.02]">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="px-1 py-0.5 rounded text-[9px] font-medium shrink-0"
+                          style={{
+                            backgroundColor: evt.event === 'SENT' ? '#10b98120' : evt.event === 'OPEN' ? '#3b82f620' : evt.event === 'CLICK' ? '#8b5cf620' : evt.event === 'BOUNCE' ? '#ef444420' : '#6b728020',
+                            color: evt.event === 'SENT' ? '#10b981' : evt.event === 'OPEN' ? '#3b82f6' : evt.event === 'CLICK' ? '#8b5cf6' : evt.event === 'BOUNCE' ? '#ef4444' : '#6b7280',
+                          }}
+                        >
+                          {evt.event}
+                        </span>
+                        <span className="truncate text-muted-foreground">{evt.email}</span>
+                      </div>
+                      <span className="text-muted-foreground/50 shrink-0 ml-2">{new Date(evt.timestamp).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Loading email analytics...</p>
+          )}
         </motion.div>
       </div>
     </motion.div>
