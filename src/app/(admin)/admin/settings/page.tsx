@@ -17,6 +17,11 @@ import {
   Bot,
   X,
   Plus,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  Save,
+  GripVertical,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -193,6 +198,54 @@ export default function SettingsPage() {
   const [fbTestStatus, setFbTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [fbTestMessage, setFbTestMessage] = useState('');
   const [fbTestingLlm, setFbTestingLlm] = useState(false);
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [editingValues, setEditingValues] = useState<{ defaultModel: string; apiKey: string }>({ defaultModel: '', apiKey: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const moveProvider = async (index: number, direction: 'up' | 'down') => {
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= fallbackProviders.length) return;
+    const updated = [...fallbackProviders];
+    // Swap priorities
+    const tempPriority = updated[index].priority;
+    updated[index] = { ...updated[index], priority: updated[swapIndex].priority };
+    updated[swapIndex] = { ...updated[swapIndex], priority: tempPriority };
+    // Sort by priority
+    updated.sort((a, b) => a.priority - b.priority);
+    setFallbackProviders(updated);
+    try {
+      await fetch('/api/admin/llm-providers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: updated.map((p) => ({ id: p.id, priority: p.priority })),
+        }),
+      });
+    } catch { /* silent */ }
+  };
+
+  const saveProviderEdit = async (fp: typeof fallbackProviders[0]) => {
+    setSavingEdit(true);
+    try {
+      const res = await fetch('/api/admin/llm-providers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: fp.id,
+          defaultModel: editingValues.defaultModel,
+          ...(editingValues.apiKey ? { apiKey: editingValues.apiKey } : {}),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFallbackProviders((prev) =>
+          prev.map((p) => (p.id === fp.id ? { ...p, ...data } : p))
+        );
+        setEditingProviderId(null);
+      }
+    } catch { /* silent */ }
+    setSavingEdit(false);
+  };
 
   // ─── Agent Override state ───
   const [agentOverrides, setAgentOverrides] = useState<Array<{ id?: string; agentShortName: string; provider: string; model: string; baseUrl: string }>>([]);
@@ -661,20 +714,40 @@ export default function SettingsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b border-border/30">
-                    <th className="text-left py-2 pr-2 font-medium">Priority</th>
+                    <th className="w-16 text-left py-2 pr-1 font-medium">Order</th>
                     <th className="text-left py-2 pr-2 font-medium">Provider</th>
                     <th className="text-left py-2 pr-2 font-medium">Model</th>
                     <th className="text-left py-2 pr-2 font-medium">Status</th>
-                    <th className="w-8"></th>
+                    <th className="w-24"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {fallbackProviders.map((fp) => (
-                    <tr key={fp.id} className="border-b border-border/20 last:border-0">
-                      <td className="py-2 pr-2">
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-orange-500/10 text-orange-500 text-xs font-bold">
-                          {fp.priority}
-                        </span>
+                  {fallbackProviders.map((fp, idx) => (
+                    <tr key={fp.id} className="border-b border-border/20 last:border-0 group">
+                      <td className="py-2 pr-1">
+                        <div className="flex items-center gap-0.5">
+                          <div className="flex flex-col">
+                            <button
+                              onClick={() => moveProvider(idx, 'up')}
+                              disabled={idx === 0}
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Move up"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => moveProvider(idx, 'down')}
+                              disabled={idx === fallbackProviders.length - 1}
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Move down"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-orange-500/10 text-orange-500 text-xs font-bold">
+                            {fp.priority}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-2 pr-2">
                         <div>
@@ -685,7 +758,26 @@ export default function SettingsPage() {
                         </div>
                       </td>
                       <td className="py-2 pr-2">
-                        <span className="font-mono text-xs bg-muted px-2 py-1 rounded">{fp.defaultModel}</span>
+                        {editingProviderId === fp.id ? (
+                          <div className="space-y-1">
+                            <input
+                              type="text"
+                              value={editingValues.defaultModel}
+                              onChange={(e) => setEditingValues((prev) => ({ ...prev, defaultModel: e.target.value }))}
+                              className="w-48 h-7 px-2 rounded border border-border bg-background text-xs font-mono focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                              placeholder="Model name"
+                            />
+                            <input
+                              type="password"
+                              value={editingValues.apiKey}
+                              onChange={(e) => setEditingValues((prev) => ({ ...prev, apiKey: e.target.value }))}
+                              className="w-48 h-7 px-2 rounded border border-border bg-background text-xs font-mono focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                              placeholder="New API key (leave blank to keep)"
+                            />
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs bg-muted px-2 py-1 rounded">{fp.defaultModel}</span>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
                         <button
@@ -695,10 +787,10 @@ export default function SettingsPage() {
                             );
                             setFallbackProviders(updated);
                             try {
-                              await fetch(`/api/admin/llm-providers`, {
-                                method: 'POST',
+                              await fetch('/api/admin/llm-providers', {
+                                method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ ...fp, isActive: !fp.isActive }),
+                                body: JSON.stringify({ id: fp.id, isActive: !fp.isActive }),
                               });
                             } catch { /* silent */ }
                           }}
@@ -712,18 +804,52 @@ export default function SettingsPage() {
                         </button>
                       </td>
                       <td className="py-2">
-                        <button
-                          onClick={async () => {
-                            setFallbackProviders((prev) => prev.filter((p) => p.id !== fp.id));
-                            try {
-                              await fetch(`/api/admin/llm-providers?id=${fp.id}`, { method: 'DELETE' });
-                            } catch { /* silent */ }
-                          }}
-                          className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
-                          title="Remove provider"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {editingProviderId === fp.id ? (
+                            <>
+                              <button
+                                onClick={() => saveProviderEdit(fp)}
+                                disabled={savingEdit}
+                                className="p-1 rounded hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-500 transition-colors"
+                                title="Save changes"
+                              >
+                                {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                              </button>
+                              <button
+                                onClick={() => setEditingProviderId(null)}
+                                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditingProviderId(fp.id ?? null);
+                                  setEditingValues({ defaultModel: fp.defaultModel, apiKey: '' });
+                                }}
+                                className="p-1 rounded hover:bg-orange-500/10 text-muted-foreground hover:text-orange-500 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Edit model & API key"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  setFallbackProviders((prev) => prev.filter((p) => p.id !== fp.id));
+                                  try {
+                                    await fetch(`/api/admin/llm-providers?id=${fp.id}`, { method: 'DELETE' });
+                                  } catch { /* silent */ }
+                                }}
+                                className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Remove provider"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

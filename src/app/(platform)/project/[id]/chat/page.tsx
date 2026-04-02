@@ -1008,7 +1008,7 @@ export default function ChatPage() {
               </motion.div>
             )}
 
-            {activeError && !showStreamBubble && (
+            {activeError && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-xs text-red-400/70 bg-red-500/[0.06] border border-red-500/15 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-3 h-3 shrink-0" /> {activeError}
               </motion.div>

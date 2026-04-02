@@ -101,8 +101,23 @@ export async function POST(
           data: { status: 'COMPLETED', completedAt: new Date() },
         });
       } catch (streamError) {
-        console.error('Stream error:', streamError);
-        sendEvent('error', { message: 'An error occurred processing your request' });
+        const errMsg = streamError instanceof Error ? streamError.message : String(streamError);
+        console.error('Stream error:', errMsg);
+        const userMessage = errMsg.includes('fetch failed') || errMsg.includes('ECONNREFUSED')
+          ? 'AI service is temporarily unavailable. Please check the LLM provider configuration in Admin Settings.'
+          : 'An error occurred processing your request. Please try again.';
+        sendEvent('error', { message: userMessage });
+
+        // Save error as a chat message so it persists after page refresh
+        try {
+          await prisma.chatMessage.create({
+            data: {
+              projectId,
+              role: 'SYSTEM',
+              content: `[Error] ${userMessage}`,
+            },
+          });
+        } catch { /* non-fatal */ }
 
         // Mark OrchestrationRun as failed
         await prisma.orchestrationRun.update({
@@ -110,7 +125,7 @@ export async function POST(
           data: {
             status: 'FAILED',
             completedAt: new Date(),
-            errorMessage: streamError instanceof Error ? streamError.message : String(streamError),
+            errorMessage: errMsg,
           },
         });
       } finally {

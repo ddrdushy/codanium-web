@@ -95,6 +95,77 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * PUT /api/admin/llm-providers
+ * Update one or more platform provider configs.
+ * Body (single): { id, provider?, displayName?, apiKey?, baseUrl?, defaultModel?, priority?, isActive? }
+ * Body (batch reorder): { updates: [{ id, priority }] }
+ */
+export async function PUT(req: NextRequest) {
+  const { error } = await requireAdmin();
+  if (error) return error;
+
+  try {
+    const body = await req.json();
+
+    // Batch reorder mode
+    if (Array.isArray(body.updates)) {
+      const results = await Promise.all(
+        body.updates.map((u: { id: string; priority: number }) =>
+          prisma.lLMProviderConfig.update({
+            where: { id: u.id },
+            data: { priority: u.priority },
+          })
+        )
+      );
+      return NextResponse.json({ success: true, updated: results.length });
+    }
+
+    // Single update mode
+    const { id, provider, displayName, apiKey, baseUrl, defaultModel, priority, isActive } = body;
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    const existing = await prisma.lLMProviderConfig.findFirst({
+      where: { id, scope: 'PLATFORM' },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: 'Platform provider config not found' }, { status: 404 });
+    }
+
+    const data: Record<string, unknown> = {};
+    if (provider !== undefined) data.provider = provider;
+    if (displayName !== undefined) data.displayName = displayName;
+    if (baseUrl !== undefined) data.baseUrl = baseUrl || null;
+    if (defaultModel !== undefined) data.defaultModel = defaultModel;
+    if (priority !== undefined) data.priority = priority;
+    if (isActive !== undefined) data.isActive = isActive;
+    if (apiKey !== undefined && apiKey !== '') {
+      data.apiKeyEncrypted = encrypt(apiKey);
+    }
+
+    const updated = await prisma.lLMProviderConfig.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json({
+      id: updated.id,
+      provider: updated.provider,
+      displayName: updated.displayName,
+      baseUrl: updated.baseUrl ?? '',
+      defaultModel: updated.defaultModel,
+      priority: updated.priority,
+      isActive: updated.isActive,
+      createdAt: updated.createdAt,
+    });
+  } catch (err) {
+    console.error('PUT /api/admin/llm-providers error:', err);
+    return NextResponse.json({ error: 'Failed to update platform provider' }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/admin/llm-providers?id=<configId>
  * Removes a platform provider config by ID.
  */

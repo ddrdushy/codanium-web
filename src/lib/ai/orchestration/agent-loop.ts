@@ -779,9 +779,13 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             }
           }
 
-          // Try next provider in the fallback chain on rate limit or server errors
+          // Try next provider in the fallback chain on retryable errors
+          const lowerErr = errMsg.toLowerCase();
           const isRetryable = errMsg.includes('429') || errMsg.includes('500') || errMsg.includes('503')
-            || errMsg.toLowerCase().includes('rate limit') || errMsg.toLowerCase().includes('timeout');
+            || lowerErr.includes('rate limit') || lowerErr.includes('timeout')
+            || lowerErr.includes('fetch failed') || lowerErr.includes('econnrefused')
+            || lowerErr.includes('econnreset') || lowerErr.includes('socket hang up')
+            || lowerErr.includes('network') || lowerErr.includes('unavailable');
           if (isRetryable && attempt < MAX_LLM_ATTEMPTS - 1) {
             try {
               const failedProviderName = fallbackConfig?.config.provider || modelOverride || 'unknown';
