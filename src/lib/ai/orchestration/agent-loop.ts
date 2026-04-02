@@ -696,10 +696,16 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             lastResolvedProvider = fallbackConfig.config.provider;
           }
           const llmStart = Date.now();
+          // Document-generating agents need higher token limits
+          // BA creates BRD (~3000+ words), SA creates SDD (~3000+ words)
+          const DOCUMENT_AGENTS = ['BA', 'SA', 'UX', 'TL'];
+          const maxTokens = DOCUMENT_AGENTS.includes(currentAgent) ? 16384 : 4096;
+
           for await (const chunk of llmGateway.stream({
             messages,
             model: modelOverride,
             temperature: agentDef.temperature,
+            maxTokens,
             agentId: currentAgent,
             projectId: input.projectId,
             metadata: { userId: input.userId },
@@ -765,6 +771,20 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
                 toolCallCount: collectedToolCalls.length,
                 costEstimate: 0,
               });
+            }
+          }
+
+          // Detect truncation — if a document agent's response ends abruptly
+          if (iterContent && DOCUMENT_AGENTS.includes(currentAgent)) {
+            const hasOpenTags = (iterContent.match(/\[ARTIFACT/g) || []).length > (iterContent.match(/\[\/ARTIFACT\]/g) || []).length;
+            const endsAbruptly = iterContent.length > 2000 && !iterContent.trimEnd().endsWith(']') && !iterContent.trimEnd().endsWith('.') && !iterContent.trimEnd().endsWith('\n');
+            if (hasOpenTags || endsAbruptly) {
+              console.warn(`[AgentLoop] ${currentAgent} response may be truncated (${iterContent.length} chars, openTags=${hasOpenTags}, abrupt=${endsAbruptly})`);
+              // Add continuation prompt and retry
+              messages.push({ role: 'assistant', content: iterContent });
+              messages.push({ role: 'user', content: 'Your previous response was truncated. Please continue from where you left off and complete the document. Do NOT restart from the beginning.' });
+              iterContent = ''; // Reset so the retry appends
+              throw new Error('Response truncated — retrying with continuation');
             }
           }
 
