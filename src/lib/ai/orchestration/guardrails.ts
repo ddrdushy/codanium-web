@@ -78,12 +78,18 @@ const DEFAULT_INJECTION_PATTERNS: GuardrailConfig['injectionPatterns'] = [
   { label: 'Identity Override', pattern: 'pretend\\s+(you\\s+)?(are|to\\s+be)\\s+(a|an|the)\\s+', enabled: true },
   { label: 'Safety Bypass Attempt', pattern: 'bypass\\s+(your\\s+)?(safety|content|ethical|guardrail|filter|restriction)', enabled: true },
   { label: 'Restriction Removal', pattern: '\\bact\\s+as\\s+(if|though)\\s+(you\\s+)?(have\\s+)?no\\s+(restrictions|limits|rules)', enabled: true },
+  { label: 'Base64 Encoded Instructions', pattern: 'base64[:\\s]+(decode|eval|execute)', enabled: true },
+  { label: 'Hidden Instruction Marker', pattern: '\\[INST\\]|\\[/INST\\]|<<SYS>>|<</SYS>>', enabled: true },
+  { label: 'Prompt Leak Attempt', pattern: '(show|reveal|print|output|display)\\s+(your|the|system)\\s+(prompt|instructions|rules)', enabled: true },
 ];
 
 const DEFAULT_PII_PATTERNS: GuardrailConfig['piiPatterns'] = [
   { label: 'US Social Security Number', pattern: '\\b\\d{3}[-\\s]?\\d{2}[-\\s]?\\d{4}\\b', replacement: '[REDACTED-SSN]', enabled: true },
   { label: 'Credit Card Number', pattern: '\\b(?:\\d{4}[-\\s]?){3,4}\\d{1,4}\\b', replacement: '[REDACTED-CC]', enabled: true },
   { label: 'US Passport Number', pattern: '\\b[A-Z]?\\d{8,9}\\b', replacement: '[REDACTED-PASSPORT]', enabled: true },
+  { label: 'Email Address', pattern: '\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b', replacement: '[REDACTED-EMAIL]', enabled: false },
+  { label: 'Phone Number', pattern: '\\b(?:\\+?1[-.]?)?\\(?\\d{3}\\)?[-.]?\\d{3}[-.]?\\d{4}\\b', replacement: '[REDACTED-PHONE]', enabled: false },
+  { label: 'API Key Pattern', pattern: '\\b(sk-|api[_-]?key|token|secret)[\\w-]{20,}\\b', replacement: '[REDACTED-APIKEY]', enabled: true },
 ];
 
 const DEFAULT_UNSAFE_CODE_PATTERNS: GuardrailConfig['unsafeCodePatterns'] = [
@@ -93,6 +99,10 @@ const DEFAULT_UNSAFE_CODE_PATTERNS: GuardrailConfig['unsafeCodePatterns'] = [
   { label: 'exec() Usage', pattern: '\\bexec\\s*\\(', enabled: true },
   { label: 'Environment Variable Mutation', pattern: 'process\\.env\\.\\w+\\s*=\\s*', enabled: true },
   { label: 'Shell Execution', pattern: 'child_process|spawn\\s*\\(|execSync\\s*\\(', enabled: true },
+  { label: 'File System Delete', pattern: 'fs\\.(?:unlink|rmdir|rm)Sync?\\s*\\(', enabled: true },
+  { label: 'Crypto Mining', pattern: 'crypto(?:night|miner)|coinhive|minergate', enabled: true },
+  { label: 'Reverse Shell', pattern: 'nc\\s+-[el]|bash\\s+-i\\s+>&|/dev/tcp/', enabled: true },
+  { label: 'SQL Injection Pattern', pattern: '(?:UNION\\s+SELECT|OR\\s+1\\s*=\\s*1|--\\s*$|;\\s*DROP)', enabled: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -112,7 +122,7 @@ export const DEFAULT_GUARDRAIL_CONFIG: GuardrailConfig = {
     maxLength: 100_000,
     unsafeCodeDetection: true,
     actionValidation: true,
-    blockOnCritical: false,
+    blockOnCritical: true,
   },
   rateLimit: {
     maxRequests: 20,

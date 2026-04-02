@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/auth-guard';
+import { invalidateGuardrailConfigCache } from '@/lib/ai/orchestration/guardrails';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,11 @@ export async function PUT(request: NextRequest) {
     );
 
     await Promise.all([...upsertPromises, ...auditPromises]);
+
+    // Invalidate guardrail config cache if guardrail settings were updated
+    if (entries.some(([key]) => key.startsWith('guardrails'))) {
+      await invalidateGuardrailConfigCache();
+    }
 
     // Return the updated settings map
     const allSettings = await prisma.adminSetting.findMany();

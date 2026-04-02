@@ -38,7 +38,7 @@
 //   return
 // =============================================================================
 
-import { runInputGuardrails } from './guardrails';
+import { runInputGuardrails, runOutputGuardrails } from './guardrails';
 import { messageRouter, VSCODE_REQUIRED_SENTINEL } from './router';
 import { contextBuilder } from '@/lib/ai/context/context-builder';
 import { getAgentDefinition } from '@/lib/ai/agents/registry';
@@ -999,6 +999,19 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
 
       // Parse, persist, and emit done
       const parsed = parseAgentResponse(fullContent);
+
+      // ── Output Guardrails ──────────────────────────────────────────
+      const outputGuardrails = await runOutputGuardrails(parsed, fullContent);
+      if (outputGuardrails.flags.length > 0) {
+        console.log(`[AgentLoop] Output guardrail flags: ${outputGuardrails.flags.join(', ')}`);
+        yield { type: 'info', data: { message: `Output guardrails: ${outputGuardrails.flags.length} flag(s)` } };
+      }
+      if (outputGuardrails.hasCriticalIssues) {
+        console.warn(`[AgentLoop] Output blocked — critical guardrail issues detected`);
+        yield { type: 'error', data: { message: 'Response blocked by safety guardrails. Please rephrase your request.', guardrail: true } };
+        await agentStateManager.setIdle(input.projectId, currentAgent);
+        break;
+      }
 
       // Emit artifact events
       for (const artifact of parsed.artifacts) {
