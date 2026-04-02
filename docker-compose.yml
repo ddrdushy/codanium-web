@@ -1,8 +1,37 @@
-# ─── Codanium Platform — Docker Compose ───
-# Nginx + PostgreSQL + Redis + Next.js App + BullMQ Worker
+# ─── Codanium Platform — Docker Compose (Blue-Green Deploy) ───
+# Nginx + PostgreSQL + Redis + 2x Next.js App (blue/green) + BullMQ Worker
+
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  volumes:
+    - ./workspaces:/app/workspaces
+  environment: &app-env
+    DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
+    REDIS_URL: redis://redis:6379
+    NEXTAUTH_URL: ${NEXTAUTH_URL:-https://codanium.com}
+    NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-docker-dev-secret-change-in-production}
+    AUTH_SECRET: ${AUTH_SECRET:-docker-dev-secret-change-in-production}
+    AUTH_TRUST_HOST: "true"
+    SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+    STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+    STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
+    STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
+    STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
+    APP_URL: ${APP_URL:-https://codanium.com}
+    NODE_ENV: production
+    LLM_ENCRYPTION_KEY: ${LLM_ENCRYPTION_KEY:-}
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
 
 services:
-  # ─── Nginx Reverse Proxy (80 + 443 with SSL) ────────────────────────────────
+  # ─── Nginx Reverse Proxy (load-balances blue + green) ────────────────────────
   nginx:
     image: nginx:alpine
     container_name: codanium-nginx
@@ -15,7 +44,8 @@ services:
       - certbot_www:/var/www/certbot:ro
       - certbot_conf:/etc/letsencrypt:ro
     depends_on:
-      - app
+      - app-blue
+      - app-green
 
   # ─── Certbot (SSL cert issuance + auto-renewal) ──────────────────────────────
   certbot:
@@ -25,7 +55,6 @@ services:
       - certbot_www:/var/www/certbot
       - certbot_conf:/etc/letsencrypt
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done'"
-
 
   # ─── PostgreSQL Database ─────────────────────────────────────────────────────
   db:
@@ -62,38 +91,19 @@ services:
       timeout: 5s
       retries: 10
 
-  # ─── Next.js Application ─────────────────────────────────────────────────────
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ats-app
-    restart: unless-stopped
+  # ─── Next.js App (Blue instance) ─────────────────────────────────────────────
+  app-blue:
+    <<: *app-common
+    container_name: ats-app-blue
     ports:
       - "14001:3000"
-    volumes:
-      - ./workspaces:/app/workspaces    # Sync generated files to local filesystem
-    environment:
-      DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
-      REDIS_URL: redis://redis:6379
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://codanium.com}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-docker-dev-secret-change-in-production}
-      AUTH_SECRET: ${AUTH_SECRET:-docker-dev-secret-change-in-production}
-      AUTH_TRUST_HOST: "true"
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
-      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
-      STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
-      APP_URL: ${APP_URL:-https://codanium.com}
-      NODE_ENV: production
-      LLM_ENCRYPTION_KEY: ${LLM_ENCRYPTION_KEY:-}
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+
+  # ─── Next.js App (Green instance) ────────────────────────────────────────────
+  app-green:
+    <<: *app-common
+    container_name: ats-app-green
+    ports:
+      - "14004:3000"
 
   # ─── BullMQ Worker (Background Job Processor) ───────────────────────────────
   worker:
@@ -103,20 +113,11 @@ services:
     container_name: ats-worker
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
-      REDIS_URL: redis://redis:6379
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
-      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
-      STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
-      APP_URL: http://localhost:14001
-      NODE_ENV: production
-      LLM_ENCRYPTION_KEY: ${LLM_ENCRYPTION_KEY:-}
+      <<: *app-env
+      APP_URL: http://app-blue:3000
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker for code execution sandbox
-      - ./workspaces:/app/workspaces    # Sync generated files to local filesystem
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspaces:/app/workspaces
     command: ["node", "worker.mjs"]
     depends_on:
       db:
