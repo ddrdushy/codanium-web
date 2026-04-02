@@ -81,6 +81,23 @@ jobs:
               echo "Database has $USER_COUNT users — skipping seed"
             fi
 
+            echo "=== Issuing SSL certificate ==="
+            docker compose run --rm certbot certonly --webroot \
+              -w /var/www/certbot \
+              -d codanium.com -d www.codanium.com -d app.codanium.com \
+              --email admin@codanium.com --agree-tos --no-eff-email \
+              --keep-until-expiring || echo "Certbot failed (check DNS)"
+
+            echo "=== Switching to SSL nginx config ==="
+            if [ -f /etc/letsencrypt/live/codanium.com/fullchain.pem ] || \
+               docker compose exec -T nginx test -f /etc/letsencrypt/live/codanium.com/fullchain.pem 2>/dev/null; then
+              cp nginx-ssl.conf nginx.conf
+              docker compose exec -T nginx nginx -s reload 2>/dev/null || docker compose restart nginx
+              echo "  SSL enabled"
+            else
+              echo "  No cert found — staying on HTTP"
+            fi
+
             echo "=== Health checks ==="
             LANDING=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:14005/ 2>/dev/null || echo "000")
             echo "  Landing: $LANDING"
