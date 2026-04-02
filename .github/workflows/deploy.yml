@@ -44,6 +44,9 @@ jobs:
             echo "=== Pulling latest code ==="
             cd /opt/codanium
             git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/AiSenseiMY/Ai-Team_studio.git
+            # Discard any local server changes (e.g. nginx.conf edits) so pull succeeds
+            git checkout -- .
+            git clean -fd -e .env -e node_modules
             git pull origin main
 
             echo "=== Setting production .env ==="
