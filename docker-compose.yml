@@ -1,37 +1,8 @@
-# ─── Codanium Platform — Docker Compose (Blue-Green Deploy) ───
-# Nginx + PostgreSQL + Redis + 2x Next.js App (blue/green) + BullMQ Worker
-
-x-app-common: &app-common
-  build:
-    context: .
-    dockerfile: Dockerfile
-  restart: unless-stopped
-  volumes:
-    - ./workspaces:/app/workspaces
-  environment: &app-env
-    DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
-    REDIS_URL: redis://redis:6379
-    NEXTAUTH_URL: ${NEXTAUTH_URL:-https://codanium.com}
-    NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-docker-dev-secret-change-in-production}
-    AUTH_SECRET: ${AUTH_SECRET:-docker-dev-secret-change-in-production}
-    AUTH_TRUST_HOST: "true"
-    SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
-    STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-    STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-    STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
-    STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
-    STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
-    APP_URL: ${APP_URL:-https://codanium.com}
-    NODE_ENV: production
-    LLM_ENCRYPTION_KEY: ${LLM_ENCRYPTION_KEY:-}
-  depends_on:
-    db:
-      condition: service_healthy
-    redis:
-      condition: service_healthy
+# ─── Codanium Platform — Docker Compose ───
+# Nginx + PostgreSQL + Redis + Next.js App + BullMQ Worker
 
 services:
-  # ─── Nginx Reverse Proxy (load-balances blue + green) ────────────────────────
+  # ─── Nginx Reverse Proxy ─────────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: codanium-nginx
@@ -44,8 +15,7 @@ services:
       - certbot_www:/var/www/certbot:ro
       - certbot_conf:/etc/letsencrypt:ro
     depends_on:
-      - app-blue
-      - app-green
+      - app
 
   # ─── Certbot (SSL cert issuance + auto-renewal) ──────────────────────────────
   certbot:
@@ -91,19 +61,38 @@ services:
       timeout: 5s
       retries: 10
 
-  # ─── Next.js App (Blue instance) ─────────────────────────────────────────────
-  app-blue:
-    <<: *app-common
-    container_name: ats-app-blue
+  # ─── Next.js App ─────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ats-app
+    restart: unless-stopped
     ports:
       - "14001:3000"
-
-  # ─── Next.js App (Green instance) ────────────────────────────────────────────
-  app-green:
-    <<: *app-common
-    container_name: ats-app-green
-    ports:
-      - "14004:3000"
+    volumes:
+      - ./workspaces:/app/workspaces
+    environment: &app-env
+      DATABASE_URL: postgresql://ats_user:ats_secret_2025@db:5432/ai_team_studio?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://codanium.com}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-docker-dev-secret-change-in-production}
+      AUTH_SECRET: ${AUTH_SECRET:-docker-dev-secret-change-in-production}
+      AUTH_TRUST_HOST: "true"
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
+      STRIPE_PRICE_ENTERPRISE: ${STRIPE_PRICE_ENTERPRISE:-}
+      APP_URL: ${APP_URL:-https://codanium.com}
+      NODE_ENV: production
+      LLM_ENCRYPTION_KEY: ${LLM_ENCRYPTION_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # ─── BullMQ Worker (Background Job Processor) ───────────────────────────────
   worker:
@@ -114,7 +103,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-env
-      APP_URL: http://app-blue:3000
+      APP_URL: http://app:3000
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./workspaces:/app/workspaces

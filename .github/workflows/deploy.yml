@@ -44,9 +44,8 @@ jobs:
             echo "=== Pulling latest code ==="
             cd /opt/codanium
             git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/AiSenseiMY/Ai-Team_studio.git
-            # Discard any local server changes (e.g. nginx.conf edits) so pull succeeds
             git checkout -- .
-            git clean -fd -e .env -e node_modules
+            git clean -fd -e .env -e node_modules -e workspaces
             git pull origin main
 
             echo "=== Setting production .env ==="
@@ -63,61 +62,39 @@ jobs:
             ENVEOF
             sed -i 's/^            //' .env
 
-            echo "=== Removing orphan containers ==="
-            # Stop any leftover containers from old compose configs (e.g. ats-app)
-            docker compose down --remove-orphans 2>/dev/null || true
-            # Also force-remove the specific known orphan that blocks port 14001
-            docker rm -f ats-app 2>/dev/null || true
+            echo "=== Stopping all containers ==="
+            docker compose down --remove-orphans || true
+            # Remove any leftover orphan containers from old configs
+            docker rm -f ats-app ats-app-blue ats-app-green 2>/dev/null || true
 
-            echo "=== Starting infrastructure services ==="
-            docker compose up -d db redis
-
-            echo "=== Waiting for DB and Redis to be healthy ==="
-            sleep 5
-
-            echo "=== Building new image ==="
+            echo "=== Building fresh image ==="
             docker compose build --no-cache
 
+            echo "=== Starting all services ==="
+            docker compose up -d
+
+            echo "=== Waiting for app to be ready ==="
+            sleep 15
+
             echo "=== Running database migrations ==="
-            # Run migrations on blue (it's still running old code but DB is forward-compatible)
-            docker compose exec -T app-blue npx prisma migrate deploy 2>/dev/null || \
-              docker compose exec -T app-blue npx prisma db push --accept-data-loss 2>/dev/null || true
-
-            echo "=== Blue-Green Deploy: Updating Green first ==="
-            # Step 1: Rebuild + restart green (blue keeps serving traffic)
-            docker compose up -d --no-deps app-green
-            echo "  Waiting for green to be healthy..."
-            sleep 15
-            HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:14004/api/health 2>/dev/null || echo "000")
-            echo "  Green health: $HEALTH"
-
-            echo "=== Blue-Green Deploy: Updating Blue ==="
-            # Step 2: Rebuild + restart blue (green is now serving traffic)
-            docker compose up -d --no-deps app-blue
-            echo "  Waiting for blue to be healthy..."
-            sleep 15
-            HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:14001/api/health 2>/dev/null || echo "000")
-            echo "  Blue health: $HEALTH"
-
-            echo "=== Reloading Nginx ==="
-            docker compose exec -T nginx nginx -s reload 2>/dev/null || docker compose restart nginx
-
-            echo "=== Updating worker ==="
-            docker compose up -d --no-deps worker
+            docker compose exec -T app npx prisma migrate deploy 2>/dev/null || \
+              docker compose exec -T app npx prisma db push --accept-data-loss 2>/dev/null || true
 
             echo "=== Seeding database (first deploy only) ==="
             USER_COUNT=$(docker compose exec -T db psql -U ats_user -d ai_team_studio -t -A -c "SELECT COUNT(*) FROM users;" 2>/dev/null || echo "0")
             if [ "$USER_COUNT" -lt "2" ]; then
               echo "  No users found — running seed..."
-              docker compose exec -T app-blue npx prisma db seed || echo "  Seed failed (non-critical)"
+              docker compose exec -T app npx prisma db seed || echo "  Seed failed (non-critical)"
             else
               echo "  Database already has $USER_COUNT users — skipping seed"
             fi
 
             echo "=== Verifying site is up ==="
-            curl -s -o /dev/null -w "%{http_code}" https://codanium.com/api/health || true
+            HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:14001/api/health 2>/dev/null || echo "000")
+            echo "  App health: $HEALTH"
+            curl -s -o /dev/null -w "%{http_code}" https://codanium.com/ || true
 
             echo ""
             echo "=== Final status ==="
             docker compose ps
-            echo "=== Zero-downtime deployment complete ==="
+            echo "=== Deployment complete ==="
