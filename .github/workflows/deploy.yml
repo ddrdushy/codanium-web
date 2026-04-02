@@ -82,20 +82,19 @@ jobs:
             fi
 
             echo "=== Issuing SSL certificate ==="
-            docker compose run --rm certbot certonly --webroot \
+            timeout 120 docker compose run --rm certbot certonly --webroot \
               -w /var/www/certbot \
               -d codanium.com -d www.codanium.com -d app.codanium.com \
               --email admin@codanium.com --agree-tos --no-eff-email \
-              --keep-until-expiring || echo "Certbot failed (check DNS)"
+              --keep-until-expiring --non-interactive 2>&1 || echo "Certbot: skipped or failed (non-critical)"
 
-            echo "=== Switching to SSL nginx config ==="
-            if [ -f /etc/letsencrypt/live/codanium.com/fullchain.pem ] || \
-               docker compose exec -T nginx test -f /etc/letsencrypt/live/codanium.com/fullchain.pem 2>/dev/null; then
+            echo "=== Checking for SSL cert ==="
+            if docker compose exec -T nginx test -f /etc/letsencrypt/live/codanium.com/fullchain.pem 2>/dev/null; then
+              echo "  Cert found — enabling HTTPS"
               cp nginx-ssl.conf nginx.conf
               docker compose exec -T nginx nginx -s reload 2>/dev/null || docker compose restart nginx
-              echo "  SSL enabled"
             else
-              echo "  No cert found — staying on HTTP"
+              echo "  No cert — site serves over HTTP only"
             fi
 
             echo "=== Health checks ==="
