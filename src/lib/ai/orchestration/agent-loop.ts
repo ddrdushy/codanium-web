@@ -678,6 +678,7 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
       let llmSuccess = false;
 
       let lastLLMError = '';
+      let lastResolvedProvider = '';
 
       for (let attempt = 0; attempt < MAX_LLM_ATTEMPTS; attempt++) {
         iterContent = '';
@@ -685,6 +686,15 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
         collectedToolCalls = [];
 
         try {
+          // Track which provider we're about to use (for fallback resolution)
+          if (!fallbackConfig) {
+            try {
+              const resolved = await llmGateway.resolve(input.projectId, currentAgent, input.userId);
+              lastResolvedProvider = resolved.config.provider;
+            } catch { /* resolve will be called again inside stream() */ }
+          } else {
+            lastResolvedProvider = fallbackConfig.config.provider;
+          }
           const llmStart = Date.now();
           for await (const chunk of llmGateway.stream({
             messages,
@@ -790,7 +800,7 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
             || lowerErr.includes('unknown api error');
           if (isRetryable && attempt < MAX_LLM_ATTEMPTS - 1) {
             try {
-              const failedProviderName = fallbackConfig?.config.provider || modelOverride || 'unknown';
+              const failedProviderName = fallbackConfig?.config.provider || lastResolvedProvider || 'unknown';
               const nextProvider = await llmGateway.resolveFallback(failedProviderName);
               if (nextProvider) {
                 // Store the FULL provider config (API key, base URL, adapter)
