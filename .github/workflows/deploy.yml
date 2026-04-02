@@ -56,6 +56,7 @@ jobs:
             AUTH_TRUST_HOST=true
             APP_URL=https://codanium.com
             NODE_ENV=production
+            LLM_ENCRYPTION_KEY=codanium-llm-enc-2026-stable-k3y9x7m2p
             ENVEOF
             sed -i 's/^            //' .env
 
