@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { FolderPlus, Bot, Scale, Rocket } from 'lucide-react';
+import { FolderPlus, Bot, Scale, Rocket, ArrowRight } from 'lucide-react';
 
 const steps = [
   {
@@ -11,13 +11,19 @@ const steps = [
     title: 'Describe Your Idea',
     description:
       'Tell us what you want built. It can be a rough idea, a detailed brief, or anything in between.',
+    color: 'from-blue-500 to-cyan-500',
+    iconColor: 'text-blue-400',
+    bg: 'bg-blue-500/10',
   },
   {
     number: 2,
     icon: Bot,
-    title: 'Your AI Team Gets to Work',
+    title: 'AI Team Gets to Work',
     description:
       'Our AI analysts clarify your requirements, architects design the solution, and developers start building.',
+    color: 'from-emerald-500 to-teal-500',
+    iconColor: 'text-emerald-400',
+    bg: 'bg-emerald-500/10',
   },
   {
     number: 3,
@@ -25,13 +31,19 @@ const steps = [
     title: 'Review & Approve',
     description:
       'Your AI team presents key decisions with clear recommendations. You approve what matters to you.',
+    color: 'from-purple-500 to-violet-500',
+    iconColor: 'text-purple-400',
+    bg: 'bg-purple-500/10',
   },
   {
     number: 4,
     icon: Rocket,
-    title: 'Receive Your Product',
+    title: 'Launch Your Product',
     description:
       'Your software is tested, reviewed, and deployed. Quality checks at every step ensure it works right.',
+    color: 'from-amber-500 to-orange-500',
+    iconColor: 'text-amber-400',
+    bg: 'bg-amber-500/10',
   },
 ];
 
@@ -53,56 +65,104 @@ export function HowItWorksSection() {
           transition={{ duration: 0.5 }}
           className="mx-auto max-w-2xl text-center mb-20"
         >
-          <span className="text-sm font-semibold uppercase tracking-widest text-amber">
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber">
             How It Works
           </span>
-          <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-            From Idea to Launch in 4 Steps
+          <h2 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
+            From Idea to Launch in{' '}
+            <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
+              4 Steps
+            </span>
           </h2>
+          <p className="mt-4 text-lg text-muted-foreground">
+            No coding skills needed. No technical knowledge required. Just tell us your vision.
+          </p>
         </motion.div>
 
         {/* Steps */}
         <div ref={ref} className="relative">
-          {/* Horizontal connector line — desktop only */}
-          <div className="absolute left-0 right-0 top-[52px] hidden lg:block">
-            <div className="mx-auto max-w-4xl px-16">
-              <div className="h-[2px] w-full border-t-2 border-dashed border-border" />
-            </div>
-          </div>
-
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Desktop: Horizontal layout */}
+          <div className="hidden lg:grid lg:grid-cols-4 gap-6">
             {steps.map((step, i) => (
               <motion.div
                 key={step.number}
-                initial={{ opacity: 0, x: -30 }}
-                animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -30 }}
+                initial={{ opacity: 0, y: 30 }}
+                animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                 transition={{
                   duration: 0.5,
                   delay: i * 0.15,
                   ease: 'easeOut' as const,
                 }}
-                className="relative flex flex-col items-center text-center"
+                className="relative"
               >
-                {/* Numbered circle with icon */}
-                <div className="relative z-10 mb-6">
-                  <div className="flex h-[104px] w-[104px] items-center justify-center rounded-full border-2 border-amber/20 bg-[var(--surface-raised)]">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber/10">
-                      <step.icon className="h-7 w-7 text-amber" />
+                {/* Connector arrow */}
+                {i < steps.length - 1 && (
+                  <div className="absolute top-14 -right-3 z-10">
+                    <ArrowRight className="h-5 w-5 text-border" />
+                  </div>
+                )}
+
+                <div className="flex flex-col items-center text-center">
+                  {/* Number + Icon */}
+                  <div className="relative mb-6">
+                    <div className={`flex h-28 w-28 items-center justify-center rounded-2xl border border-border bg-[var(--surface-raised)] shadow-lg`}>
+                      <div className={`flex h-16 w-16 items-center justify-center rounded-xl ${step.bg}`}>
+                        <step.icon className={`h-8 w-8 ${step.iconColor}`} />
+                      </div>
+                    </div>
+                    <div className={`absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${step.color} text-sm font-bold text-white shadow-lg`}>
+                      {step.number}
                     </div>
                   </div>
-                  {/* Step number badge */}
-                  <div className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-amber text-xs font-bold text-background">
+
+                  {/* Text */}
+                  <h3 className="text-lg font-bold text-foreground mb-2">
+                    {step.title}
+                  </h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground max-w-[260px]">
+                    {step.description}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Mobile: Vertical timeline */}
+          <div className="lg:hidden space-y-8">
+            {steps.map((step, i) => (
+              <motion.div
+                key={step.number}
+                initial={{ opacity: 0, x: -20 }}
+                animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+                transition={{
+                  duration: 0.5,
+                  delay: i * 0.12,
+                  ease: 'easeOut' as const,
+                }}
+                className="flex gap-5"
+              >
+                {/* Timeline line + number */}
+                <div className="flex flex-col items-center">
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${step.color} text-lg font-bold text-white shadow-lg`}>
                     {step.number}
                   </div>
+                  {i < steps.length - 1 && (
+                    <div className="w-px flex-1 bg-border mt-3" />
+                  )}
                 </div>
 
-                {/* Text */}
-                <h3 className="text-lg font-bold text-foreground mb-2">
-                  {step.title}
-                </h3>
-                <p className="text-sm leading-relaxed text-muted-foreground max-w-[240px]">
-                  {step.description}
-                </p>
+                {/* Content */}
+                <div className="pb-8">
+                  <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${step.bg}`}>
+                    <step.icon className={`h-5 w-5 ${step.iconColor}`} />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-1">
+                    {step.title}
+                  </h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {step.description}
+                  </p>
+                </div>
               </motion.div>
             ))}
           </div>

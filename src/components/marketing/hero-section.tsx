@@ -1,21 +1,27 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Bot, CheckCircle2, Zap, GitBranch, BarChart3, Download } from 'lucide-react';
+import { ArrowRight, Bot, CheckCircle2, Zap, GitBranch, BarChart3, Download, Sparkles, Shield, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const agentAvatars = [
-  { name: 'PM', color: 'bg-amber-500' },
-  { name: 'BA', color: 'bg-emerald-500' },
-  { name: 'SA', color: 'bg-blue-500' },
-  { name: 'UX', color: 'bg-purple-500' },
-  { name: 'QA', color: 'bg-rose-500' },
+  { name: 'PM', color: 'bg-amber-500', label: 'Project Manager' },
+  { name: 'BA', color: 'bg-emerald-500', label: 'Business Analyst' },
+  { name: 'SA', color: 'bg-blue-500', label: 'System Architect' },
+  { name: 'UX', color: 'bg-purple-500', label: 'UX Designer' },
+  { name: 'QA', color: 'bg-rose-500', label: 'QA Engineer' },
 ];
 
 const miniCards = [
   { title: 'Requirements BRD', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
   { title: 'Architecture SDD', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
   { title: 'Auth Module', status: 'In Progress', color: 'text-amber-400 bg-amber-400/10' },
+];
+
+const stats = [
+  { label: 'AI Agents', value: '23+', description: 'Specialized team members' },
+  { label: 'SDLC Phases', value: '8', description: 'End-to-end coverage' },
+  { label: 'Uptime', value: '99.9%', description: 'Enterprise reliability' },
 ];
 
 export function HeroSection() {
@@ -25,17 +31,23 @@ export function HeroSection() {
       <div className="hero-gradient absolute inset-0" />
       <div className="grid-pattern absolute inset-0" />
 
+      {/* Animated orbs */}
+      <div className="absolute top-1/4 left-1/4 h-72 w-72 rounded-full bg-amber/5 blur-[120px] animate-float" />
+      <div className="absolute bottom-1/4 right-1/4 h-96 w-96 rounded-full bg-purple-500/5 blur-[120px] animate-float-slow" />
+
       <div className="relative mx-auto max-w-7xl px-6">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
           {/* Left — Copy */}
           <div className="max-w-2xl animate-fade-in">
+            {/* Badge */}
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber mb-6">
-                <Zap className="h-3.5 w-3.5" />
-                Your Vibe, Multiplied
+                <Sparkles className="h-3.5 w-3.5" />
+                AI-Powered Software Delivery
               </span>
             </div>
 
+            {/* Main heading */}
             <h1 className="mt-4 text-5xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
               Describe Your Idea.{' '}
               <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
@@ -43,23 +55,25 @@ export function HeroSection() {
               </span>
             </h1>
 
+            {/* Subheading */}
             <p className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl">
-              Tell us what you need — even a rough idea. Codanium&apos;s team of AI agents
+              Tell us what you need — even a rough idea. Codanium&apos;s team of 23 AI agents
               handles everything: requirements, architecture, design, coding, testing,
               and deployment.
             </p>
 
+            {/* CTA buttons */}
             <div className="mt-10 flex flex-wrap items-center gap-4">
               <Link href="/signup">
                 <Button
                   size="lg"
-                  className="bg-amber text-background hover:bg-amber/90 font-semibold text-base px-8 h-12 glow-amber"
+                  className="bg-amber text-background hover:bg-amber/90 font-semibold text-base px-8 h-12 glow-amber group"
                 >
                   Start Your Project Free
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
                 </Button>
               </Link>
-              <a href="#download">
+              <Link href="/#download">
                 <Button
                   variant="outline"
                   size="lg"
@@ -68,22 +82,36 @@ export function HeroSection() {
                   <Download className="h-4 w-4" />
                   Download Desktop App
                 </Button>
-              </a>
+              </Link>
             </div>
 
+            {/* Trust indicators */}
             <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 No credit card required
               </span>
               <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                No coding skills needed
+                <Shield className="h-4 w-4 text-blue-500" />
+                Enterprise-grade security
               </span>
               <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Mac · Windows · Linux
+                <Clock className="h-4 w-4 text-purple-500" />
+                Setup in under 2 min
               </span>
+            </div>
+
+            {/* Stats strip */}
+            <div className="mt-12 grid grid-cols-3 gap-6 border-t border-border pt-8">
+              {stats.map((stat) => (
+                <div key={stat.label}>
+                  <div className="text-2xl font-extrabold text-foreground sm:text-3xl">
+                    {stat.value}
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-amber">{stat.label}</div>
+                  <div className="text-xs text-muted-foreground">{stat.description}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -132,7 +160,7 @@ export function HeroSection() {
                   <span className="text-[10px] text-amber font-semibold">Phase 5 — Development</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-[var(--surface-overlay)]">
-                  <div className="h-2 w-[60%] rounded-full bg-gradient-to-r from-amber-500 to-orange-500" />
+                  <div className="h-2 w-[60%] rounded-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-1000" />
                 </div>
               </div>
 
@@ -146,13 +174,14 @@ export function HeroSection() {
                     {agentAvatars.map((agent) => (
                       <div
                         key={agent.name}
-                        className={`flex h-7 w-7 items-center justify-center rounded-full ${agent.color} text-[9px] font-bold text-white ring-2 ring-[var(--surface)]`}
+                        title={agent.label}
+                        className={`flex h-7 w-7 items-center justify-center rounded-full ${agent.color} text-[9px] font-bold text-white ring-2 ring-[var(--surface)] transition-transform hover:scale-110 hover:z-10`}
                       >
                         {agent.name}
                       </div>
                     ))}
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--surface-overlay)] text-[9px] font-medium text-muted-foreground ring-2 ring-[var(--surface)]">
-                      +15
+                      +18
                     </div>
                   </div>
                 </div>
@@ -175,7 +204,9 @@ export function HeroSection() {
               </div>
             </div>
 
+            {/* Glow effect behind card */}
             <div className="absolute -inset-4 -z-10 rounded-3xl bg-amber/5 blur-3xl" />
+            <div className="absolute -inset-8 -z-20 rounded-3xl bg-purple-500/3 blur-[60px]" />
           </div>
         </div>
       </div>

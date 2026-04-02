@@ -1,42 +1,53 @@
 'use client';
 
 import Link from 'next/link';
-import { Zap } from 'lucide-react';
+import { Zap, Heart } from 'lucide-react';
 
-const footerLinks = [
+interface FooterLink {
+  label: string;
+  href: string;
+  external?: boolean;
+}
+
+interface FooterGroup {
+  heading: string;
+  links: FooterLink[];
+}
+
+const footerLinks: FooterGroup[] = [
   {
     heading: 'Product',
     links: [
-      { label: 'Features', href: '#features' },
-      { label: 'Download', href: '#download' },
-      { label: 'Pricing', href: '#pricing' },
-      { label: 'Roadmap', href: '#' },
+      { label: 'Features', href: '/#features' },
+      { label: 'Download', href: '/#download' },
+      { label: 'Pricing', href: '/#pricing' },
+      { label: 'Roadmap', href: '/roadmap' },
     ],
   },
   {
     heading: 'Resources',
     links: [
-      { label: 'Documentation', href: '#' },
-      { label: 'Help Center', href: '#' },
-      { label: 'GitHub', href: 'https://github.com/AiSenseiMY/Codanium' },
-      { label: 'Community', href: '#' },
+      { label: 'Documentation', href: '/docs' },
+      { label: 'Help Center', href: '/help' },
+      { label: 'GitHub', href: 'https://github.com/AiSenseiMY/Codanium', external: true },
+      { label: 'Community', href: '/community' },
     ],
   },
   {
     heading: 'Company',
     links: [
-      { label: 'About', href: '#' },
-      { label: 'Careers', href: '#' },
-      { label: 'Contact', href: '#' },
-      { label: 'Press', href: '#' },
+      { label: 'About', href: '/about' },
+      { label: 'Careers', href: '/careers' },
+      { label: 'Contact', href: '/contact' },
+      { label: 'Press', href: '/press' },
     ],
   },
   {
     heading: 'Legal',
     links: [
-      { label: 'Privacy Policy', href: '#' },
-      { label: 'Terms of Service', href: '#' },
-      { label: 'Cookie Policy', href: '#' },
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms of Service', href: '/terms' },
+      { label: 'Cookie Policy', href: '/cookies' },
     ],
   },
 ];
@@ -57,22 +68,103 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
+function DiscordIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z" />
+    </svg>
+  );
+}
+
+function FooterLinkItem({ link }: { link: FooterLink }) {
+  const className = "text-sm text-muted-foreground transition-colors hover:text-foreground";
+
+  if (link.external) {
+    return (
+      <a href={link.href} target="_blank" rel="noopener noreferrer" className={className}>
+        {link.label}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={link.href} className={className}>
+      {link.label}
+    </Link>
+  );
+}
+
 export function MarketingFooter() {
   return (
     <footer className="border-t border-border bg-[var(--surface)]">
+      {/* Newsletter / brand strip */}
+      <div className="border-b border-border">
+        <div className="mx-auto max-w-7xl px-6 py-12">
+          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Stay in the loop</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Get product updates, tips, and community highlights.
+              </p>
+            </div>
+            <div className="flex w-full max-w-md gap-2">
+              <input
+                type="email"
+                placeholder="you@example.com"
+                className="flex-1 rounded-lg border border-border bg-[var(--surface-raised)] px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber/30 focus:border-amber/40 transition-all"
+              />
+              <button className="shrink-0 rounded-lg bg-amber px-5 py-2.5 text-sm font-semibold text-background hover:bg-amber/90 transition-colors">
+                Subscribe
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main footer links */}
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand column */}
           <div className="lg:col-span-1">
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber/10 border border-amber/20">
-                <Zap className="h-4 w-4 text-amber" />
+            <Link href="/" className="flex items-center gap-2.5 mb-4 group">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber/20 group-hover:shadow-amber/30 transition-shadow">
+                <Zap className="h-4.5 w-4.5 text-white" />
               </div>
-              <span className="text-base font-bold text-foreground">Codanium</span>
+              <span className="text-lg font-bold tracking-tight text-foreground">Codanium</span>
             </Link>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
               Your Vibe, Multiplied. Describe what you need — AI agents build, test, and launch it.
             </p>
+            {/* Social icons */}
+            <div className="flex items-center gap-3">
+              <a
+                href="https://github.com/AiSenseiMY/Codanium"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-[var(--surface-raised)] text-muted-foreground transition-all hover:text-foreground hover:border-amber/30 hover:bg-amber/5"
+                aria-label="GitHub"
+              >
+                <GitHubIcon className="h-4 w-4" />
+              </a>
+              <a
+                href="https://discord.gg/codanium"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-[var(--surface-raised)] text-muted-foreground transition-all hover:text-foreground hover:border-amber/30 hover:bg-amber/5"
+                aria-label="Discord"
+              >
+                <DiscordIcon className="h-4 w-4" />
+              </a>
+              <a
+                href="https://x.com/codanium"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-[var(--surface-raised)] text-muted-foreground transition-all hover:text-foreground hover:border-amber/30 hover:bg-amber/5"
+                aria-label="X (Twitter)"
+              >
+                <XIcon className="h-4 w-4" />
+              </a>
+            </div>
           </div>
 
           {/* Link columns */}
@@ -84,12 +176,7 @@ export function MarketingFooter() {
               <ul className="space-y-2.5">
                 {group.links.map((link) => (
                   <li key={link.label}>
-                    <a
-                      href={link.href}
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {link.label}
-                    </a>
+                    <FooterLinkItem link={link} />
                   </li>
                 ))}
               </ul>
@@ -102,26 +189,11 @@ export function MarketingFooter() {
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 py-6 sm:flex-row">
           <p className="text-sm text-muted-foreground">
-            &copy; 2026 Codanium. All rights reserved. Your Vibe, Multiplied.
+            &copy; {new Date().getFullYear()} Codanium. All rights reserved.
           </p>
-          <div className="flex items-center gap-4">
-            <a
-              href="https://github.com/AiSenseiMY/Codanium"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="GitHub"
-            >
-              <GitHubIcon className="h-5 w-5" />
-            </a>
-            <a
-              href="#"
-              className="text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="X (Twitter)"
-            >
-              <XIcon className="h-5 w-5" />
-            </a>
-          </div>
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            Built with <Heart className="h-3.5 w-3.5 text-rose-500 fill-rose-500" /> by AiSensei
+          </p>
         </div>
       </div>
     </footer>

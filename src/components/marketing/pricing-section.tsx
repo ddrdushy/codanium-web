@@ -89,14 +89,18 @@ export function PricingSection() {
           transition={{ duration: 0.5 }}
           className="mx-auto max-w-2xl text-center mb-16"
         >
-          <span className="text-sm font-semibold uppercase tracking-widest text-amber">
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber">
             Pricing
           </span>
-          <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-            Simple, Transparent Pricing
+          <h2 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
+            Simple,{' '}
+            <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
+              Transparent
+            </span>{' '}
+            Pricing
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Start free and scale as your projects grow. No hidden fees.
+            Start free and scale as your projects grow. No hidden fees, no surprises.
           </p>
         </motion.div>
 

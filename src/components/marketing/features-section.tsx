@@ -20,6 +20,7 @@ const features = [
     color: 'text-emerald-400',
     bg: 'bg-emerald-400/10',
     border: 'border-emerald-400/20',
+    glow: 'group-hover:shadow-emerald-500/10',
   },
   {
     icon: Workflow,
@@ -29,6 +30,7 @@ const features = [
     color: 'text-amber-400',
     bg: 'bg-amber-400/10',
     border: 'border-amber-400/20',
+    glow: 'group-hover:shadow-amber-500/10',
   },
   {
     icon: KanbanSquare,
@@ -38,6 +40,7 @@ const features = [
     color: 'text-blue-400',
     bg: 'bg-blue-400/10',
     border: 'border-blue-400/20',
+    glow: 'group-hover:shadow-blue-500/10',
   },
   {
     icon: Scale,
@@ -47,6 +50,7 @@ const features = [
     color: 'text-purple-400',
     bg: 'bg-purple-400/10',
     border: 'border-purple-400/20',
+    glow: 'group-hover:shadow-purple-500/10',
   },
   {
     icon: MessageSquare,
@@ -56,15 +60,17 @@ const features = [
     color: 'text-rose-400',
     bg: 'bg-rose-400/10',
     border: 'border-rose-400/20',
+    glow: 'group-hover:shadow-rose-500/10',
   },
   {
     icon: BarChart3,
     title: 'Budget & Progress Dashboard',
     description:
       'Track how your project is progressing, what it\'s costing, and when it\'ll be ready — all in one place.',
-    color: 'text-red-400',
-    bg: 'bg-red-400/10',
-    border: 'border-red-400/20',
+    color: 'text-cyan-400',
+    bg: 'bg-cyan-400/10',
+    border: 'border-cyan-400/20',
+    glow: 'group-hover:shadow-cyan-500/10',
   },
 ];
 
@@ -83,14 +89,18 @@ export function FeaturesSection() {
           transition={{ duration: 0.5 }}
           className="mx-auto max-w-2xl text-center mb-16"
         >
-          <span className="text-sm font-semibold uppercase tracking-widest text-amber">
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber">
             Features
           </span>
-          <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-            Everything Handled For You
+          <h2 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
+            Everything Handled{' '}
+            <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
+              For You
+            </span>
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            From your first idea to a working product — our AI team manages every step.
+            From your first idea to a working product — our AI team manages every step
+            of the software development lifecycle.
           </p>
         </motion.div>
 
@@ -106,13 +116,13 @@ export function FeaturesSection() {
                 delay: i * 0.1,
                 ease: 'easeOut' as const,
               }}
-              className="group relative rounded-xl glass p-6 card-lift"
+              className={`group relative rounded-2xl border border-border bg-[var(--surface)] p-7 card-lift transition-shadow ${feature.glow} hover:shadow-xl`}
             >
               {/* Icon */}
               <div
-                className={`mb-4 flex h-11 w-11 items-center justify-center rounded-lg ${feature.bg} border ${feature.border}`}
+                className={`mb-5 flex h-12 w-12 items-center justify-center rounded-xl ${feature.bg} border ${feature.border} transition-transform group-hover:scale-110`}
               >
-                <feature.icon className={`h-5 w-5 ${feature.color}`} />
+                <feature.icon className={`h-6 w-6 ${feature.color}`} />
               </div>
 
               {/* Content */}
@@ -125,7 +135,7 @@ export function FeaturesSection() {
 
               {/* Subtle hover glow */}
               <div
-                className={`absolute inset-0 -z-10 rounded-xl opacity-0 transition-opacity group-hover:opacity-100 blur-2xl ${feature.bg}`}
+                className={`absolute inset-0 -z-10 rounded-2xl opacity-0 transition-opacity group-hover:opacity-100 blur-2xl ${feature.bg}`}
               />
             </motion.div>
           ))}

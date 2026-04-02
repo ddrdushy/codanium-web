@@ -306,14 +306,17 @@ export function ScreenshotsSection() {
           transition={{ duration: 0.5 }}
           className="mx-auto max-w-2xl text-center mb-14"
         >
-          <span className="text-sm font-semibold uppercase tracking-widest text-amber">
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber">
             Product Preview
           </span>
-          <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-            See It In Action
+          <h2 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
+            See It{' '}
+            <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
+              In Action
+            </span>
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Watch your AI team build software in real time.
+            Watch your AI team build software in real time. Every phase, every agent, every decision — visible and trackable.
           </p>
         </motion.div>
 
@@ -351,7 +354,7 @@ export function ScreenshotsSection() {
               <div className="h-2.5 w-2.5 rounded-full bg-amber-500/60" />
               <div className="h-2.5 w-2.5 rounded-full bg-emerald-500/60" />
               <div className="ml-4 flex-1 rounded bg-[var(--surface-overlay)] px-3 py-1 text-center text-[9px] text-muted-foreground">
-                app.aiteamstudio.com/{activeTab}
+                app.codanium.com/{activeTab}
               </div>
             </div>
 
