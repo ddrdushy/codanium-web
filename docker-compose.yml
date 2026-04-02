@@ -1,5 +1,5 @@
 # ─── Codanium Platform — Docker Compose ───
-# Nginx + PostgreSQL + Redis + Next.js App + BullMQ Worker
+# Nginx + Landing Page + Platform App + PostgreSQL + Redis + BullMQ Worker
 
 services:
   # ─── Nginx Reverse Proxy ─────────────────────────────────────────────────────
@@ -15,7 +15,18 @@ services:
       - certbot_www:/var/www/certbot:ro
       - certbot_conf:/etc/letsencrypt:ro
     depends_on:
+      - landing
       - app
+
+  # ─── Landing Page (lightweight marketing site) ──────────────────────────────
+  landing:
+    build:
+      context: ./landing
+      dockerfile: Dockerfile
+    container_name: ats-landing
+    restart: unless-stopped
+    ports:
+      - "14005:3000"
 
   # ─── Certbot (SSL cert issuance + auto-renewal) ──────────────────────────────
   certbot:

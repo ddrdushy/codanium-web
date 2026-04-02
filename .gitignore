@@ -52,3 +52,5 @@ test-results/
 # AI-generated project workspaces (dynamic content)
 /workspaces/
 sync-settings.sh
+landing/node_modules
+landing/.next
