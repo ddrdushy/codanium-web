@@ -31,7 +31,7 @@ export function LoginForm() {
       });
 
       if (result?.error || result?.status === 401) {
-        setError('Invalid email or password');
+        setError('Invalid email or password. Please try again.');
         setLoading(false);
       } else if (result?.url) {
         window.location.href = result.url;
