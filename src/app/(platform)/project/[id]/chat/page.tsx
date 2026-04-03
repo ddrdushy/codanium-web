@@ -346,6 +346,7 @@ export default function ChatPage() {
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
   const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
+  const [ideHandoff, setIdeHandoff] = useState(false);
   const [showVSCodePrompt, setShowVSCodePrompt] = useState(false);
   const [llmError, setLlmError] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -497,6 +498,21 @@ export default function ChatPage() {
       })
       .catch(() => {});
   }, [projectId]);
+
+  // Check if project needs IDE handoff (scaffolding card exists)
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/cards`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const hasScaffold = data.some((c: any) =>
+            c.title?.toLowerCase().includes('scaffolding') && c.state !== 'DONE' && c.state !== 'RELEASED'
+          );
+          setIdeHandoff(hasScaffold);
+        }
+      })
+      .catch(() => {});
+  }, [projectId, messages.length]); // Re-check when messages change (new cards may be created)
 
   // Empty state handled in JSX — no demo messages injected
 
@@ -1136,6 +1152,50 @@ export default function ChatPage() {
                     </svg>
                     Open VS Code to Continue
                   </a>
+                </div>
+              </div>
+            )}
+
+            {/* ── Codanium IDE Handoff Banner ──────────────────────────────── */}
+            {ideHandoff && !vscodeRequired && (
+              <div className="mx-4 mb-3 px-4 py-4 rounded-xl border-2 border-amber/50 bg-amber/[0.08] flex items-start gap-3 shadow-lg shadow-amber/5">
+                <div className="mt-0.5 w-10 h-10 rounded-lg bg-amber/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-amber" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber mb-1">Ready for Development</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-1">
+                    Requirements and architecture are complete! Open the Codanium IDE to continue with project scaffolding, coding, testing, and deployment.
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mb-3">
+                    All development work runs through the Codanium Desktop app.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={`codanium://open?projectId=${projectId}`}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber text-black text-xs font-bold hover:bg-amber/90 transition-colors shadow-sm"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                      Open Codanium IDE
+                    </a>
+                    <a
+                      href="https://github.com/AiSenseiMY/Codanium/releases"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:border-amber/30 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Download Codanium Desktop
+                    </a>
+                  </div>
                 </div>
               </div>
             )}

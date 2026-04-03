@@ -212,7 +212,36 @@ export async function PATCH(
           console.error('[Decision] Failed to update SD card:', e);
         }
 
-        // 3. Trigger PM to create development task cards
+        // 3. Create Scaffolding card for DO (deterministic)
+        try {
+          const doAgent = await prisma.agent.findFirst({
+            where: { projectId, shortName: 'DO' },
+            select: { id: true },
+          });
+
+          const existingScaffoldCard = await prisma.card.findFirst({
+            where: { projectId, title: { contains: 'Scaffolding' } },
+          });
+
+          if (!existingScaffoldCard) {
+            await prisma.card.create({
+              data: {
+                title: `Project Scaffolding: ${sddProjectName}`,
+                description: `Phase 3: DevOps Engineer scaffolds the project based on the approved SDD tech stack. Requires Codanium IDE.`,
+                type: 'TASK',
+                state: 'PLANNED',
+                priority: 'HIGH',
+                ownerAgentId: doAgent?.id,
+                projectId,
+              },
+            });
+            console.log(`[Decision] Created Scaffolding card for DO`);
+          }
+        } catch (e) {
+          console.error('[Decision] Failed to create scaffolding card:', e);
+        }
+
+        // 4. Enqueue PM to acknowledge SDD approval + prompt user to open IDE
         try {
           const member = await prisma.projectMember.findFirst({
             where: { projectId },
@@ -220,18 +249,27 @@ export async function PATCH(
           });
           const userId = member?.userId || 'usr-001';
 
+          // Create system message about IDE requirement
+          await prisma.chatMessage.create({
+            data: {
+              role: 'SYSTEM',
+              content: `SDD has been approved. Requirements and architecture phases are COMPLETE. The next phase (Project Scaffolding) requires the Codanium IDE. Inform the user to open the Codanium IDE to continue.`,
+              projectId,
+            },
+          });
+
           await taskQueue.enqueue({
             projectId,
             userId,
-            userMessage: `The SDD has been approved by the user. The Solution Design phase is COMPLETE. Create development task cards based on the SDD for the Tech Lead (TL) to begin implementation planning. Each card should map to a specific module or feature from the SDD.`,
+            userMessage: `The user approved the SDD. Architecture phase is COMPLETE. Tell the user: "Great news! Requirements and architecture are done. To continue with project scaffolding and development, please open the Codanium IDE. If you haven't installed it yet, download it from our releases page." Do NOT create any development task cards yet — scaffolding must happen first in the IDE.`,
             targetAgent: 'PM',
             autoRouted: true,
             isBackground: true,
             priority: 10,
           });
-          console.log(`[Decision] Triggered PM for development task creation`);
+          console.log(`[Decision] Triggered PM for IDE handoff message`);
         } catch (e) {
-          console.error('[Decision] Failed to trigger PM for dev tasks:', e);
+          console.error('[Decision] Failed to trigger PM for IDE handoff:', e);
         }
       }
     }
