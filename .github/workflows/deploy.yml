@@ -98,7 +98,13 @@ jobs:
             if docker compose exec -T nginx test -f /etc/letsencrypt/live/codanium.com/fullchain.pem 2>/dev/null; then
               echo "  Cert found — enabling HTTPS"
               cp nginx-ssl.conf nginx.conf
-              docker compose exec -T nginx nginx -s reload 2>/dev/null || docker compose restart nginx
+              echo "  Testing nginx config..."
+              docker compose exec -T nginx nginx -t 2>&1 || echo "  WARN: nginx config test failed"
+              echo "  Restarting nginx with SSL..."
+              docker compose restart nginx
+              sleep 3
+              docker compose exec -T nginx nginx -t 2>&1
+              echo "  Nginx restarted"
             else
               echo "  No cert — site serves over HTTP only"
             fi
