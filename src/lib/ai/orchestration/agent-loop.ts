@@ -310,7 +310,7 @@ async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promi
 
 const DEFAULT_NEXT_AGENT: Record<string, { next: string; context: string; requiresApproval?: string }> = {
   // PM is FIRST agent on project start. PM routes to BA for requirements.
-  PM: { next: 'BA', context: 'Gather requirements from the user. Ask questions ONE AT A TIME with clickable options. After enough answers, generate the full BRD, call update_document(type="BRD") to persist it, then call approve_document(type="BRD").' },
+  PM: { next: 'BA', context: 'Start requirements gathering. Your FIRST question must ask the user about their technical background (Non-technical / Vibe Coder / Developer / Team Lead) and save it with remember(key="user_profile"). Then ask discovery questions ONE AT A TIME with clickable options, saving each Q&A pair with remember(key="qa_N"). After enough answers, generate the full BRD.' },
   // BA completes BRD → routes back to PM for validation
   BA: { next: 'PM', context: 'Validate the BRD — check completeness, acceptance criteria, content inventory. If gaps, send back to BA with comments. If satisfactory, mark Requirements phase COMPLETE and create Architecture phase card for SA.', requiresApproval: 'BRD' },
   // PM validates BRD → routes to SA for architecture
@@ -409,54 +409,129 @@ const TEXT_TOOL_NAMES = [
 
 function extractTextToolCalls(content: string): LLMToolCall[] {
   const toolCalls: LLMToolCall[] = [];
+  const seen = new Set<string>(); // Dedup by tool+args hash
+
   for (const toolName of TEXT_TOOL_NAMES) {
     const upper = toolName.toUpperCase();
-    // Pattern 1: [CREATE_CARD] { json }
+
+    // Pattern 1: [CREATE_CARD] { json } — tool name in brackets, JSON after
     const re1 = new RegExp(`\\[\\s*${upper}\\s*\\]\\s*\\{([\\s\\S]*?)\\}`, 'gi');
-    // Pattern 2: [CREATE_CARD { json }]
+    // Pattern 2: [CREATE_CARD { json }] — everything inside brackets
     const re2 = new RegExp(`\\[\\s*${upper}\\s+\\{([\\s\\S]*?)\\}\\s*\\]`, 'gi');
-    // Pattern 3: [CREATE_DOCUMENT] <parameter=type> SDD </parameter> <parameter=content> ... </parameter>
-    // Capture everything from the first <parameter until the last </parameter> or end-of-block marker
+    // Pattern 3: XML parameters
     const re3 = new RegExp(`\\[\\s*${upper}\\s*\\]\\s*(<parameter[\\s\\S]*</parameter>)`, 'gi');
+
+    // Pattern 4: ```json block after tool name — models often wrap JSON in code fences
+    const re4 = new RegExp(`\\[\\s*${upper}\\s*\\]\\s*\`\`\`(?:json)?\\s*\\{([\\s\\S]*?)\\}\\s*\`\`\``, 'gi');
+
+    // Pattern 5: Inline function-call style: remember({"key": "value"}) or remember({key: "value"})
+    const re5 = new RegExp(`(?:^|\\n|\\s)${toolName}\\s*\\(\\s*\\{([\\s\\S]*?)\\}\\s*\\)`, 'gi');
+
+    // Pattern 6: Inline function-call with named params: remember(key="user_profile", value="...")
+    const re6 = new RegExp(`(?:^|\\n|\\s)${toolName}\\s*\\(([^)]+)\\)`, 'gi');
+
+    // Process XML pattern
     let m3;
     while ((m3 = re3.exec(content)) !== null) {
       try {
         const xmlBlock = m3[1];
         const args: Record<string, string> = {};
-        // Match all <parameter=key>value</parameter> pairs — use greedy match for content
         const paramRegex = /<parameter(?:=|\s+name=")([^">]+)"?\s*>([\s\S]*?)<\/parameter>/gi;
         let pm;
         while ((pm = paramRegex.exec(xmlBlock)) !== null) {
-          const key = pm[1].trim();
-          const val = pm[2].trim();
-          // For 'content' param, keep full value even if it's long
-          args[key] = val;
+          args[pm[1].trim()] = pm[2].trim();
         }
         if (Object.keys(args).length > 0) {
-          toolCalls.push({
-            id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            name: toolName,
-            arguments: args,
-          });
-          console.log(`[AgentLoop] Extracted XML tool call: ${toolName}(${Object.keys(args).join(', ')})`);
+          const hash = `${toolName}:${JSON.stringify(args)}`;
+          if (!seen.has(hash)) {
+            seen.add(hash);
+            toolCalls.push({
+              id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              name: toolName,
+              arguments: args,
+            });
+            console.log(`[AgentLoop] Extracted XML tool call: ${toolName}(${Object.keys(args).join(', ')})`);
+          }
         }
       } catch { /* skip malformed XML */ }
     }
 
-    for (const re of [re1, re2]) {
+    // Process JSON patterns (re1, re2, re4)
+    for (const re of [re1, re2, re4]) {
       let m;
       while ((m = re.exec(content)) !== null) {
         try {
           const args = JSON.parse('{' + m[1] + '}');
-          toolCalls.push({
-            id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            name: toolName,
-            arguments: args,
-          });
+          const hash = `${toolName}:${JSON.stringify(args)}`;
+          if (!seen.has(hash)) {
+            seen.add(hash);
+            toolCalls.push({
+              id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              name: toolName,
+              arguments: args,
+            });
+            console.log(`[AgentLoop] Extracted JSON tool call: ${toolName}(${Object.keys(args).join(', ')})`);
+          }
         } catch { /* skip malformed JSON */ }
       }
     }
+
+    // Process inline function-call style with JSON: remember({"category": "..."})
+    {
+      let m5;
+      while ((m5 = re5.exec(content)) !== null) {
+        try {
+          const args = JSON.parse('{' + m5[1] + '}');
+          const hash = `${toolName}:${JSON.stringify(args)}`;
+          if (!seen.has(hash)) {
+            seen.add(hash);
+            toolCalls.push({
+              id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              name: toolName,
+              arguments: args,
+            });
+            console.log(`[AgentLoop] Extracted inline tool call: ${toolName}(${Object.keys(args).join(', ')})`);
+          }
+        } catch { /* skip malformed JSON */ }
+      }
+    }
+
+    // Process inline named-param style: remember(key="user_profile", value="developer")
+    {
+      let m6;
+      while ((m6 = re6.exec(content)) !== null) {
+        try {
+          const paramStr = m6[1];
+          // Skip if it looks like JSON (already handled above)
+          if (paramStr.trim().startsWith('{')) continue;
+          const args: Record<string, string> = {};
+          // Match key="value" or key='value' pairs
+          const kvRegex = /(\w+)\s*=\s*["']([^"']*?)["']/g;
+          let kv;
+          while ((kv = kvRegex.exec(paramStr)) !== null) {
+            args[kv[1]] = kv[2];
+          }
+          if (Object.keys(args).length > 0) {
+            const hash = `${toolName}:${JSON.stringify(args)}`;
+            if (!seen.has(hash)) {
+              seen.add(hash);
+              toolCalls.push({
+                id: `text-tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                name: toolName,
+                arguments: args,
+              });
+              console.log(`[AgentLoop] Extracted named-param tool call: ${toolName}(${Object.keys(args).join(', ')})`);
+            }
+          }
+        } catch { /* skip malformed params */ }
+      }
+    }
   }
+
+  if (toolCalls.length > 0) {
+    console.log(`[AgentLoop] Text extraction found ${toolCalls.length} tool call(s): ${toolCalls.map(tc => tc.name).join(', ')}`);
+  }
+
   return toolCalls;
 }
 
@@ -544,19 +619,20 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
     // For pipeline calls, prefix the message so agents know they're in autonomous mode
     let pipelinePrefix = `[PIPELINE] ${sanitizedMessage}\n\nYou are in PIPELINE MODE. Work autonomously — do NOT ask the user questions. Read the project documents in your context and produce your deliverables.`;
 
-    // BA kickoff: ask 3-5 targeted questions, then create BRD after answers
+    // BA is INTERACTIVE — it must ask the user questions, NOT work autonomously
     if (input.isPipeline && currentAgent === 'BA') {
       try {
         const existingBrd = await prisma.document.findFirst({
           where: { projectId: input.projectId, type: 'BRD' },
         });
         if (existingBrd) {
-          pipelinePrefix += `\n\nA BRD already exists (status: ${existingBrd.status}). If the user approved it, call approve_document(type='BRD') and hand off to SA. Otherwise ask what changes they want.`;
+          pipelinePrefix = `[PIPELINE] ${sanitizedMessage}\n\nA BRD already exists (status: ${existingBrd.status}). If the user approved it, call approve_document(type='BRD') and hand off to SA. Otherwise ask what changes they want.`;
         } else {
-          pipelinePrefix += `\n\nYou are starting Phase 1. Ask the user 3-5 targeted questions to understand scope before creating the BRD. Cover: key features, user roles, integrations, constraints, and MVP scope. Ask ONE question at a time with clickable options [A/B/C/D]. After enough answers, create the complete BRD using create_document(type='BRD').`;
+          // BA REPLACES the autonomous prefix — BA is user-facing and must ask questions
+          pipelinePrefix = `[PIPELINE] ${sanitizedMessage}\n\nYou are the Business Analyst starting Phase 1 — Requirements Gathering.\n\nIMPORTANT: You are NOT in autonomous mode. You MUST interact with the user.\n\nYour VERY FIRST message must:\n1. Introduce yourself as the Business Analyst\n2. Ask the user about their technical background:\n   "Before we dive in, how would you describe your technical background?"\n   A) Non-technical — I have the idea, you handle the tech\n   B) Vibe Coder — I know some basics but need guidance\n   C) Developer — I'm technical and want architecture control\n   D) Team Lead — Managing a dev team, need specs for handoff\n3. Save their answer with remember(key="user_profile")\n4. Then ask discovery questions ONE AT A TIME with clickable [A/B/C/D] options\n5. Save each Q&A with remember(key="qa_N")\n6. After enough answers (8-12 questions), generate the full BRD with update_document\n\nDo NOT generate a BRD yet. Do NOT work autonomously. WAIT for user answers.`;
         }
       } catch {
-        pipelinePrefix += `\n\nAsk 3-5 targeted scope questions, then create the BRD.`;
+        pipelinePrefix = `[PIPELINE] ${sanitizedMessage}\n\nYou are the Business Analyst. Ask the user about their technical background first, then ask discovery questions ONE AT A TIME. Do NOT generate the BRD until you have enough answers.`;
       }
     }
 
@@ -567,9 +643,44 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
     // Consolidate all system content into ONE system message at the start
     // (NVIDIA and some providers reject multiple system messages)
     const correction = buildContextCorrection(currentAgent);
-    const fullSystemMessage = correction
+
+    // Add explicit tool call format instructions for models that don't support native function calling.
+    // This tells the model to output tool calls as structured text that extractTextToolCalls() can parse.
+    const toolCallFormatGuide = `
+
+═══════════════════════════════════════════════════════════
+HOW TO CALL TOOLS — MANDATORY FORMAT
+═══════════════════════════════════════════════════════════
+
+When you need to call a tool, you MUST output it in this EXACT format (one per line):
+
+[TOOL_NAME] {"param1": "value1", "param2": "value2"}
+
+Examples:
+[REMEMBER] {"key": "user_profile", "value": "Developer — technical, wants architecture control"}
+[REMEMBER] {"key": "qa_1", "value": "Q: First action on app open? | A: Dashboard view showing current spending vs budget"}
+[UPDATE_DOCUMENT] {"type": "BRD", "title": "Business Requirements Document", "content": "# Business Requirements Document\\n\\n## 1. Executive Summary\\n..."}
+[CREATE_DECISION] {"title": "BRD Approval: Project Name", "description": "Review the BRD", "options": [{"label": "Approve", "pros": "Ready to proceed"}, {"label": "Request Changes", "pros": "Refine further"}]}
+[UPDATE_CARD] {"cardId": "xxx", "state": "DONE"}
+
+RULES:
+- You MUST use this [TOOL_NAME] {json} format — never just describe what you would do
+- Tool name must be UPPERCASE with underscores (e.g., REMEMBER, UPDATE_DOCUMENT, CREATE_DECISION)
+- The JSON must be valid and on the same line or immediately after the tool name
+- You can call multiple tools in one response — put each on its own line
+- ALWAYS include tool calls when instructed to save, remember, update, or create
+- After calling a tool, you may add conversational text before or after the tool call line
+`;
+
+    let fullSystemMessage = correction
       ? `${context.systemMessage}\n\n${correction}`
       : context.systemMessage;
+
+    // Append tool format guide for agents that use tools
+    const TOOL_USING_AGENTS = ['BA', 'PM', 'SA', 'TL', 'JD', 'SD', 'QA', 'DO', 'UX'];
+    if (TOOL_USING_AGENTS.includes(currentAgent)) {
+      fullSystemMessage += toolCallFormatGuide;
+    }
 
     const messages: LLMMessage[] = [
       { role: 'system', content: fullSystemMessage },

@@ -17,13 +17,13 @@
 import type { LLMMessage } from '@/lib/ai/providers/types';
 
 /** Number of messages that triggers summarization */
-const MESSAGE_THRESHOLD = 15;
+const MESSAGE_THRESHOLD = 30;
 
 /** Estimated token count that triggers summarization (chars / 4) */
 const TOKEN_THRESHOLD = 80_000;
 
 /** Number of recent messages to always preserve (never summarized) */
-const PRESERVE_RECENT = 5;
+const PRESERVE_RECENT = 8;
 
 /**
  * Estimate token count for a messages array (rough: chars / 4).

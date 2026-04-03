@@ -72,9 +72,9 @@ export async function seedProject(projectId: string): Promise<SeedProjectResult>
   };
 }
 
-// ── Auto-Kickoff BA Agent ────────────────────────────────────────────────────
+// ── Auto-Kickoff PM Agent (Project Gatekeeper) ──────────────────────────────
 
-export async function autoKickoffBA(
+export async function autoKickoffPM(
   projectId: string,
   projectDescription: string,
   userId: string,
@@ -93,21 +93,46 @@ export async function autoKickoffBA(
     ? `Here is what the stakeholder provided during project setup:\n${briefParts.join('\n')}`
     : `Project description: ${projectDescription}`;
 
-  // Create system message as the initial trigger
-  await prisma.chatMessage.create({
+  // 2. Create "Requirements Gathering" card assigned to BA (deterministic, not LLM-dependent)
+  const baAgent = await prisma.agent.findFirst({
+    where: { projectId, shortName: 'BA' },
+    select: { id: true },
+  });
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { name: true },
+  });
+
+  const projectName = project?.name || 'this project';
+
+  await prisma.card.create({
     data: {
-      role: 'SYSTEM',
-      content: `New project created.\n\n${structuredBrief}\n\nIMPORTANT: The stakeholder already provided the above information. Do NOT re-ask questions they already answered. Start your discovery from where they left off — acknowledge what you know and ask the NEXT relevant question.`,
+      title: `Requirements Gathering: ${projectName}`,
+      description: `Phase 1: Business Analyst gathers full requirements, defines user stories, acceptance criteria, and produces a Business Requirements Document (BRD).\n\n${structuredBrief}`,
+      type: 'TASK',
+      state: 'IN_PROGRESS',
+      priority: 'HIGH',
+      ownerAgentId: baAgent?.id,
       projectId,
     },
   });
 
-  // 2. Enqueue background orchestration job targeting BA agent
+  // 3. Create system message as the initial trigger for PM
+  await prisma.chatMessage.create({
+    data: {
+      role: 'SYSTEM',
+      content: `New project created.\n\n${structuredBrief}\n\nYou are the PM — this is your FIRST ACTIVATION for this project.\nA "Requirements Gathering" card has already been created (state: IN_PROGRESS) and assigned to the Business Analyst (BA).\n\nYour job now — ONLY do these 3 things:\n1. Greet the user warmly and acknowledge the project information they provided above.\n2. Summarize what you understood in 2-3 bullet points.\n3. Tell the user that the Requirements Gathering card has been created and the Business Analyst will start working on their requirements.\n\nSTRICT RULES FOR FIRST ACTIVATION:\n- Do NOT create any cards — the card is already created.\n- Do NOT call update_card — the card is already IN_PROGRESS.\n- Do NOT call consult_agent — you do not need to check with anyone.\n- Do NOT modify any card states.\n- Do NOT re-ask questions the stakeholder already answered.\n- ONLY output a greeting message. The system handles routing to BA automatically after you respond.`,
+      projectId,
+    },
+  });
+
+  // 4. Enqueue background orchestration job targeting PM agent
   const runId = await taskQueue.enqueue({
     projectId,
     userId,
     userMessage: projectDescription,
-    targetAgent: 'BA',
+    targetAgent: 'PM',
     autoRouted: false,
     isBackground: true,
     priority: 10,
@@ -130,7 +155,7 @@ export async function autoKickoffBA(
           'x-internal-secret': process.env.INTERNAL_TASK_SECRET ?? 'dev-task-secret',
         },
         body: JSON.stringify({ maxTasks: 5 }),
-      }).catch((err) => console.error('[autoKickoffBA] trigger error:', err));
+      }).catch((err) => console.error('[autoKickoffPM] trigger error:', err));
     } catch {
       // Fallback: try process-tasks anyway
       const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';

@@ -44,6 +44,7 @@ export const createCard: ToolDefinition = {
       description: { type: 'string', description: 'Detailed description of what this task involves' },
       type: { type: 'string', enum: ['EPIC', 'FEATURE', 'TASK', 'BUG'], description: 'Card type' },
       priority: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'], description: 'Priority level' },
+      assigneeId: { type: 'string', description: 'Agent short name to assign this card to (e.g., "BA", "SA", "DO", "JD", "SD", "QA", "UX", "TL"). The system resolves this to the correct agent.' },
       module: { type: 'string', description: 'Module or feature area (e.g., "Auth API")' },
       parentId: { type: 'string', description: 'Parent card ID (for tasks under features/epics)' },
       requirementIds: {

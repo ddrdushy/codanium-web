@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuthOrApiKey } from '@/lib/auth-guard';
-import { seedProject, autoKickoffBA } from '@/lib/project-seed';
+import { seedProject, autoKickoffPM } from '@/lib/project-seed';
 import { validateBody } from '@/lib/validations/validate';
 import { createProjectSchema } from '@/lib/validations/schemas';
 import { initializeWorkspace } from '@/lib/ai/tools/workspace';
@@ -187,11 +187,11 @@ export async function POST(request: NextRequest) {
       console.error('Memory seed failed (non-fatal):', memoryError);
     }
 
-    // Auto-kickoff BA agent (async background job)
+    // Auto-kickoff PM agent — greets user and creates BA requirement card
     if (data.description) {
-      autoKickoffBA(project.id, data.description, userId)
-        .then((runId) => console.log(`[Project ${project.id}] BA kickoff queued: ${runId}`))
-        .catch((err) => console.error('BA auto-kickoff failed (non-fatal):', err));
+      autoKickoffPM(project.id, data.description, userId)
+        .then((runId) => console.log(`[Project ${project.id}] PM kickoff queued: ${runId}`))
+        .catch((err) => console.error('PM auto-kickoff failed (non-fatal):', err));
     }
 
     return NextResponse.json(project, { status: 201 });

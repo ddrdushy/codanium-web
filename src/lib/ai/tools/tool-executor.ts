@@ -613,7 +613,7 @@ async function handleUpdateDocument(args: Record<string, any>, projectId: string
       data: {
         projectId,
         type: args.type,
-        title: `Staging: ${args.type} Requirements`,
+        title: args.title || `Business Requirements Document`,
         content: args.content || '',
         status: 'DRAFT',
         owner: 'system',
@@ -640,6 +640,9 @@ async function handleUpdateDocument(args: Record<string, any>, projectId: string
 }
 
 async function handleApproveDocument(args: Record<string, any>, projectId: string) {
+  // Documents cannot be self-approved by agents. They must go through
+  // the user approval flow via My Decisions. This tool now creates a
+  // decision for user approval instead of directly approving.
   const doc = await prisma.document.findFirst({
     where: { projectId, type: args.type },
     orderBy: { createdAt: 'desc' },
@@ -649,11 +652,43 @@ async function handleApproveDocument(args: Record<string, any>, projectId: strin
     throw new Error(`No ${args.type} document found to approve`);
   }
 
-  await prisma.document.update({
-    where: { id: doc.id },
-    data: { status: 'APPROVED' },
+  // Instead of directly approving, create a decision for user sign-off
+  const member = await prisma.projectMember.findFirst({
+    where: { projectId },
+    select: { userId: true },
   });
-  return { documentId: doc.id, type: args.type, status: 'APPROVED' };
+  const ownerId = member?.userId || 'usr-001';
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { name: true },
+  });
+  const projectName = project?.name || 'this project';
+  const docLabel = args.type === 'BRD' ? 'Business Requirements Document' : args.type === 'SDD' ? 'System Design Document' : args.type;
+
+  const decision = await prisma.decision.create({
+    data: {
+      projectId,
+      trigger: `${args.type} Approval: ${projectName}`,
+      context: `The ${docLabel} is ready for review and approval. Please review the document in the Documents section and approve or request changes.`,
+      status: 'AWAITING_APPROVAL',
+      recommendation: `Approve the ${args.type} — the document has been reviewed and is ready for the next phase.`,
+      ownerId,
+      options: {
+        create: [
+          { name: `Approve ${args.type} — proceed to next phase`, description: `The ${docLabel} is complete and ready`, pros: { set: ['Document is complete', 'Ready to proceed'] }, cons: { set: ['Changes require re-approval'] } },
+          { name: 'Request changes', description: `Send back for revisions`, pros: { set: ['Opportunity to refine'] }, cons: { set: ['Delays the project'] } },
+        ],
+      },
+    },
+  });
+
+  return {
+    documentId: doc.id,
+    type: args.type,
+    status: 'AWAITING_APPROVAL',
+    decisionId: decision.id,
+    message: `${args.type} sent to My Decisions for user approval. The user must approve before proceeding.`,
+  };
 }
 
 async function handleCreateDecision(
@@ -669,30 +704,58 @@ async function handleCreateDecision(
   });
   const ownerId = member?.userId || 'usr-001'; // fallback to default user
 
+  // Parse options from tool args
+  const options: Array<{ label: string; pros: string; cons: string }> = args.options || [];
+  const hasOptions = options.length > 0;
+
   const decision = await prisma.decision.create({
     data: {
       projectId,
       trigger: args.title,
       context: args.description || '',
-      status: 'DRAFTED',
+      status: hasOptions ? 'AWAITING_APPROVAL' : 'DRAFTED',
       recommendation: args.recommendation || '',
       ownerId,
+      options: hasOptions ? {
+        create: options.map((opt) => {
+          // Normalize pros/cons — LLM may send string, array, or nothing
+          const prosArr = Array.isArray(opt.pros) ? opt.pros : (opt.pros ? [String(opt.pros)] : []);
+          const consArr = Array.isArray(opt.cons) ? opt.cons : (opt.cons ? [String(opt.cons)] : []);
+          return {
+            name: opt.label || (prosArr[0] || '').substring(0, 50) || 'Option',
+            description: `${prosArr.join(', ')}\n${consArr.join(', ')}`.trim(),
+            pros: { set: prosArr.map(String) },
+            cons: { set: consArr.map(String) },
+          };
+        }),
+      } : undefined,
     },
+    include: { options: true },
   });
-  return { decisionId: decision.id, trigger: decision.trigger };
+  return {
+    decisionId: decision.id,
+    trigger: decision.trigger,
+    status: decision.status,
+    optionCount: decision.options?.length || 0,
+    message: hasOptions
+      ? 'Decision created and sent to user for approval in My Decisions menu.'
+      : 'Decision drafted. Add options to send for user approval.',
+  };
 }
 
 async function handleRemember(args: Record<string, any>, projectId: string) {
-  // ProjectMemory uses category + content + source
+  // Accept both key/value and category/content parameter names
+  const category = args.key || args.category || 'general';
+  const content = args.value || args.content || JSON.stringify(args);
   await prisma.projectMemory.create({
     data: {
       projectId,
-      category: args.key,
-      content: args.value,
+      category,
+      content,
       source: 'agent',
     },
   });
-  return { key: args.key, stored: true };
+  return { key: category, stored: true };
 }
 
 // ─── Web Handlers ─────────────────────────────────────────────────────────────

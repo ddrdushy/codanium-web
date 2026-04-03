@@ -74,9 +74,13 @@ async function processOrchestrationJob(
     isPipeline: true,
   });
 
-  // Drain the generator silently — no SSE streaming in background mode
-  for await (const _event of events) {
-    // Events discarded in background mode
+  // Drain the generator — handle pipeline_next events for auto-continuation
+  let pipelineNext: { nextAgent: string; context: string; depth: number } | null = null;
+  for await (const event of events) {
+    // Capture pipeline_next to continue the chain after this agent completes
+    if (event.type === 'pipeline_next' && event.data) {
+      pipelineNext = event.data as { nextAgent: string; context: string; depth: number };
+    }
   }
 
   // 6. Mark COMPLETED in Postgres
@@ -102,6 +106,24 @@ async function processOrchestrationJob(
     const { maybeCompleteTeam } = await import('@/lib/ai/orchestration/team-dispatch');
     await maybeCompleteTeam(run.parentRunId, run.projectId).catch((err) => {
       console.warn('[Worker] maybeCompleteTeam failed:', err.message);
+    });
+  }
+
+  // 9. Pipeline continuation — if the agent yielded a pipeline_next event,
+  //    enqueue the next agent as a new background task (e.g., PM → BA)
+  if (pipelineNext) {
+    console.log(`[Worker] Pipeline continuation: ${run.routedTo} -> ${pipelineNext.nextAgent}`);
+    const { taskQueue } = await import('@/lib/ai/orchestration/task-queue');
+    await taskQueue.enqueue({
+      projectId: run.projectId,
+      userId: run.userId,
+      userMessage: pipelineNext.context,
+      targetAgent: pipelineNext.nextAgent,
+      autoRouted: true,
+      isBackground: true,
+      priority: 10,
+    }).catch((err) => {
+      console.error(`[Worker] Pipeline continuation failed: ${err.message}`);
     });
   }
 }

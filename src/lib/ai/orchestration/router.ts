@@ -365,7 +365,26 @@ export class MessageRouter {
    * @returns Agent shortName (e.g. "BA", "SA", "QA").
    */
   async route(message: string, projectId: string): Promise<string> {
-    const agent = await this.resolveRoute(message, projectId);
+    let agent = await this.resolveRoute(message, projectId);
+
+    // ── BRD Phase Guard ──────────────────────────────────────────────
+    // If routed to a dev agent (TL, JD, SD, etc.) but BRD is not yet
+    // approved, redirect to BA to finalize BRD first. "Ready to build"
+    // during requirements phase should trigger BRD generation, not coding.
+    if (DEV_AGENTS.has(agent)) {
+      try {
+        const brd = await prisma.document.findFirst({
+          where: { projectId, type: 'BRD' },
+          select: { status: true },
+        });
+        if (!brd || brd.status !== 'APPROVED') {
+          console.log(
+            `[MessageRouter] Dev agent ${agent} requested but BRD not approved (${brd?.status ?? 'none'}) → redirecting to BA`,
+          );
+          agent = 'BA';
+        }
+      } catch { /* fall through to normal routing */ }
+    }
 
     // ── VS Code Gate ─────────────────────────────────────────────────
     // Development agents require VS Code. If VS Code isn't connected,
@@ -469,21 +488,36 @@ export class MessageRouter {
     }
 
     // ── Priority 3.5: Smart code_generation routing ──────────────────
-    // If user wants to build but no cards exist yet, route to PM first
-    // so it can create the task backlog before TL tries to assign work.
+    // "Ready to build" during requirements phase should go to BA (to generate BRD),
+    // not to TL. Only route to TL when BRD is approved and cards exist.
     if (intent === 'code_generation') {
       try {
+        // Check if BRD exists and is approved
+        const brd = await prisma.document.findFirst({
+          where: { projectId, type: 'BRD' },
+          select: { status: true },
+        });
+
+        if (!brd || brd.status !== 'APPROVED') {
+          // BRD not yet approved — keep with BA to generate/finalize BRD
+          console.log(
+            `[MessageRouter] code_generation intent but BRD not approved (status: ${brd?.status ?? 'none'}) → routing to BA`,
+          );
+          return 'BA';
+        }
+
         const cardCount = await prisma.card.count({
           where: { projectId },
         });
-        if (cardCount === 0) {
+        if (cardCount <= 1) {
+          // Only the Requirements Gathering card exists — route to PM to create backlog
           console.log(
-            `[MessageRouter] code_generation intent but 0 cards → routing to PM to create backlog`,
+            `[MessageRouter] code_generation intent but only ${cardCount} card(s) → routing to PM to create backlog`,
           );
           return 'PM';
         }
       } catch (e) {
-        console.warn('[MessageRouter] Card count check failed:', e);
+        console.warn('[MessageRouter] Code generation routing check failed:', e);
       }
     }
 

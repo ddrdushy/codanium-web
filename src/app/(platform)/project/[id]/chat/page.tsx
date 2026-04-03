@@ -432,10 +432,11 @@ export default function ChatPage() {
   // Poll for BA auto-kickoff response when only system message exists.
   // On new projects, BA generates its first message in the background (~5s).
   // The page may load before BA finishes, showing only the system message.
-  // Poll every 2s until an AGENT message appears, then stop.
+  // Poll every 2s until PM + BA messages appear (pipeline kickoff creates both).
   // IMPORTANT: Do NOT depend on `messages` — it changes during streaming
   // and would cause re-render storms / browser crashes.
   const [needsKickoffPoll, setNeedsKickoffPoll] = useState(false);
+  const kickoffAgentCountRef = useRef(0);
   useEffect(() => {
     if (!loaded) return;
     const hasAgentMsg = messages.some(m => m.role === 'agent');
@@ -452,7 +453,9 @@ export default function ChatPage() {
       fetch(`/api/projects/${projectId}/chat`)
         .then(r => r.json())
         .then((data: any[]) => {
-          if (Array.isArray(data) && data.some((m: any) => m.role === 'AGENT')) {
+          if (!Array.isArray(data)) return;
+          const agentMsgs = data.filter((m: any) => m.role === 'AGENT');
+          if (agentMsgs.length > 0) {
             const seen = new Set<string>();
             const unique = data.filter((m: any) => {
               if (seen.has(m.id)) return false;
@@ -471,14 +474,18 @@ export default function ChatPage() {
               thinking: m.thinking ?? undefined,
               timestamp: formatTime(m.createdAt),
             })));
-            setNeedsKickoffPoll(false);
-            clearInterval(interval);
+            // Stop polling once we have 2+ agent messages (PM + BA) or count stabilized
+            if (agentMsgs.length >= 2 || (agentMsgs.length === kickoffAgentCountRef.current && kickoffAgentCountRef.current > 0)) {
+              setNeedsKickoffPoll(false);
+              clearInterval(interval);
+            }
+            kickoffAgentCountRef.current = agentMsgs.length;
           }
         })
         .catch(() => {});
     }, 2000);
 
-    const timeout = setTimeout(() => { clearInterval(interval); setNeedsKickoffPoll(false); }, 30000);
+    const timeout = setTimeout(() => { clearInterval(interval); setNeedsKickoffPoll(false); }, 90000);
     return () => { clearInterval(interval); clearTimeout(timeout); };
   }, [needsKickoffPoll, projectId]);
 

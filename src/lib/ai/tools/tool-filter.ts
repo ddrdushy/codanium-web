@@ -15,6 +15,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
   // ─── SDLC Agents ───────────────────────────────────────
   BA: [
     'create_document', 'update_document', 'approve_document',
+    'update_card',
     'create_decision', 'remember', 'task_progress',
     'consult_agent',
   ],
