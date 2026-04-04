@@ -202,11 +202,18 @@ export class OpenAIAdapter implements LLMProvider {
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
-
     if (!res.ok) {
-      throw new Error(`LLM API error (${res.status}): ${extractError(data)}`);
+      let errorMsg = `LLM API error (${res.status})`;
+      try {
+        const errorData = await res.json();
+        errorMsg += `: ${extractError(errorData)}`;
+      } catch {
+        // Response may not be JSON (e.g. 503 HTML page)
+      }
+      throw new Error(errorMsg);
     }
+
+    const data = await res.json();
 
     const choice = data.choices?.[0];
     const content = choice?.message?.content ?? '';
@@ -393,7 +400,7 @@ export class OpenAIAdapter implements LLMProvider {
             // Accumulate tool calls from delta
             if (delta?.tool_calls) {
               for (const tc of delta.tool_calls as Array<Record<string, any>>) {
-                const idx = tc.index ?? 0;
+                const idx = tc.index ?? toolCallAccumulators.size;
                 if (!toolCallAccumulators.has(idx)) {
                   toolCallAccumulators.set(idx, {
                     id: tc.id ?? '',

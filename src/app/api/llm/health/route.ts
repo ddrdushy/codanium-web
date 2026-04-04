@@ -1,13 +1,25 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decrypt, isEncrypted } from '@/lib/ai/encryption';
+import { llmGateway } from '@/lib/ai';
+import type { ProviderConfig } from '@/lib/ai';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/llm/health
  * Check whether the current LLM provider is configured and reachable.
- * Returns: { configured: boolean, provider: string, model: string, error?: string }
+ * Now performs actual connectivity tests (not just key-existence checks)
+ * and reports the full platform fallback chain status.
+ *
+ * Returns: {
+ *   configured: boolean,
+ *   provider: string,
+ *   model: string,
+ *   reachable: boolean,
+ *   error?: string,
+ *   fallbackChain?: Array<{ provider, model, priority, reachable, error? }>
+ * }
  */
 export async function GET() {
   try {
@@ -38,113 +50,75 @@ export async function GET() {
       }
     }
 
-    // Admin-only config — no user-level BYOM
-    const effectiveProvider = provider;
-    const effectiveModel = model;
-    const effectiveBaseUrl = baseUrl;
-    const effectiveApiKey = apiKey;
+    // ── Check platform fallback chain ──
+    const fallbackChain = await checkFallbackChain();
 
-    if (!effectiveProvider || effectiveProvider === 'mock') {
+    if (!provider || provider === 'mock') {
+      // No admin default — check if fallback chain has anything
+      const hasWorkingFallback = fallbackChain.some(f => f.reachable);
+      return NextResponse.json({
+        configured: hasWorkingFallback,
+        provider: provider || 'none',
+        model: model || '',
+        reachable: hasWorkingFallback,
+        error: hasWorkingFallback
+          ? undefined
+          : 'No LLM provider configured. Please ask your administrator to set up a provider in Admin Settings.',
+        fallbackChain,
+      });
+    }
+
+    // ── Validate the admin default provider with a real connectivity test ──
+    const config: ProviderConfig = {
+      provider,
+      apiKey: apiKey || undefined,
+      baseUrl: baseUrl || undefined,
+      defaultModel: model,
+    };
+
+    const adapter = llmGateway.getProvider(provider);
+    if (!adapter) {
       return NextResponse.json({
         configured: false,
-        provider: effectiveProvider || 'none',
-        model: effectiveModel || '',
-        error: 'No LLM provider configured. Please ask your administrator to set up a provider in Admin Settings.',
+        provider,
+        model,
+        reachable: false,
+        error: `Unknown provider "${provider}". Supported: openai, anthropic, ollama, mistral, nvidia, groq, together, custom.`,
+        fallbackChain,
       });
     }
 
-    // ── Provider-specific checks ──
-
-    if (effectiveProvider === 'ollama') {
-      let ollamaUrl = effectiveBaseUrl || 'http://host.docker.internal:11434';
-      // Translate localhost/127.0.0.1 to Docker host gateway when inside Docker
-      ollamaUrl = ollamaUrl
-        .replace('://localhost:', '://host.docker.internal:')
-        .replace('://127.0.0.1:', '://host.docker.internal:');
-      try {
-        const res = await fetch(`${ollamaUrl}/api/tags`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (!res.ok) {
-          return NextResponse.json({
-            configured: false,
-            provider: effectiveProvider,
-            model: effectiveModel,
-            error: `Ollama returned HTTP ${res.status} at ${ollamaUrl}. Make sure Ollama is running.`,
-          });
-        }
-        return NextResponse.json({
-          configured: true,
-          provider: effectiveProvider,
-          model: effectiveModel,
-        });
-      } catch (err) {
-        return NextResponse.json({
-          configured: false,
-          provider: effectiveProvider,
-          model: effectiveModel,
-          error: `Ollama is not reachable at ${ollamaUrl}. Make sure Ollama is running and accessible.`,
-        });
-      }
-    }
-
-    if (effectiveProvider === 'openai') {
-      if (!effectiveApiKey) {
-        return NextResponse.json({
-          configured: false,
-          provider: effectiveProvider,
-          model: effectiveModel,
-          error: 'OpenAI API key is not set. Please add your API key in Settings.',
-        });
-      }
+    // Check if API key is required but missing (skip for ollama/custom)
+    if (!apiKey && provider !== 'ollama' && provider !== 'custom') {
       return NextResponse.json({
-        configured: true,
-        provider: effectiveProvider,
-        model: effectiveModel,
+        configured: false,
+        provider,
+        model,
+        reachable: false,
+        error: `${provider} API key is not set. Please add your API key in Admin Settings.`,
+        fallbackChain,
       });
     }
 
-    if (effectiveProvider === 'anthropic') {
-      if (!effectiveApiKey) {
-        return NextResponse.json({
-          configured: false,
-          provider: effectiveProvider,
-          model: effectiveModel,
-          error: 'Anthropic API key is not set. Please add your API key in Settings.',
-        });
+    // Actual connectivity test
+    let reachable = false;
+    let error: string | undefined;
+    try {
+      reachable = await adapter.validateConnection(config);
+      if (!reachable) {
+        error = `${provider} connection test failed. Check your API key, base URL, and ensure the service is running.`;
       }
-      return NextResponse.json({
-        configured: true,
-        provider: effectiveProvider,
-        model: effectiveModel,
-      });
+    } catch (err) {
+      error = `${provider} connection test error: ${err instanceof Error ? err.message : 'Unknown error'}`;
     }
 
-    // OpenAI-compatible providers (Mistral, NVIDIA, Groq, Together, custom)
-    // These use the same format as OpenAI — just need an API key and base URL
-    const openaiCompatible = ['mistral', 'nvidia', 'groq', 'together', 'custom'];
-    if (openaiCompatible.includes(effectiveProvider)) {
-      if (!effectiveApiKey && effectiveProvider !== 'custom') {
-        return NextResponse.json({
-          configured: false,
-          provider: effectiveProvider,
-          model: effectiveModel,
-          error: `${effectiveProvider} API key is not set. Please add your API key in Admin Settings.`,
-        });
-      }
-      return NextResponse.json({
-        configured: true,
-        provider: effectiveProvider,
-        model: effectiveModel,
-      });
-    }
-
-    // Unknown provider — treat as not configured
     return NextResponse.json({
-      configured: false,
-      provider: effectiveProvider,
-      model: effectiveModel,
-      error: `Unknown provider "${effectiveProvider}". Supported: openai, anthropic, ollama, mistral, nvidia, groq, together, custom.`,
+      configured: true,
+      provider,
+      model,
+      reachable,
+      error,
+      fallbackChain,
     });
   } catch (error) {
     console.error('GET /api/llm/health error:', error);
@@ -153,9 +127,96 @@ export async function GET() {
         configured: false,
         provider: 'unknown',
         model: '',
+        reachable: false,
         error: 'Failed to check LLM configuration. Please try again.',
       },
       { status: 500 }
     );
+  }
+}
+
+// ── Fallback Chain Health ──────────────────────────────────────────────────
+
+interface FallbackStatus {
+  provider: string;
+  model: string;
+  priority: number;
+  reachable: boolean;
+  error?: string;
+}
+
+async function checkFallbackChain(): Promise<FallbackStatus[]> {
+  try {
+    const platformConfigs = await prisma.lLMProviderConfig.findMany({
+      where: { scope: 'PLATFORM', isActive: true },
+      orderBy: { priority: 'asc' },
+    });
+
+    if (platformConfigs.length === 0) return [];
+
+    // Test each provider in parallel with a timeout
+    const results = await Promise.all(
+      platformConfigs.map(async (cfg): Promise<FallbackStatus> => {
+        const adapter = llmGateway.getProvider(cfg.provider);
+        if (!adapter) {
+          return {
+            provider: cfg.provider,
+            model: cfg.defaultModel,
+            priority: cfg.priority,
+            reachable: false,
+            error: `Unknown provider "${cfg.provider}"`,
+          };
+        }
+
+        // Decrypt API key
+        let apiKey: string | undefined;
+        if (cfg.apiKeyEncrypted) {
+          try {
+            apiKey = isEncrypted(cfg.apiKeyEncrypted)
+              ? decrypt(cfg.apiKeyEncrypted)
+              : cfg.apiKeyEncrypted;
+          } catch {
+            return {
+              provider: cfg.provider,
+              model: cfg.defaultModel,
+              priority: cfg.priority,
+              reachable: false,
+              error: 'Failed to decrypt API key',
+            };
+          }
+        }
+
+        const config: ProviderConfig = {
+          provider: cfg.provider,
+          apiKey,
+          baseUrl: cfg.baseUrl ?? undefined,
+          defaultModel: cfg.defaultModel,
+        };
+
+        try {
+          const reachable = await adapter.validateConnection(config);
+          return {
+            provider: cfg.provider,
+            model: cfg.defaultModel,
+            priority: cfg.priority,
+            reachable,
+            error: reachable ? undefined : 'Connection test returned false',
+          };
+        } catch (err) {
+          return {
+            provider: cfg.provider,
+            model: cfg.defaultModel,
+            priority: cfg.priority,
+            reachable: false,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          };
+        }
+      }),
+    );
+
+    return results;
+  } catch (err) {
+    console.error('[Health] Failed to check fallback chain:', err);
+    return [];
   }
 }

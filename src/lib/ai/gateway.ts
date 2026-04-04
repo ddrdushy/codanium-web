@@ -38,7 +38,14 @@ interface ResolvedConfig {
   config: ProviderConfig;
   isMock: boolean;
   billingType: BillingType;
+  /** The scope that matched (USER, AGENT, PROJECT, PLATFORM, ADMIN). */
+  scope: string;
+  /** Priority number for PLATFORM-scoped configs (used for fallback). */
+  priority?: number;
 }
+
+/** Max number of fallback attempts to prevent infinite loops. */
+const MAX_FALLBACK_ATTEMPTS = 10;
 
 // ---------------------------------------------------------------------------
 // Gateway
@@ -82,7 +89,7 @@ export class LLMGateway {
         });
         if (userConfig) {
           console.log(`[LLMGateway] ✓ BYOK config: provider=${userConfig.provider}, user=${userId}`);
-          return { ...this.resolveConfig(userConfig), billingType: 'BYOK' };
+          return { ...this.resolveConfig(userConfig), billingType: 'BYOK', scope: 'USER' };
         }
       } catch (err) {
         console.warn('[LLMGateway] ✗ User-level BYOK query failed:', err);
@@ -98,7 +105,7 @@ export class LLMGateway {
         });
         if (agentConfig) {
           console.log(`[LLMGateway] ✓ AGENT config: provider=${agentConfig.provider}, agent=${agentId}`);
-          return { ...this.resolveConfig(agentConfig), billingType: 'PLATFORM' };
+          return { ...this.resolveConfig(agentConfig), billingType: 'PLATFORM', scope: 'AGENT' };
         }
       } catch (err) {
         console.warn('[LLMGateway] ✗ Agent-level config query failed:', err);
@@ -114,7 +121,7 @@ export class LLMGateway {
         });
         if (projectConfig) {
           console.log(`[LLMGateway] ✓ PROJECT config: provider=${projectConfig.provider}`);
-          return { ...this.resolveConfig(projectConfig), billingType: 'PLATFORM' };
+          return { ...this.resolveConfig(projectConfig), billingType: 'PLATFORM', scope: 'PROJECT' };
         }
       } catch (err) {
         console.warn('[LLMGateway] ✗ Project-level config query failed:', err);
@@ -133,7 +140,7 @@ export class LLMGateway {
         const firstConfig = platformConfigs[0];
         if (this.providers.has(firstConfig.provider)) {
           console.log(`[LLMGateway] ✓ PLATFORM fallback chain: provider=${firstConfig.provider}, model=${firstConfig.defaultModel}, priority=${firstConfig.priority}`);
-          return { ...this.resolveConfig(firstConfig), billingType: 'PLATFORM' };
+          return { ...this.resolveConfig(firstConfig), billingType: 'PLATFORM', scope: 'PLATFORM', priority: firstConfig.priority };
         }
       }
     } catch (err) {
@@ -173,6 +180,7 @@ export class LLMGateway {
           config,
           isMock: false,
           billingType: 'PLATFORM',
+          scope: 'ADMIN',
         };
       }
     } catch (err) {
@@ -195,7 +203,7 @@ export class LLMGateway {
     baseUrl: string | null;
     organizationId: string | null;
     defaultModel: string;
-  }): Omit<ResolvedConfig, 'billingType'> {
+  }): Omit<ResolvedConfig, 'billingType' | 'scope' | 'priority'> {
     const provider = this.providers.get(dbConfig.provider);
     if (!provider) {
       throw new Error(
@@ -209,8 +217,9 @@ export class LLMGateway {
         apiKey = isEncrypted(dbConfig.apiKeyEncrypted)
           ? decrypt(dbConfig.apiKeyEncrypted)
           : dbConfig.apiKeyEncrypted;
-      } catch {
-        apiKey = undefined;
+      } catch (decryptErr) {
+        console.error(`[LLMGateway] Failed to decrypt API key for provider "${dbConfig.provider}":`, decryptErr);
+        throw new Error(`Failed to decrypt API key for provider "${dbConfig.provider}". Check LLM_ENCRYPTION_KEY.`);
       }
     }
 
@@ -233,34 +242,57 @@ export class LLMGateway {
     await this.enforceRateLimit(options.projectId);
 
     const userId = options.metadata?.userId;
-    const { provider, config, isMock, billingType } = await this.resolve(
+    let resolved = await this.resolve(
       options.projectId,
       options.agentId,
       userId,
     );
 
     // Pre-flight credit check (only for PLATFORM path)
-    if (userId && billingType === 'PLATFORM') {
+    if (userId && resolved.billingType === 'PLATFORM') {
       await this.enforceCredits(userId);
     }
 
-    const startTime = Date.now();
-    let response: LLMResponse;
-    try {
-      response = await provider.complete(options, config);
-    } catch (err) {
-      console.error(`[LLMGateway] Provider "${config.provider}" failed after ${Date.now() - startTime}ms:`, err);
-      throw err;
-    }
-    response.latencyMs = Date.now() - startTime;
+    // Try the resolved provider, then walk the fallback chain on failure
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= MAX_FALLBACK_ATTEMPTS; attempt++) {
+      const { provider, config, isMock, billingType } = resolved;
+      const startTime = Date.now();
 
-    if (!isMock) {
-      this.logUsage(options, response, billingType, userId).catch((logErr) => {
-        console.error('[LLMGateway] Failed to log usage:', logErr);
-      });
+      try {
+        const response = await provider.complete(options, config);
+        response.latencyMs = Date.now() - startTime;
+
+        if (!isMock) {
+          this.logUsage(options, response, billingType, userId).catch((logErr) => {
+            console.error('[LLMGateway] Failed to log usage:', logErr);
+          });
+        }
+
+        return response;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.error(
+          `[LLMGateway] Provider "${config.provider}" failed after ${Date.now() - startTime}ms:`,
+          lastError.message,
+        );
+
+        // Only attempt fallback for PLATFORM-scoped configs
+        if (resolved.scope !== 'PLATFORM') {
+          throw lastError;
+        }
+
+        const fallback = await this.resolveFallback(config.provider, resolved.priority);
+        if (!fallback) {
+          console.error('[LLMGateway] No more fallback providers available');
+          throw lastError;
+        }
+
+        resolved = { ...fallback, isMock: false, scope: 'PLATFORM', priority: fallback.priority };
+      }
     }
 
-    return response;
+    throw lastError ?? new Error('LLM: unknown error after fallback attempts');
   }
 
   // -------------------------------------------------------------------------
@@ -269,17 +301,14 @@ export class LLMGateway {
 
   async *stream(
     options: LLMRequestOptions,
-    configOverride?: { provider: LLMProvider; config: ProviderConfig; billingType: BillingType },
+    configOverride?: { provider: LLMProvider; config: ProviderConfig; billingType: BillingType; priority?: number },
   ): AsyncIterable<LLMStreamChunk> {
     // Per-project rate limit check
     await this.enforceRateLimit(options.projectId);
 
     const userId = options.metadata?.userId;
-    // When a configOverride is provided (e.g. from fallback retry), use it
-    // instead of resolving from the DB. This ensures the full provider config
-    // (API key, base URL, adapter) is used, not just the model name.
-    const { provider, config, isMock, billingType } = configOverride
-      ? { ...configOverride, isMock: false }
+    let resolved: ResolvedConfig = configOverride
+      ? { ...configOverride, isMock: false, scope: 'PLATFORM' }
       : await this.resolve(
           options.projectId,
           options.agentId,
@@ -287,35 +316,75 @@ export class LLMGateway {
         );
 
     // Pre-flight credit check (only for PLATFORM path)
-    if (userId && billingType === 'PLATFORM') {
+    if (userId && resolved.billingType === 'PLATFORM') {
       await this.enforceCredits(userId);
     }
 
-    let lastTokensUsed: LLMResponse['tokensUsed'] | undefined;
-    for await (const chunk of provider.stream(options, config)) {
-      if (chunk.done && chunk.tokensUsed) {
-        lastTokensUsed = chunk.tokensUsed;
+    // Try the resolved provider, then walk the fallback chain on failure.
+    // Only fallback if no chunks have been yielded yet (can't restart mid-stream).
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= MAX_FALLBACK_ATTEMPTS; attempt++) {
+      const { provider, config, isMock, billingType } = resolved;
+      let yieldedAny = false;
+
+      try {
+        let lastTokensUsed: LLMResponse['tokensUsed'] | undefined;
+        for await (const chunk of provider.stream(options, config)) {
+          if (chunk.done && chunk.tokensUsed) {
+            lastTokensUsed = chunk.tokensUsed;
+          }
+          yieldedAny = true;
+          yield chunk;
+        }
+
+        // Stream completed successfully — log usage
+        if (!isMock && lastTokensUsed && options.projectId) {
+          this.logUsage(
+            options,
+            {
+              content: '',
+              tokensUsed: lastTokensUsed,
+              model: options.model ?? config.defaultModel,
+              provider: config.provider,
+              latencyMs: 0,
+              finishReason: 'stop',
+            },
+            billingType,
+            userId,
+          ).catch((logErr) => {
+            console.error('[LLMGateway] Failed to log stream usage:', logErr);
+          });
+        }
+
+        return; // success
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.error(
+          `[LLMGateway] Stream provider "${config.provider}" failed:`,
+          lastError.message,
+        );
+
+        // If we already yielded chunks, we can't restart — throw
+        if (yieldedAny) {
+          throw lastError;
+        }
+
+        // Only attempt fallback for PLATFORM-scoped configs
+        if (resolved.scope !== 'PLATFORM') {
+          throw lastError;
+        }
+
+        const fallback = await this.resolveFallback(config.provider, resolved.priority);
+        if (!fallback) {
+          console.error('[LLMGateway] No more stream fallback providers available');
+          throw lastError;
+        }
+
+        resolved = { ...fallback, isMock: false, scope: 'PLATFORM', priority: fallback.priority };
       }
-      yield chunk;
     }
 
-    if (!isMock && lastTokensUsed && options.projectId) {
-      this.logUsage(
-        options,
-        {
-          content: '',
-          tokensUsed: lastTokensUsed,
-          model: options.model ?? config.defaultModel,
-          provider: config.provider,
-          latencyMs: 0,
-          finishReason: 'stop',
-        },
-        billingType,
-        userId,
-      ).catch((logErr) => {
-        console.error('[LLMGateway] Failed to log stream usage:', logErr);
-      });
-    }
+    throw lastError ?? new Error('LLM: unknown streaming error after fallback attempts');
   }
 
   // -------------------------------------------------------------------------
@@ -338,7 +407,7 @@ export class LLMGateway {
   async resolveFallback(
     failedProvider: string,
     failedPriority?: number,
-  ): Promise<{ provider: LLMProvider; config: ProviderConfig; billingType: BillingType } | null> {
+  ): Promise<{ provider: LLMProvider; config: ProviderConfig; billingType: BillingType; priority: number } | null> {
     try {
       const platformConfigs = await prisma.lLMProviderConfig.findMany({
         where: { scope: 'PLATFORM', isActive: true },
@@ -354,7 +423,7 @@ export class LLMGateway {
         }
         if (found && this.providers.has(cfg.provider)) {
           console.log(`[LLMGateway] ↪ Fallback: ${failedProvider} failed → trying ${cfg.provider} (priority ${cfg.priority})`);
-          return { ...this.resolveConfig(cfg), billingType: 'PLATFORM' as BillingType };
+          return { ...this.resolveConfig(cfg), billingType: 'PLATFORM' as BillingType, priority: cfg.priority };
         }
       }
     } catch (err) {

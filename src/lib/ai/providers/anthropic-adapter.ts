@@ -419,8 +419,9 @@ export class AnthropicAdapter implements LLMProvider {
                   let parsedArgs: Record<string, any> = {};
                   try {
                     parsedArgs = JSON.parse(currentToolArgsJson || '{}');
-                  } catch {
-                    console.warn(`[Anthropic] Failed to parse tool args for ${currentToolName}`);
+                  } catch (parseErr) {
+                    console.error(`[Anthropic] Failed to parse tool args for ${currentToolName}: ${currentToolArgsJson}`);
+                    parsedArgs = { _rawArgs: currentToolArgsJson, _parseError: true };
                   }
                   pendingToolCalls.push({
                     id: currentToolId,
