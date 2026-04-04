@@ -35,6 +35,7 @@ export interface ContextBuildOptions {
   maxHistoryMessages?: number;
   scope?: ContextScope;
   isDelegation?: boolean; // Skip chat_history for delegated calls (context from delegator)
+  agentShortName?: string; // Current agent — controls document content injection depth
 }
 
 // ─── Fetcher Registry ────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ const FETCHER_MAP: Record<ContextSource, ContextFetcher> = {
 
 // ─── Formatter Registry ──────────────────────────────────────────────────────
 
-type ContextFormatter = (data: unknown) => string;
+type ContextFormatter = (data: unknown, agentShortName?: string) => string;
 
 const FORMATTER_MAP: Record<ContextSource, ContextFormatter> = {
   project_info:    formatProjectInfo,
@@ -110,6 +111,7 @@ export class ContextBuilder {
   ): Promise<AgentContext> {
     const maxHistory = options?.maxHistoryMessages ?? agentDef.maxHistory ?? 10;
     const scope = options?.scope;
+    const agentShortName = options?.agentShortName ?? agentDef.shortName;
 
     // Determine which sources to fetch
     // For delegated calls, skip chat_history — delegator passes context in the message
@@ -152,7 +154,7 @@ export class ContextBuilder {
       if (source === 'chat_history') continue;
       const data = contextData.get(source);
       if (data == null) continue;
-      const formatted = FORMATTER_MAP[source](data);
+      const formatted = FORMATTER_MAP[source](data, agentShortName);
       if (formatted) {
         sectionMap.set(source, formatted);
       }
@@ -612,7 +614,51 @@ function formatDecisions(data: unknown): string {
   return [`DECISIONS (${decisions.length}):`, ...lines].join('\n');
 }
 
-function formatDocuments(data: unknown): string {
+/**
+ * Generate a compact summary of a key document (BRD/SDD) for agents that don't
+ * need the full content. Keeps token usage under 500 tokens per document.
+ */
+function summarizeDocument(d: { title: string; type: string; status: string; wordCount: number; content: string }): string {
+  const content = d.content;
+  const cl = content.toLowerCase();
+
+  // Extract vision/summary (first meaningful paragraph, max 200 chars)
+  const visionMatch = content.match(/(?:vision|executive summary|project vision)[:\s]*\n([\s\S]{10,300}?)(?:\n#|\n\*\*|\n---)/i);
+  const vision = visionMatch ? visionMatch[1].replace(/\n/g, ' ').trim().substring(0, 200) : '';
+
+  // Count FR-IDs
+  const frIds = [...new Set(content.match(/FR-\d{3}/g) || [])];
+  const nfrIds = [...new Set(content.match(/NFR-\d{3}/g) || [])];
+
+  // Extract module/section headers
+  const sectionHeaders = content.match(/^#{2,3}\s+\d*\.?\d*\s*(.+)/gm) || [];
+  const modules = sectionHeaders.slice(0, 12).map(h => h.replace(/^#{2,3}\s+\d*\.?\d*\s*/, '').trim());
+
+  // Count MoSCoW priorities
+  const mustCount = (content.match(/\|\s*MUST\s*\|/gi) || []).length;
+  const shouldCount = (content.match(/\|\s*SHOULD\s*\|/gi) || []).length;
+
+  // Extract persona names
+  const personaMatches = content.match(/persona\s*\d*:\s*\*{0,2}([^*\n]+)\*{0,2}/gi) || [];
+  const personas = personaMatches.map(p => p.replace(/persona\s*\d*:\s*\*{0,2}/i, '').replace(/\*{0,2}$/, '').trim()).slice(0, 4);
+
+  const lines = [
+    `--- ${d.type} SUMMARY: ${d.title} ---`,
+    `Status: ${d.status} | Words: ${d.wordCount}`,
+  ];
+  if (vision) lines.push(`Vision: ${vision}...`);
+  if (frIds.length > 0) lines.push(`Functional Requirements: ${frIds.length} (${frIds[0]} to ${frIds[frIds.length - 1]})`);
+  if (nfrIds.length > 0) lines.push(`Non-Functional Requirements: ${nfrIds.length}`);
+  if (modules.length > 0) lines.push(`Sections: ${modules.join(', ')}`);
+  if (personas.length > 0) lines.push(`Personas: ${personas.join(', ')}`);
+  if (mustCount > 0 || shouldCount > 0) lines.push(`Priority: ${mustCount} must-have, ${shouldCount} should-have`);
+  lines.push(`Full document available in project Documents tab.`);
+  lines.push(`--- END ${d.type} SUMMARY ---`);
+
+  return lines.join('\n');
+}
+
+function formatDocuments(data: unknown, agentShortName?: string): string {
   const docs = data as Array<{
     title: string;
     type: string;
@@ -631,24 +677,35 @@ function formatDocuments(data: unknown): string {
   const lines: string[] = [];
   const docContents: string[] = [];
 
-  // Key document types that downstream agents need to read in full
+  // Key document types
   const KEY_DOC_TYPES = new Set(['BRD', 'SDD', 'DESIGN_SYSTEM', 'CONSTITUTION']);
+
+  // Agents that AUTHOR a document need full content to read/edit it.
+  // All other agents get a compact summary to save tokens.
+  const agent = (agentShortName || '').toUpperCase();
 
   for (const d of docs) {
     lines.push(`  ${d.title} (${d.type}) — ${statusIcon[d.status] ?? d.status}`);
 
     if (!d.content || d.content.length === 0) continue;
 
-    // Include content for key documents (BRD, SDD, DESIGN_SYSTEM) regardless of status.
-    // SA needs BRD to design architecture, UX needs BRD+SDD to create wireframes,
-    // PM needs BRD+SDD to create cards, TL needs everything to plan development.
     if (KEY_DOC_TYPES.has(d.type) && !d.title.startsWith('Staging:')) {
-      // Allow up to 15000 chars for key docs — BRD/SDD are critical context
-      // that downstream agents (SA, UX, PM, TL) need to read in full
-      const truncated = d.content.length > 15000
-        ? d.content.substring(0, 15000) + '\n... (truncated — see full document in project)'
-        : d.content;
-      docContents.push(`\n--- ${d.type} CONTENT: ${d.title} ---\n${truncated}\n--- END ${d.type} ---`);
+      // Determine if this agent needs full content:
+      //   BA authoring BRD → full BRD
+      //   SA authoring SDD → full SDD + full BRD (needs BRD for traceability)
+      const needsFullContent =
+        (agent === 'BA' && d.type === 'BRD') ||
+        (agent === 'SA' && (d.type === 'BRD' || d.type === 'SDD'));
+
+      if (needsFullContent) {
+        const truncated = d.content.length > 15000
+          ? d.content.substring(0, 15000) + '\n... (truncated — see full document in project)'
+          : d.content;
+        docContents.push(`\n--- ${d.type} CONTENT: ${d.title} ---\n${truncated}\n--- END ${d.type} ---`);
+      } else {
+        // Compact summary for PM, TL, QA, UX, DO, CA, and all other agents
+        docContents.push('\n' + summarizeDocument({ ...d, content: d.content }));
+      }
     }
     // Include staging docs for BA to compile into final BRD
     else if (d.title.startsWith('Staging:') && d.status === 'DRAFT') {

@@ -381,6 +381,11 @@ function sanitizeContent(text: string): string {
     .replace(/<parameter=[^>]*>[\s\S]*?<\/parameter>/gi, '')
     // ChatML/Qwen: <|tool_call|>...<|end|>
     .replace(/<\|tool_call\|>[\s\S]*?<\|end\|>/gi, '')
+    // Bracketless tool calls: UPDATE_DOCUMENT{"type":"BRD",...} or REMEMBER{"key":"x",...}
+    // (Mistral/some models output tool calls as plain text without brackets)
+    .replace(/(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*\{[\s\S]*?\}/gi, '')
+    // Bracketed tool calls: [UPDATE_DOCUMENT]{...} or [REMEMBER {...}]
+    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/gi, '')
     // Agent tags at start of lines: [BA], [SA], [TL], [ORC], etc.
     .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM|SEC|STC|JD|SD|AT|PF|SR|LLM|PRE|UI)\s*\]\s*/gm, '')
     // [ACTION:...] markers

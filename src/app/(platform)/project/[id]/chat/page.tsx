@@ -78,7 +78,10 @@ function stripAgentMarkers(content: string): string {
     .replace(/^\s*\*{0,2}\[\s*\/\s*ACTION\s*\]\*{0,2}/gm, '')
     .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\]\s*$/gm, '')
     .replace(/^\s*\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gm, '')
-    // Strip text-based tool calls in two formats:
+    // Bracketless tool calls: UPDATE_DOCUMENT{"type":"BRD",...} or REMEMBER{"key":"x",...}
+    // (Mistral/some models output tool calls as plain text without brackets)
+    .replace(/(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*\{[\s\S]*?\}/gi, '')
+    // Bracketed tool calls in two formats:
     //   [UPDATE_DOCUMENT]{ "type": "BRD", ... }    (bracket then JSON)
     //   [REMEMBER {"key":"x","value":"y"}]          (JSON inside brackets)
     .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/gi, '')
@@ -746,6 +749,11 @@ export default function ChatPage() {
                                     // Single-select: send label + text so LLM knows which option was picked
                                     // Use sendRef.current to avoid stale closure on sendMessage
                                     sendRef.current(`${opt.label}) ${opt.text}`);
+                                    // Navigate to Decisions page when user clicks an approval option
+                                    const optLower = opt.text.toLowerCase();
+                                    if (optLower.match(/approv|ready to|looks good|accept.*brd|accept.*sdd|confirm.*brd|confirm.*sdd/)) {
+                                      setTimeout(() => router.push(`/project/${projectId}/decisions`), 500);
+                                    }
                                   }
                                 }}
                                 className={cn(
