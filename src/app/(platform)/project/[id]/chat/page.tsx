@@ -110,6 +110,8 @@ function stripAgentMarkers(content: string): string {
     .replace(/<\|tool_call\|>[\s\S]*?<\|end\|>/gi, '')
     // [ACTION:...] inline markers
     .replace(/\[ACTION:[^\]]*\]/gi, '')
+    // Clean up orphaned empty brackets from stripped tool calls
+    .replace(/^\s*\[\]\s*/gm, '')
     // Clean up whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
