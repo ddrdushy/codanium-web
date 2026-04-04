@@ -16,6 +16,17 @@
 
 Codanium is a full-service AI platform that builds and delivers software from your ideas. Users describe what they want built — even as a rough idea — and our AI team handles the entire lifecycle: requirements analysis, architecture, design, coding, testing, and deployment.
 
+### Live URLs
+
+| Resource | URL |
+|----------|-----|
+| **Production App** | [https://codanium.com](https://codanium.com) |
+| **Landing Page** | [https://codanium.com](https://codanium.com) |
+| **GitHub (Web)** | [https://github.com/AiSenseiMY/Ai-Team_studio](https://github.com/AiSenseiMY/Ai-Team_studio) |
+| **GitHub (Desktop)** | [https://github.com/AiSenseiMY/Codanium](https://github.com/AiSenseiMY/Codanium) |
+| **Desktop Downloads** | [https://github.com/AiSenseiMY/Codanium/releases](https://github.com/AiSenseiMY/Codanium/releases) |
+| **API Health** | [https://codanium.com/api/llm/health](https://codanium.com/api/llm/health) |
+
 ## Who Is This For?
 
 - Non-technical founders with a product idea
