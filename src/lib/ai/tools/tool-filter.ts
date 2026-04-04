@@ -186,5 +186,7 @@ export function getToolsForAgent(agentShortName: string): ToolDefinition[] {
  */
 export function isToolAuthorized(agentShortName: string, toolName: string): boolean {
   const allowedNames = AGENT_TOOL_MAP[agentShortName];
-  return allowedNames ? allowedNames.includes(toolName) : false;
+  if (!allowedNames) return false;
+  const normalized = toolName.toLowerCase();
+  return allowedNames.includes(normalized);
 }

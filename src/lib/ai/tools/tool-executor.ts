@@ -53,7 +53,19 @@ export async function executeTool(
   options: ExecuteOptions,
 ): Promise<ToolResult> {
   const { projectId, agentShortName, agentId } = options;
-  const { name, arguments: args } = toolCall;
+  let { name, arguments: args } = toolCall;
+
+  // ── Normalize tool name ──
+  // Some models return tool names with JSON embedded (e.g., "UPDATE_DOCUMENT {json}")
+  // or in UPPERCASE. Normalize to lowercase snake_case name only.
+  if (name.includes('{') || name.includes(' ')) {
+    const cleanName = name.split(/[\s{]/)[0].trim();
+    if (cleanName) {
+      console.log(`[ToolExecutor] Normalized tool name: "${name.substring(0, 60)}..." → "${cleanName.toLowerCase()}"`);
+      name = cleanName;
+    }
+  }
+  name = name.toLowerCase();
 
   // ── Authority check ──
   if (!isToolAuthorized(agentShortName, name)) {
