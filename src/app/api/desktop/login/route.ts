@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { randomBytes, createHmac } from 'crypto';
+import { generateApiKey } from '@/lib/api-keys';
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,13 +33,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate a simple session token for the desktop app
-    const secret = process.env.AUTH_SECRET || 'codanium-desktop';
-    const tokenData = `${user.id}:${Date.now()}:${randomBytes(16).toString('hex')}`;
-    const token = createHmac('sha256', secret).update(tokenData).digest('hex');
+    // Generate a real API key (ats_sk_...) so it passes requireAuthOrApiKey()
+    const { raw, hash, prefix } = generateApiKey();
+
+    // Delete any previous desktop session keys for this user
+    await prisma.apiKey.deleteMany({
+      where: { userId: user.id, name: { startsWith: 'desktop-session' } },
+    });
+
+    // Store the key hash in the database
+    await prisma.apiKey.create({
+      data: {
+        userId: user.id,
+        name: `desktop-session-${Date.now()}`,
+        keyHash: hash,
+        keyPrefix: prefix,
+        scopes: ['all'],
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      },
+    });
 
     return NextResponse.json({
-      token,
+      token: raw,     // ats_sk_... — the desktop app sends this as Bearer token
       userId: user.id,
       user: {
         id: user.id,
