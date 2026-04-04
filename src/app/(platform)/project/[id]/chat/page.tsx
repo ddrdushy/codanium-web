@@ -350,6 +350,7 @@ export default function ChatPage() {
   const [sidebarArtifacts, setSidebarArtifacts] = useState<Array<{id: string; name: string; type: string; ownerAgent: string}>>([]);
   const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
   const [ideHandoff, setIdeHandoff] = useState(false);
+  const [ideHandoffDismissed, setIdeHandoffDismissed] = useState(false);
   const [showVSCodePrompt, setShowVSCodePrompt] = useState(false);
   const [llmError, setLlmError] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1164,47 +1165,37 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* ── Codanium IDE Handoff Banner ──────────────────────────────── */}
-            {ideHandoff && !vscodeRequired && (
-              <div className="mx-4 mb-3 px-4 py-4 rounded-xl border-2 border-amber/50 bg-amber/[0.08] flex items-start gap-3 shadow-lg shadow-amber/5">
-                <div className="mt-0.5 w-10 h-10 rounded-lg bg-amber/20 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-amber" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {/* ── Codanium IDE Handoff Banner (dismissible) ─────────────────── */}
+            {ideHandoff && !vscodeRequired && !ideHandoffDismissed && (
+              <div className="mx-4 mb-3 px-4 py-3 rounded-xl border border-amber/30 bg-amber/[0.06] flex items-start gap-3">
+                <div className="mt-0.5 w-8 h-8 rounded-lg bg-amber/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-4 h-4 text-amber" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-amber mb-1">Ready for Development</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed mb-1">
-                    Requirements and architecture are complete! Open the Codanium IDE to continue with project scaffolding, coding, testing, and deployment.
+                  <p className="text-xs font-semibold text-amber mb-1">Ready for Development</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">
+                    Requirements and architecture are complete! You can continue chatting here, or open the Codanium IDE for coding.
                   </p>
-                  <p className="text-xs text-muted-foreground/60 mb-3">
-                    All development work runs through the Codanium Desktop app.
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <a
-                      href={`codanium://open?projectId=${projectId}`}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber text-black text-xs font-bold hover:bg-amber/90 transition-colors shadow-sm"
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                      </svg>
-                      Open Codanium IDE
-                    </a>
+                  <div className="flex items-center gap-2">
                     <a
                       href="https://github.com/AiSenseiMY/Codanium/releases"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:border-amber/30 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber text-black text-[11px] font-bold hover:bg-amber/90 transition-colors"
                     >
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                      Download Codanium Desktop
+                      Download Codanium IDE
                     </a>
                   </div>
                 </div>
+                <button
+                  onClick={() => setIdeHandoffDismissed(true)}
+                  className="text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
+                  title="Dismiss"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
               </div>
             )}
 

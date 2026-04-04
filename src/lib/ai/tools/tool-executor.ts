@@ -720,6 +720,24 @@ async function handleCreateDecision(
   const options: Array<{ label: string; pros: string; cons: string }> = args.options || [];
   const hasOptions = options.length > 0;
 
+  // Deduplication: if a decision with the same trigger already exists for this project, return it
+  const existing = await prisma.decision.findFirst({
+    where: { projectId, trigger: args.title },
+    include: { options: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (existing) {
+    console.log(`[ToolExecutor] Decision already exists: "${args.title}" (${existing.id}) — skipping duplicate`);
+    return {
+      decisionId: existing.id,
+      trigger: existing.trigger,
+      status: existing.status,
+      optionCount: existing.options?.length || 0,
+      message: 'Decision already exists. User can review it in My Decisions menu.',
+      __deduplicated: true,
+    };
+  }
+
   const decision = await prisma.decision.create({
     data: {
       projectId,
