@@ -171,10 +171,22 @@ The system resolves these automatically. NEVER ask the user for IDs again. Just 
 // PM is the gatekeeper — every phase routes back through PM for validation.
 const PIPELINE_RULES: PipelineRule[] = [
   // ── PHASE 1: REQUIREMENTS ──────────────────────────────────────────
-  { from: 'BA', signals: ['approve_document(BRD)'], next: 'PM', context: 'The BRD is complete. Validate it — check for completeness, acceptance criteria coverage, and content inventory. If gaps exist, add a card comment explaining what is missing and send back to BA. If the BRD is satisfactory, mark the Requirements phase card as COMPLETE and create the Architecture phase card for SA.' },
+  // BA approves BRD → routes to PM for validation
+  { from: 'BA', signals: ['approve_document(BRD)'], next: 'PM', context: 'The BRD is complete and APPROVED. Validate it — check for completeness, acceptance criteria coverage, and content inventory. If gaps exist, add a card comment explaining what is missing and send back to BA. If the BRD is satisfactory, mark the Requirements phase card as COMPLETE, then create a "Solution Design" card assigned to SA and route to SA for architecture.' },
+  // BA updates/creates BRD but doesn't approve → still routes to PM to check
+  { from: 'BA', signals: ['update_document(BRD)', 'create_document(BRD)'], next: 'PM', context: 'BA has updated the BRD. Check BRD quality — if it has all required sections (Executive Summary, Functional Requirements with FR-IDs, User Personas, User Flows, NFRs, Content Inventory), approve it and create SA card. Otherwise send feedback to BA.' },
+
+  // ── PM ROUTING — PM routes to the NEXT phase agent ─────────────────
+  // PM creates a card for SA → routes to SA
+  { from: 'PM', signals: ['create_card'], next: 'SA', context: 'Read the BRD document carefully. Design the technical architecture and produce the System Design Document (SDD). Include: tech stack with rationale, database schema, API endpoints, component architecture, security, and deployment strategy. Reference BRD requirement IDs (FR-XXX) for traceability.' },
+  // PM approves BRD → routes to SA
+  { from: 'PM', signals: ['approve_document(BRD)'], next: 'SA', context: 'The BRD has been approved by PM. Now design the system architecture. Read the BRD and produce the SDD with tech stack, database schema, API design, and security architecture.' },
 
   // ── PHASE 2: ARCHITECTURE ──────────────────────────────────────────
+  // SA approves SDD → routes to PM
   { from: 'SA', signals: ['approve_document(SDD)'], next: 'PM', context: 'The SDD is complete. Validate it — check that all BRD requirements (FR-XXX) are mapped to architecture components. If gaps exist, add a card comment and send back to SA. If satisfactory, mark the Architecture phase card as COMPLETE and create the Scaffolding phase card for DO.' },
+  // SA creates/updates SDD → routes to PM for validation
+  { from: 'SA', signals: ['update_document(SDD)', 'create_document(SDD)'], next: 'PM', context: 'SA has produced the SDD. Validate it — check all FR-XXX mapped, database schema present, API design complete. If satisfactory, approve it and create DO card. Otherwise send feedback to SA.' },
 
   // ── PHASE 3: SCAFFOLDING ───────────────────────────────────────────
   { from: 'DO', signals: ['write_file()', 'git_commit()', 'trigger_deploy()', 'run_build()'], next: 'PM', context: 'The project scaffold is ready. Verify the build compiles. Mark the Scaffolding phase card as COMPLETE. Hand control to TL for the UI/UX phase.' },
@@ -309,21 +321,28 @@ async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promi
 // ---------------------------------------------------------------------------
 
 const DEFAULT_NEXT_AGENT: Record<string, { next: string; context: string; requiresApproval?: string }> = {
+  // ── PHASE 1: REQUIREMENTS ──────────────────────────────────────────
   // PM is FIRST agent on project start. PM routes to BA for requirements.
   PM: { next: 'BA', context: 'Start requirements gathering. Your FIRST question must ask the user about their technical background (Non-technical / Vibe Coder / Developer / Team Lead) and save it with remember(key="user_profile"). Then ask discovery questions ONE AT A TIME with clickable options, saving each Q&A pair with remember(key="qa_N"). After enough answers, generate the full BRD.' },
-  // BA completes BRD → routes back to PM for validation
-  BA: { next: 'PM', context: 'Validate the BRD — check completeness, acceptance criteria, content inventory. If gaps, send back to BA with comments. If satisfactory, mark Requirements phase COMPLETE and create Architecture phase card for SA.', requiresApproval: 'BRD' },
-  // PM validates BRD → routes to SA for architecture
-  SA: { next: 'PM', context: 'Validate the SDD — check all BRD FR-XXX requirements are mapped. If gaps, send back to SA. If satisfactory, mark Architecture phase COMPLETE and create Scaffolding phase card for DO.', requiresApproval: 'SDD' },
-  // DO completes scaffold → routes back to PM
+
+  // BA completes BRD → always routes back to PM for validation.
+  // NO approval gate here — BA is the AUTHOR, PM is the VALIDATOR.
+  BA: { next: 'PM', context: 'BA has finished working. Check the BRD status: if BRD is APPROVED, create a "Solution Design" card for SA and route to SA. If BRD is still DRAFT, validate it — if complete, approve it and create SA card. If gaps exist, send comments back to BA.' },
+
+  // ── PHASE 2: ARCHITECTURE ──────────────────────────────────────────
+  // SA completes SDD → always routes back to PM for validation.
+  // NO approval gate here — SA is the AUTHOR, PM is the VALIDATOR.
+  SA: { next: 'PM', context: 'SA has finished working. Check the SDD status: if SDD is APPROVED, create a "Scaffolding" card for DO and route to DO. If SDD is still DRAFT, validate it — if complete, approve it and create DO card. If gaps exist, send comments back to SA.' },
+
+  // ── PHASE 3: SCAFFOLDING ───────────────────────────────────────────
   DO: { next: 'PM', context: 'Scaffold complete. Verify build compiles. Mark Scaffolding phase COMPLETE. Hand to TL for UI/UX phase.' },
-  // TL manages UI phase (UX → UID) then dev phase (JD/SD → QA → SEC → DO → PE)
+
+  // ── PHASE 4: UI/UX ────────────────────────────────────────────────
   TL: { next: 'JD', context: 'Implement the assigned task. Read the card description. Write production code. Run npx tsc --noEmit for zero compile errors. When done, request sign-off from QA, SEC, DO, and PE.' },
-  // UX completes UI Kit → routes to TL
   UX: { next: 'TL', context: 'UI Kit complete. Review the design system. If satisfactory, mark UI Kit card DONE. Create UI Interfaces card for UID.' },
-  // UID completes wireframes → routes to TL
   UID: { next: 'TL', context: 'UI interfaces complete. Review wireframes. Get user approval. Mark UI Interfaces card DONE. Report to PM that UI phase is complete.' },
-  // Dev sign-off chain: JD/SD → QA → SEC → DO → PE → TL
+
+  // ── PHASE 5: DEVELOPMENT ──────────────────────────────────────────
   JD: { next: 'QA', context: 'Review and test the implementation. Validate code quality, check for bugs. Sign off if tests pass.' },
   SD: { next: 'QA', context: 'Review the senior implementation. Run quality checks. Sign off if standards met.' },
   QA: { next: 'SEC', context: 'Security review. Check for vulnerabilities. Sign off and route to DO.' },
