@@ -677,10 +677,27 @@ async function handleApproveDocument(args: Record<string, any>, projectId: strin
   const projectName = project?.name || 'this project';
   const docLabel = args.type === 'BRD' ? 'Business Requirements Document' : args.type === 'SDD' ? 'System Design Document' : args.type;
 
+  // Dedup: check if an approval decision for this doc type already exists
+  const approvalTrigger = `${args.type} Approval: ${projectName}`;
+  const existingApproval = await prisma.decision.findFirst({
+    where: { projectId, trigger: approvalTrigger },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (existingApproval) {
+    console.log(`[ToolExecutor] Approval decision already exists: "${approvalTrigger}" (${existingApproval.id}) — skipping duplicate`);
+    return {
+      documentId: doc.id,
+      type: args.type,
+      status: 'AWAITING_APPROVAL',
+      decisionId: existingApproval.id,
+      message: `${args.type} approval already pending in My Decisions. The user can review and approve it there.`,
+    };
+  }
+
   const decision = await prisma.decision.create({
     data: {
       projectId,
-      trigger: `${args.type} Approval: ${projectName}`,
+      trigger: approvalTrigger,
       context: `The ${docLabel} is ready for review and approval. Please review the document in the Documents section and approve or request changes.`,
       status: 'AWAITING_APPROVAL',
       recommendation: `Approve the ${args.type} — the document has been reviewed and is ready for the next phase.`,

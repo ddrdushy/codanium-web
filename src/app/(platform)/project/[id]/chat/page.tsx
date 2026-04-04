@@ -79,16 +79,24 @@ function stripAgentMarkers(content: string): string {
     .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\]\s*$/gm, '')
     .replace(/^\s*\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gm, '')
     // Bracketless tool calls: UPDATE_DOCUMENT{"type":"BRD",...} or REMEMBER{"key":"x",...}
-    // (Mistral/some models output tool calls as plain text without brackets)
-    .replace(/(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*\{[\s\S]*?\}/gi, '')
+    // Handles both UPPER and lower case tool names with JSON object {...}
+    .replace(/(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*\{[\s\S]*?\}/g, '')
+    // Tool calls with JSON array syntax: [create_document]["type","SDD","content","..."]
+    // Some models output tool args as arrays instead of objects
+    .replace(/\[?\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*\]?\s*\[[\s\S]*?\]/g, '')
     // Bracketed tool calls in two formats:
     //   [UPDATE_DOCUMENT]{ "type": "BRD", ... }    (bracket then JSON)
     //   [REMEMBER {"key":"x","value":"y"}]          (JSON inside brackets)
-    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/gi, '')
+    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/g, '')
     // Strip agent name prefixes like "[BA]", "[SA]", "[DEC]", "[ORC]" at start of lines
     .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*/gm, '')
     // Strip repetition loops — any short pattern repeated 5+ times (e.g. "[TL] [TL] [TL]...")
-    .replace(/(.{2,20})\1{4,}/g, '*[Repetitive content removed]*')
+    // But skip lines that look like markdown tables (contain | characters for columns)
+    .replace(/(.{2,20})\1{4,}/g, (match) => {
+      // Preserve markdown table separators like |---|---|---| or | col | col |
+      if (/^\s*\|[\s|:-]+\|?\s*$/.test(match) || /^[-|:\s]+$/.test(match)) return match;
+      return '*[Repetitive content removed]*';
+    })
     // Strip inline agent tags that aren't at start of line (e.g. "[TL] [TL] [TL]")
     .replace(/(\[\s*(?:BA|SA|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*){3,}/gi, '')
     // XML tool calls: <tool_call>...</tool_call>

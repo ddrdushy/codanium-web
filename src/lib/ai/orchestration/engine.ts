@@ -763,38 +763,49 @@ export class OrchestrationEngine {
 
           case 'create_decision': {
             const riskRating = this.mapRiskRating(action.data.riskRating);
-            await prisma.decision.create({
-              data: {
-                trigger: action.data.trigger,
-                context: action.data.context ?? '',
-                riskRating,
-                recommendation: action.data.recommendation ?? '',
-                ownerId: userId,
+            // Dedup: skip if a decision with same trigger already exists for this project
+            const existingDec = await prisma.decision.findFirst({
+              where: {
                 projectId,
-                options: action.data.options?.length
-                  ? {
-                      create: action.data.options.map((opt) => ({
-                        name: opt.name,
-                        description: opt.description ?? '',
-                        pros: opt.pros ?? [],
-                        cons: opt.cons ?? [],
-                        risk: this.mapRiskRating(opt.risk),
-                        effort: this.mapEffort(opt.effort),
-                      })),
-                    }
-                  : undefined,
-              },
-            });
-
-            await eventBus.emit({
-              type: 'action.executed',
-              actor: 'system',
-              projectId,
-              payload: {
-                actionType: 'create_decision',
                 trigger: action.data.trigger,
               },
             });
+            if (!existingDec) {
+              await prisma.decision.create({
+                data: {
+                  trigger: action.data.trigger,
+                  context: action.data.context ?? '',
+                  riskRating,
+                  recommendation: action.data.recommendation ?? '',
+                  ownerId: userId,
+                  projectId,
+                  options: action.data.options?.length
+                    ? {
+                        create: action.data.options.map((opt) => ({
+                          name: opt.name,
+                          description: opt.description ?? '',
+                          pros: opt.pros ?? [],
+                          cons: opt.cons ?? [],
+                          risk: this.mapRiskRating(opt.risk),
+                          effort: this.mapEffort(opt.effort),
+                        })),
+                      }
+                    : undefined,
+                },
+              });
+
+              await eventBus.emit({
+                type: 'action.executed',
+                actor: 'system',
+                projectId,
+                payload: {
+                  actionType: 'create_decision',
+                  trigger: action.data.trigger,
+                },
+              });
+            } else {
+              console.log(`[Engine] Skipped duplicate decision: "${action.data.trigger}" (already exists: ${existingDec.id})`);
+            }
             break;
           }
 
@@ -1991,38 +2002,49 @@ export async function executeSideEffects(
 
         case 'create_decision': {
           const riskRating = mapRiskRating(action.data.riskRating);
-          await prisma.decision.create({
-            data: {
-              trigger: action.data.trigger,
-              context: action.data.context ?? '',
-              riskRating,
-              recommendation: action.data.recommendation ?? '',
-              ownerId: userId,
+          // Dedup: skip if a decision with same trigger already exists for this project
+          const existingDecision = await prisma.decision.findFirst({
+            where: {
               projectId,
-              options: action.data.options?.length
-                ? {
-                    create: action.data.options.map((opt) => ({
-                      name: opt.name,
-                      description: opt.description ?? '',
-                      pros: opt.pros ?? [],
-                      cons: opt.cons ?? [],
-                      risk: mapRiskRating(opt.risk),
-                      effort: mapEffort(opt.effort),
-                    })),
-                  }
-                : undefined,
-            },
-          });
-
-          await eventBus.emit({
-            type: 'action.executed',
-            actor: 'system',
-            projectId,
-            payload: {
-              actionType: 'create_decision',
               trigger: action.data.trigger,
             },
           });
+          if (!existingDecision) {
+            await prisma.decision.create({
+              data: {
+                trigger: action.data.trigger,
+                context: action.data.context ?? '',
+                riskRating,
+                recommendation: action.data.recommendation ?? '',
+                ownerId: userId,
+                projectId,
+                options: action.data.options?.length
+                  ? {
+                      create: action.data.options.map((opt) => ({
+                        name: opt.name,
+                        description: opt.description ?? '',
+                        pros: opt.pros ?? [],
+                        cons: opt.cons ?? [],
+                        risk: mapRiskRating(opt.risk),
+                        effort: mapEffort(opt.effort),
+                      })),
+                    }
+                  : undefined,
+              },
+            });
+
+            await eventBus.emit({
+              type: 'action.executed',
+              actor: 'system',
+              projectId,
+              payload: {
+                actionType: 'create_decision',
+                trigger: action.data.trigger,
+              },
+            });
+          } else {
+            console.log(`[Engine] Skipped duplicate decision: "${action.data.trigger}" (already exists: ${existingDecision.id})`);
+          }
           break;
         }
 
