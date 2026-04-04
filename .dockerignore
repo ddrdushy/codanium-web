@@ -42,5 +42,10 @@ LICENSE
 coverage
 .claude
 
+# Test scripts (not part of the app)
+scripts
+e2e
+test-reports
+
 # Agent-generated workspaces (synced via volume mount, not built)
 workspaces
