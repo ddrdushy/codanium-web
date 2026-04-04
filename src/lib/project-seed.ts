@@ -98,6 +98,9 @@ export async function autoKickoffPM(
     where: { projectId, shortName: 'BA' },
     select: { id: true },
   });
+  if (!baAgent) {
+    console.error(`[autoKickoffPM] BA agent not found for project ${projectId} — agents may not be seeded yet`);
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },

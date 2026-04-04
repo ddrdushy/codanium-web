@@ -614,12 +614,14 @@ export class MessageRouter {
    */
   private async shouldRedirectFromBA(projectId: string): Promise<boolean> {
     try {
-      // Check if BRD document exists (any status)
+      // Check if BRD document exists AND is approved
       const brd = await prisma.document.findFirst({
         where: { projectId, type: 'BRD' },
-        select: { id: true },
+        select: { id: true, status: true },
       });
-      if (!brd) return false; // No BRD yet — BA should continue
+      // No BRD, or BRD still in progress (DRAFT/REVIEW/AWAITING_APPROVAL) → BA should continue
+      if (!brd) return false;
+      if (brd.status !== 'APPROVED') return false;
 
       // Check if Requirement Gathering phase is completed OR if task cards exist
       const reqGatheringStage = await prisma.sDLCStage.findFirst({
