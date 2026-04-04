@@ -152,9 +152,45 @@ function extractOptions(content: string): {
  * on parent re-renders when the content hasn't changed.
  * Also strips raw agent markers before rendering.
  */
-const MemoizedMarkdown = memo(function MemoizedMarkdown({ content }: { content: string }) {
-  const cleaned = stripAgentMarkers(content);
-  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleaned}</ReactMarkdown>;
+const MemoizedMarkdown = memo(function MemoizedMarkdown({ content, projectId }: { content: string; projectId?: string }) {
+  let cleaned = stripAgentMarkers(content);
+
+  // Auto-link document references: "Document: Title (STATUS)" → clickable link to /docs
+  if (projectId) {
+    cleaned = cleaned.replace(
+      /\*{0,2}Document:?\*{0,2}\s*\[?([^\]\n]+?)\]?\s*\((?:DRAFT|REVIEW|APPROVED|PUBLISHED)\)/gi,
+      (match, title) => `**[${title.trim()}](/project/${projectId}/docs)** *(see Documents tab)*`
+    );
+  }
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        a: ({ href, children }) => {
+          // Fix document links: route /project/xxx/docs links through Next.js navigation
+          if (href && projectId && (href.includes('/docs') || href.includes('/documents'))) {
+            return (
+              <a
+                href={`/project/${projectId}/docs`}
+                className="text-amber-500 underline decoration-amber-500/30 hover:decoration-amber-500 transition-colors font-medium"
+              >
+                {children}
+              </a>
+            );
+          }
+          // External links open in new tab
+          return (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="text-amber-500 underline decoration-amber-500/30 hover:decoration-amber-500">
+              {children}
+            </a>
+          );
+        },
+      }}
+    >
+      {cleaned}
+    </ReactMarkdown>
+  );
 });
 
 /**
@@ -726,7 +762,7 @@ export default function ChatPage() {
                   <>
                     <div className="bg-[var(--surface)] border border-border rounded-2xl rounded-tl-sm px-4 py-3">
                       <div className="chat-markdown text-sm text-foreground/90 leading-relaxed break-words overflow-hidden">
-                        <MemoizedMarkdown content={cleanContent} />
+                        <MemoizedMarkdown content={cleanContent} projectId={projectId} />
                       </div>
                     </div>
                     {options.length > 0 && (
