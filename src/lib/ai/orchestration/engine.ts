@@ -893,20 +893,46 @@ export class OrchestrationEngine {
           }
 
           case 'approve_document': {
-            // Mark documents of this type as APPROVED for the project
+            // Agent requests approval → set doc to AWAITING_APPROVAL and create a decision
+            // The document is NOT auto-approved. User must approve via My Decisions.
             const approveDocType = this.mapDocumentType(action.data.type);
-            const updated = await prisma.document.updateMany({
+            const awaitingUpdate = await prisma.document.updateMany({
               where: {
                 projectId,
                 type: approveDocType,
-                status: { not: 'APPROVED' },
+                status: { in: ['DRAFT'] },
               },
-              data: { status: 'APPROVED' },
+              data: { status: 'REVIEW' },
             });
 
             console.log(
-              `[Engine] ✅ Approved ${updated.count} ${action.data.type} document(s) for project ${projectId}`,
+              `[Engine] 📋 Set ${awaitingUpdate.count} ${action.data.type} document(s) to REVIEW for project ${projectId}`,
             );
+
+            // Create a decision for user sign-off (with dedup)
+            const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
+            const projName = project?.name || 'this project';
+            const docLabel = action.data.type === 'BRD' ? 'Business Requirements Document' : action.data.type === 'SDD' ? 'System Design Document' : action.data.type;
+            const decTrigger = `${action.data.type} Approval: ${projName}`;
+            const existingDec = await prisma.decision.findFirst({ where: { projectId, trigger: decTrigger } });
+            if (!existingDec) {
+              await prisma.decision.create({
+                data: {
+                  projectId,
+                  trigger: decTrigger,
+                  context: `The ${docLabel} is ready for review and approval. Please review the document in the Documents section and approve or request changes.`,
+                  status: 'AWAITING_APPROVAL',
+                  recommendation: `Approve the ${action.data.type} — the document has been reviewed and is ready for the next phase.`,
+                  ownerId: userId,
+                  options: {
+                    create: [
+                      { name: `Approve ${action.data.type} — proceed to next phase`, description: `The ${docLabel} is complete and ready`, pros: { set: ['Document is complete', 'Ready to proceed'] }, cons: { set: ['Changes require re-approval'] } },
+                      { name: 'Request changes', description: 'Send back for revisions', pros: { set: ['Opportunity to refine'] }, cons: { set: ['Delays the project'] } },
+                    ],
+                  },
+                },
+              });
+            }
 
             await eventBus.emit({
               type: 'action.executed',
@@ -915,7 +941,8 @@ export class OrchestrationEngine {
               payload: {
                 actionType: 'approve_document',
                 docType: action.data.type,
-                count: updated.count,
+                count: awaitingUpdate.count,
+                status: 'REVIEW',
               },
             });
             break;
@@ -1602,60 +1629,141 @@ export class OrchestrationEngine {
       (a) => a.type === 'TEST' || a.type === 'test' || a.name.includes('.test.') || a.name.includes('.spec.')
     );
 
-    // ── Upstream auto-chain rules (full SDLC pipeline) ──
+    // ── SDLC Pipeline: PM is the GATEKEEPER ──────────────────────────────
+    // Flow: PM → BA → PM → SA → PM → DO → PM → TL → UX → TL → UID → TL → dev
+    // Every phase routes BACK to PM for validation before moving to the next phase.
 
-    // BA approved BRD → SA designs architecture
+    // ── BA completed → always route to PM for BRD validation ──
     if (completedAgent === 'BA') {
-      const hasBrdApproval = actions.some(
-        (a) => a.type === 'approve_document' && (a.data?.type === 'BRD' || a.data?.type === 'brd')
+      const hasBrdOutput = actions.some(
+        (a) => (a.type === 'create_document' || a.type === 'update_document' || a.type === 'approve_document') &&
+               (a.data?.type === 'BRD' || a.data?.type === 'brd')
       );
-      if (hasBrdApproval) {
+      if (hasBrdOutput) {
         return {
-          agent: 'SA',
-          context: (p) => `[PIPELINE] The Business Requirements Document (BRD) has been approved by the stakeholder. Please design the system architecture based on the requirements. Read the BRD from your context documents and produce a System Design Document (SDD) covering tech stack, database schema, API design, and component architecture.\n\nBA summary:\n${p.message}`,
+          agent: 'PM',
+          context: (p) => `[PIPELINE] BA has completed the BRD. VALIDATE the BRD now:
+1. Read the BRD from your context documents
+2. Check: Executive Summary, Functional Requirements (FR-XXX IDs), User Personas, User Flows, NFRs, Acceptance Criteria
+3. If satisfactory: Create a decision for the user to APPROVE the BRD using [APPROVE_DOCUMENT]{"type":"BRD"} — this sends it to My Decisions for user sign-off
+4. If gaps exist: Send feedback to BA explaining what's missing
+
+BA summary:\n${p.message}`,
         };
       }
     }
 
-    // SA produced SDD → UX creates wireframes
+    // ── SA completed → always route to PM for SDD validation ──
     if (completedAgent === 'SA') {
       const hasSddOutput = actions.some(
-        (a) => (a.type === 'create_document' || a.type === 'update_document') &&
+        (a) => (a.type === 'create_document' || a.type === 'update_document' || a.type === 'approve_document') &&
                (a.data?.type === 'SDD' || a.data?.type === 'sdd')
       );
       if (hasSddOutput) {
         return {
-          agent: 'UX',
-          context: (p) => `[PIPELINE] The System Design Document (SDD) is ready. Please create wireframes and a design system for the application. Read the BRD and SDD from your context to understand the features and architecture. Produce wireframes for all key screens.\n\nSA summary:\n${p.message}`,
-        };
-      }
-    }
-
-    // UX produced wireframes → PM creates task cards
-    if (completedAgent === 'UX') {
-      const hasWireframes = artifacts.some(
-        (a) => a.name.includes('wireframe') || a.name.includes('design') || a.name.includes('mockup')
-      );
-      if (hasWireframes || artifacts.length > 0) {
-        return {
           agent: 'PM',
-          context: (p) => `[PIPELINE] Wireframes and design system are complete. Please break down the project into task cards on the work board. Read the BRD, SDD, and wireframes from your context. Create TASK cards for each feature module using [ACTION:create_card] — include clear titles, descriptions, and priority levels.\n\nUX summary:\n${p.message}`,
+          context: (p) => `[PIPELINE] SA has completed the SDD. VALIDATE the SDD now:
+1. Read the SDD from your context documents
+2. Check: All BRD requirements (FR-XXX) mapped to architecture components, tech stack rationale, database schema, API design, security
+3. If satisfactory: Create a decision for the user to APPROVE the SDD using [APPROVE_DOCUMENT]{"type":"SDD"} — this sends it to My Decisions for user sign-off
+4. If gaps exist: Send feedback to SA explaining what's missing
+
+SA summary:\n${p.message}`,
         };
       }
     }
 
-    // PM created cards → DO scaffolds the project
+    // ── PM completed → route to the NEXT phase based on what PM did ──
     if (completedAgent === 'PM') {
-      const hasCardCreation = actions.some((a) => a.type === 'create_card');
-      if (hasCardCreation) {
+      // PM approved BRD → route to SA for architecture
+      const approvedBrd = actions.some(
+        (a) => a.type === 'approve_document' && (a.data?.type === 'BRD' || a.data?.type === 'brd')
+      );
+      if (approvedBrd) {
+        return {
+          agent: 'SA',
+          context: (p) => `[PIPELINE] The BRD has been approved. Design the system architecture now.
+Read the BRD from your context and produce a System Design Document (SDD) covering:
+- Tech stack selection with rationale (reference user priorities from BRD)
+- Database schema (if needed)
+- API design and component architecture
+- Security considerations
+- Deployment strategy
+Reference BRD requirement IDs (FR-XXX) for traceability.
+
+PM summary:\n${p.message}`,
+        };
+      }
+
+      // PM approved SDD → route to DO for scaffolding
+      const approvedSdd = actions.some(
+        (a) => a.type === 'approve_document' && (a.data?.type === 'SDD' || a.data?.type === 'sdd')
+      );
+      if (approvedSdd) {
         return {
           agent: 'DO',
-          context: (p) => `[PIPELINE] Task cards have been created on the work board. Please scaffold the project structure. Read the SDD from your context to understand the tech stack. Generate the project boilerplate: package.json, tsconfig.json, framework configuration, directory structure, Dockerfile, .gitignore, and entry point files using [ARTIFACT] markers.\n\nPM summary:\n${p.message}`,
+          context: (p) => `[PIPELINE] The SDD has been approved. Scaffold the project now.
+Read the SDD to understand the tech stack. Generate the project boilerplate:
+- package.json, tsconfig.json, framework configuration
+- Directory structure, Dockerfile, .gitignore
+- Entry point files
+
+PM summary:\n${p.message}`,
         };
+      }
+
+      // PM created a card for BA → route to BA for requirements gathering
+      const createdCardForBA = actions.some(
+        (a) => a.type === 'create_card' && (a.data?.assigneeId === 'BA' || a.data?.assignee === 'BA')
+      );
+      if (createdCardForBA) {
+        return {
+          agent: 'BA',
+          context: (p) => `[PIPELINE] You have been assigned to gather requirements.
+Ask the user clarifying questions about their project to understand:
+- Core features and functionality
+- Target audience and user personas
+- Business priorities (speed, cost, quality, scale)
+- Any technical constraints or preferences
+
+After gathering enough information (5-10 questions), produce the Business Requirements Document (BRD) with all required sections.
+
+PM summary:\n${p.message}`,
+        };
+      }
+
+      // PM created a card for SA → route to SA
+      const createdCardForSA = actions.some(
+        (a) => a.type === 'create_card' && (a.data?.assigneeId === 'SA' || a.data?.assignee === 'SA')
+      );
+      if (createdCardForSA) {
+        return {
+          agent: 'SA',
+          context: (p) => `[PIPELINE] You have been assigned to design the architecture. Read the approved BRD and produce the SDD.\n\nPM summary:\n${p.message}`,
+        };
+      }
+
+      // PM created a card for DO → route to DO
+      const createdCardForDO = actions.some(
+        (a) => a.type === 'create_card' && (a.data?.assigneeId === 'DO' || a.data?.assignee === 'DO')
+      );
+      if (createdCardForDO) {
+        return {
+          agent: 'DO',
+          context: (p) => `[PIPELINE] You have been assigned to scaffold the project. Read the SDD and generate the boilerplate.\n\nPM summary:\n${p.message}`,
+        };
+      }
+
+      // PM created a generic card → check card title/description for hints
+      const hasCardCreation = actions.some((a) => a.type === 'create_card');
+      if (hasCardCreation) {
+        // Default: if PM creates a card and we can't determine the assignee,
+        // don't auto-chain — let PM tell the user what's next
+        return null;
       }
     }
 
-    // DO scaffolded → TL assigns tasks and starts dev
+    // ── DO scaffolded → route to PM for validation ──
     if (completedAgent === 'DO') {
       const hasScaffold = artifacts.some(
         (a) => a.name === 'package.json' || a.name.includes('tsconfig') ||
@@ -1663,23 +1771,34 @@ export class OrchestrationEngine {
       );
       if (hasScaffold) {
         return {
-          agent: 'TL',
-          context: (p) => `[PIPELINE] Project scaffold is ready (${artifacts.length} files generated). Please review the task cards on the board and coordinate development. Assign tasks to Junior Developer (JD) and Senior Developer (SD) based on complexity. Then start the first task by delegating to the appropriate developer.\n\nDO summary:\n${p.message}`,
+          agent: 'PM',
+          context: (p) => `[PIPELINE] DO has completed project scaffolding (${artifacts.length} files). Validate the scaffold — check that all SDD tech stack choices are reflected. Mark the scaffolding phase as complete. Then hand off to TL for UI/UX phase.\n\nDO summary:\n${p.message}`,
         };
       }
     }
 
-    // TL assigned tasks → JD starts first task
+    // ── UX completed → route to TL (not directly to PM) ──
+    if (completedAgent === 'UX') {
+      const hasWireframes = artifacts.some(
+        (a) => a.name.includes('wireframe') || a.name.includes('design') || a.name.includes('mockup')
+      );
+      if (hasWireframes || artifacts.length > 0) {
+        return {
+          agent: 'TL',
+          context: (p) => `[PIPELINE] UX has completed wireframes and design system. Review the designs and coordinate the next steps.\n\nUX summary:\n${p.message}`,
+        };
+      }
+    }
+
+    // ── TL assigned tasks → JD starts first task ──
     if (completedAgent === 'TL') {
-      // TL either explicitly delegates (handled by delegation handler) or
-      // creates/updates cards with assignments. If no delegation, trigger JD.
       const hasAssignment = actions.some(
         (a) => a.type === 'update_card' || a.type === 'create_card'
       );
       if (hasAssignment && !parsed.delegateTo) {
         return {
           agent: 'JD',
-          context: (p) => `[PIPELINE] The Tech Lead has assigned tasks. Please start working on your first assigned task from the board. Read the task cards, BRD, SDD, and existing code artifacts from your context. Write the implementation code using [ARTIFACT] markers for each file.\n\nTL summary:\n${p.message}`,
+          context: (p) => `[PIPELINE] The Tech Lead has assigned tasks. Start working on your first assigned task from the board. Read the task cards, BRD, SDD, and existing code artifacts. Write the implementation code using [ARTIFACT] markers.\n\nTL summary:\n${p.message}`,
         };
       }
     }
@@ -2129,19 +2248,46 @@ export async function executeSideEffects(
         }
 
         case 'approve_document': {
+          // Agent requests approval → set doc to AWAITING_APPROVAL and create a decision
+          // The document is NOT auto-approved. User must approve via My Decisions.
           const approveDocType = mapDocumentType(action.data.type);
-          const updated = await prisma.document.updateMany({
+          const awaitingUpd = await prisma.document.updateMany({
             where: {
               projectId,
               type: approveDocType,
-              status: { not: 'APPROVED' },
+              status: { in: ['DRAFT', 'REVIEW'] },
             },
-            data: { status: 'APPROVED' },
+            data: { status: 'AWAITING_APPROVAL' },
           });
 
           console.log(
-            `[Engine] ✅ Approved ${updated.count} ${action.data.type} document(s) for project ${projectId}`,
+            `[Engine] 📋 Set ${awaitingUpd.count} ${action.data.type} document(s) to REVIEW for project ${projectId}`,
           );
+
+          // Create a decision for user sign-off (with dedup)
+          const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
+          const pName = proj?.name || 'this project';
+          const dLabel = action.data.type === 'BRD' ? 'Business Requirements Document' : action.data.type === 'SDD' ? 'System Design Document' : action.data.type;
+          const dTrigger = `${action.data.type} Approval: ${pName}`;
+          const existDec = await prisma.decision.findFirst({ where: { projectId, trigger: dTrigger } });
+          if (!existDec) {
+            await prisma.decision.create({
+              data: {
+                projectId,
+                trigger: dTrigger,
+                context: `The ${dLabel} is ready for review and approval. Please review the document in the Documents section and approve or request changes.`,
+                status: 'AWAITING_APPROVAL',
+                recommendation: `Approve the ${action.data.type} — the document has been reviewed and is ready for the next phase.`,
+                ownerId: userId,
+                options: {
+                  create: [
+                    { name: `Approve ${action.data.type} — proceed to next phase`, description: `The ${dLabel} is complete and ready`, pros: { set: ['Document is complete', 'Ready to proceed'] }, cons: { set: ['Changes require re-approval'] } },
+                    { name: 'Request changes', description: 'Send back for revisions', pros: { set: ['Opportunity to refine'] }, cons: { set: ['Delays the project'] } },
+                  ],
+                },
+              },
+            });
+          }
 
           await eventBus.emit({
             type: 'action.executed',
@@ -2150,7 +2296,8 @@ export async function executeSideEffects(
             payload: {
               actionType: 'approve_document',
               docType: action.data.type,
-              count: updated.count,
+              count: awaitingUpd.count,
+              status: 'AWAITING_APPROVAL',
             },
           });
           break;
