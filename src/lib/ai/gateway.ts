@@ -320,10 +320,14 @@ export class LLMGateway {
       await this.enforceCredits(userId);
     }
 
-    // Try the resolved provider, then walk the fallback chain on failure.
-    // Only fallback if no chunks have been yielded yet (can't restart mid-stream).
+    // When configOverride is provided (e.g. from AgentLoop fallback), try ONLY
+    // that specific provider — the caller (AgentLoop) manages its own fallback chain.
+    // Gateway-level fallback only applies when resolving fresh from DB.
+    const callerManagesFallback = !!configOverride;
+
     let lastError: Error | null = null;
-    for (let attempt = 0; attempt <= MAX_FALLBACK_ATTEMPTS; attempt++) {
+    const maxAttempts = callerManagesFallback ? 0 : MAX_FALLBACK_ATTEMPTS;
+    for (let attempt = 0; attempt <= maxAttempts; attempt++) {
       const { provider, config, isMock, billingType } = resolved;
       let yieldedAny = false;
 
@@ -366,6 +370,12 @@ export class LLMGateway {
 
         // If we already yielded chunks, we can't restart — throw
         if (yieldedAny) {
+          throw lastError;
+        }
+
+        // If caller manages fallback (configOverride), throw immediately
+        // so the caller can pick the next provider
+        if (callerManagesFallback) {
           throw lastError;
         }
 
