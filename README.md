@@ -1,8 +1,20 @@
-# AI Team Studio
+# Codanium — AI Team Studio
 
-**Your AI Software Delivery Team** — Describe what you need, and 23 AI agents build, test, and launch it.
+[![Build & Deploy](https://github.com/AiSenseiMY/Ai-Team_studio/actions/workflows/deploy.yml/badge.svg)](https://github.com/AiSenseiMY/Ai-Team_studio/actions/workflows/deploy.yml)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Prisma](https://img.shields.io/badge/Prisma-7.x-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
+[![Tailwind](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![LLM](https://img.shields.io/badge/LLM_Providers-10+-8B5CF6)]()
+[![Agents](https://img.shields.io/badge/AI_Agents-24-F59E0B)]()
+[![BRD Quality](https://img.shields.io/badge/BRD_Quality-18%2F18_Pass-22C55E)]()
 
-AI Team Studio is a full-service AI platform that builds and delivers software from your ideas. Users describe what they want built — even as a rough idea — and our AI team handles the entire lifecycle: requirements analysis, architecture, design, coding, testing, and deployment.
+**Your AI Software Delivery Team** — Describe what you need, and 24 AI agents build, test, and launch it.
+
+Codanium is a full-service AI platform that builds and delivers software from your ideas. Users describe what they want built — even as a rough idea — and our AI team handles the entire lifecycle: requirements analysis, architecture, design, coding, testing, and deployment.
 
 ## Who Is This For?
 
