@@ -1223,34 +1223,39 @@ RULES:
             // PM just greeted → advance to BA
             trigger = 'agent_done';
           } else if (currentPhase === 'BA_WORKING') {
-            // BA created/updated BRD → needs approval
-            const hasBrdAction = (parsed.actions ?? []).some(
-              (a) => (a.type === 'create_document' || a.type === 'update_document' || a.type === 'approve_document') &&
-                     (a.data?.type === 'BRD' || a.data?.type === 'brd')
+            // BA created/updated/approved BRD → needs user approval
+            // Use completedSignals (actual tool calls) — parsed.actions only has text-extracted ones
+            const hasBrdSignal = completedSignals.some(
+              (s) => s.startsWith('create_document(BRD') || s.startsWith('update_document(BRD') || s.startsWith('approve_document(BRD') ||
+                     s.startsWith('create_document(brd') || s.startsWith('update_document(brd') || s.startsWith('approve_document(brd') ||
+                     s.startsWith('create_decision')
             );
-            if (hasBrdAction) {
+            if (hasBrdSignal) {
               trigger = 'document_created';
+              console.log(`[AgentLoop] FSM: BA produced BRD (signals: ${completedSignals.join(', ')})`);
             }
-            // If no BRD action, BA is still asking questions — stay in BA_WORKING (no trigger)
+            // If no BRD signal, BA is still asking questions — stay in BA_WORKING
           } else if (currentPhase === 'SA_WORKING') {
-            // SA created/updated SDD → needs approval
-            const hasSddAction = (parsed.actions ?? []).some(
-              (a) => (a.type === 'create_document' || a.type === 'update_document' || a.type === 'approve_document') &&
-                     (a.data?.type === 'SDD' || a.data?.type === 'sdd')
+            // SA created/updated/approved SDD → needs user approval
+            const hasSddSignal = completedSignals.some(
+              (s) => s.startsWith('create_document(SDD') || s.startsWith('update_document(SDD') || s.startsWith('approve_document(SDD') ||
+                     s.startsWith('create_document(sdd') || s.startsWith('update_document(sdd') || s.startsWith('approve_document(sdd') ||
+                     s.startsWith('create_decision')
             );
-            if (hasSddAction) {
+            if (hasSddSignal) {
               trigger = 'document_created';
+              console.log(`[AgentLoop] FSM: SA produced SDD (signals: ${completedSignals.join(', ')})`);
             }
           } else if (currentPhase === 'DO_WORKING') {
-            // DO produced scaffold artifacts → needs approval
+            // DO produced scaffold — check signals and artifacts
+            const hasDOSignal = completedSignals.some(
+              (s) => s.startsWith('write_file') || s.startsWith('run_command') || s.startsWith('create_card') || s.startsWith('update_card') || s.startsWith('task_progress')
+            );
             const hasScaffold = (parsed.artifacts ?? []).some(
               (a) => a.name === 'package.json' || a.name.includes('tsconfig') ||
                      a.name.includes('Dockerfile') || a.name.includes('.gitignore')
             );
-            const hasDOAction = (parsed.actions ?? []).some(
-              (a) => a.type === 'create_card' || a.type === 'update_card'
-            );
-            if (hasScaffold || hasDOAction) {
+            if (hasDOSignal || hasScaffold) {
               trigger = 'agent_done';
             }
           } else if (currentPhase.endsWith('_NEEDS_APPROVAL')) {
