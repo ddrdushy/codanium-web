@@ -217,7 +217,87 @@ export async function PATCH(
 
       }
 
-      // Scaffolding approval → move card to DONE, prepare for DEV_WORKING
+      // UI approval → lock wireframes, create dev cards, prepare for DEV_WORKING
+      if (trigger.includes('ui') && (trigger.includes('approval') || trigger.includes('design'))) {
+        console.log(`[Decision] UI approved for project ${projectId} — running side effects`);
+
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { name: true },
+        });
+        const uiProjectName = project?.name || 'this project';
+
+        // 1. Lock DESIGN_SYSTEM document
+        try {
+          await prisma.document.updateMany({
+            where: { projectId, type: 'DESIGN_SYSTEM' },
+            data: { status: 'APPROVED', locked: true },
+          });
+          console.log(`[Decision] DESIGN_SYSTEM document → APPROVED + LOCKED`);
+        } catch (e) {
+          console.error('[Decision] Failed to lock design system:', e);
+        }
+
+        // 2. Approve wireframes
+        try {
+          await prisma.wireframe.updateMany({
+            where: { projectId },
+            data: { status: 'APPROVED' },
+          });
+          console.log(`[Decision] Wireframes → APPROVED`);
+        } catch (e) {
+          console.error('[Decision] Failed to approve wireframes:', e);
+        }
+
+        // 3. Move UX Design card to DONE
+        try {
+          const uxCard = await prisma.card.findFirst({
+            where: { projectId, title: { contains: 'UX Design' } },
+          });
+          if (uxCard) {
+            await prisma.card.update({
+              where: { id: uxCard.id },
+              data: { state: 'DONE' },
+            });
+            console.log(`[Decision] UX Design card → DONE`);
+          }
+        } catch (e) {
+          console.error('[Decision] Failed to update UX card:', e);
+        }
+
+        // 4. Create Development card for TL
+        try {
+          const tlAgent = await prisma.agent.findFirst({
+            where: { projectId, shortName: 'TL' },
+            select: { id: true },
+          });
+
+          const existingDevCard = await prisma.card.findFirst({
+            where: { projectId, title: { contains: 'Development' }, type: 'TASK' },
+          });
+
+          if (!existingDevCard) {
+            await prisma.card.create({
+              data: {
+                title: `Development: ${uiProjectName}`,
+                description: `Tech Lead breaks down the SDD into development cards based on approved wireframes and UI Kit. Assigns to JD/SD and coordinates the build cycle.`,
+                type: 'TASK',
+                state: 'PLANNED',
+                priority: 'HIGH',
+                ownerAgentId: tlAgent?.id,
+                projectId,
+              },
+            });
+            console.log(`[Decision] Created Development card for TL`);
+          }
+        } catch (e) {
+          console.error('[Decision] Failed to create dev card:', e);
+        }
+
+        console.log(`[Decision] UI approval complete — FSM will trigger DEV_WORKING`);
+      }
+
+      // Scaffolding approval → move card to DONE, prepare for UX_WORKING
       if (trigger.includes('scaffold') || trigger.includes('project setup') || trigger.includes('devops')) {
         console.log(`[Decision] Scaffolding approved for project ${projectId} — running side effects`);
 
@@ -243,37 +323,37 @@ export async function PATCH(
           console.error('[Decision] Failed to update scaffolding card:', e);
         }
 
-        // 2. Create Development card for TL
+        // 2. Create UX Design card (next phase after scaffold)
         try {
-          const tlAgent = await prisma.agent.findFirst({
-            where: { projectId, shortName: 'TL' },
+          const uxAgent = await prisma.agent.findFirst({
+            where: { projectId, shortName: 'UX' },
             select: { id: true },
           });
 
-          const existingDevCard = await prisma.card.findFirst({
-            where: { projectId, title: { contains: 'Development' }, type: 'TASK' },
+          const existingUXCard = await prisma.card.findFirst({
+            where: { projectId, title: { contains: 'UX Design' } },
           });
 
-          if (!existingDevCard) {
+          if (!existingUXCard) {
             await prisma.card.create({
               data: {
-                title: `Development: ${scaffoldProjectName}`,
-                description: `Phase 4: Tech Lead breaks down the SDD into development cards, assigns to JD/SD, and coordinates the build cycle.`,
+                title: `UX Design: ${scaffoldProjectName}`,
+                description: `Create the Design System / UI Kit: branding, color palette, typography, component system, and design tokens. After UI Kit is complete, UID will create wireframes.`,
                 type: 'TASK',
-                state: 'IN_PROGRESS',
+                state: 'PLANNED',
                 priority: 'HIGH',
-                ownerAgentId: tlAgent?.id,
+                ownerAgentId: uxAgent?.id,
                 projectId,
               },
             });
-            console.log(`[Decision] Created Development card for TL`);
+            console.log(`[Decision] Created UX Design card for UX agent`);
           }
         } catch (e) {
-          console.error('[Decision] Failed to create dev card:', e);
+          console.error('[Decision] Failed to create UX card:', e);
         }
 
-        // FSM auto-trigger handles enqueuing TL agent — no manual enqueue needed
-        console.log(`[Decision] Scaffolding approval complete — FSM will trigger TL`);
+        // FSM auto-trigger handles enqueuing UX agent — no manual enqueue needed
+        console.log(`[Decision] Scaffolding approval complete — FSM will trigger UX phase`);
       }
     }
 

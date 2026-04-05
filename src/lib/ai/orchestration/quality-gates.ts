@@ -131,6 +131,24 @@ const DELEGATION_GATES: Record<string, GatePrerequisite[]> = {
       message: 'Project scaffold (package.json) must be created before assigning tasks.',
     },
   ],
+  'UX→TL': [
+    {
+      type: 'wireframes_approved',
+      message: 'UI designs and wireframes must be approved before starting development.',
+    },
+  ],
+  'TL→JD': [
+    {
+      type: 'wireframes_approved',
+      message: 'UI designs must be approved before assigning development tasks. Complete the UX/UI phase first.',
+    },
+  ],
+  'TL→SD': [
+    {
+      type: 'wireframes_approved',
+      message: 'UI designs must be approved before assigning development tasks. Complete the UX/UI phase first.',
+    },
+  ],
   'JD→QA': [
     {
       type: 'code_exists',

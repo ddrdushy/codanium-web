@@ -8,6 +8,7 @@
  *   PM_GREETING → BA_WORKING → BA_NEEDS_APPROVAL
  *     → (user approves) → SA_WORKING → SA_NEEDS_APPROVAL
  *     → (user approves) → DO_WORKING → DO_NEEDS_APPROVAL
+ *     → (user approves) → UX_WORKING → UI_NEEDS_APPROVAL
  *     → (user approves) → DEV_WORKING → ... → COMPLETE
  */
 
@@ -26,6 +27,8 @@ export type PipelinePhase =
   | 'SA_NEEDS_APPROVAL'
   | 'DO_WORKING'
   | 'DO_NEEDS_APPROVAL'
+  | 'UX_WORKING'
+  | 'UI_NEEDS_APPROVAL'
   | 'DEV_WORKING'
   | 'COMPLETE';
 
@@ -48,7 +51,9 @@ const TRANSITIONS: Record<PipelinePhase, Partial<Record<PipelineTrigger, Pipelin
   SA_WORKING:         { document_created: 'SA_NEEDS_APPROVAL' },
   SA_NEEDS_APPROVAL:  { user_approved: 'DO_WORKING', user_rejected: 'SA_WORKING' },
   DO_WORKING:         { agent_done: 'DO_NEEDS_APPROVAL' },
-  DO_NEEDS_APPROVAL:  { user_approved: 'DEV_WORKING', user_rejected: 'DO_WORKING' },
+  DO_NEEDS_APPROVAL:  { user_approved: 'UX_WORKING', user_rejected: 'DO_WORKING' },
+  UX_WORKING:         { agent_done: 'UI_NEEDS_APPROVAL' },
+  UI_NEEDS_APPROVAL:  { user_approved: 'DEV_WORKING', user_rejected: 'UX_WORKING' },
   DEV_WORKING:        { all_cards_done: 'COMPLETE' },
   COMPLETE:           {},
 };
@@ -65,6 +70,8 @@ const PHASE_AGENT: Record<PipelinePhase, string> = {
   SA_NEEDS_APPROVAL:  'PM',
   DO_WORKING:         'DO',
   DO_NEEDS_APPROVAL:  'PM',
+  UX_WORKING:         'UX',   // UX creates design system, then UID creates wireframes
+  UI_NEEDS_APPROVAL:  'TL',   // TL reviews UI and presents for user approval
   DEV_WORKING:        'TL',   // TL coordinates dev cycle
   COMPLETE:           'PM',   // PM for final summary
 };
@@ -78,7 +85,9 @@ const PHASE_CONTEXT: Record<PipelinePhase, string> = {
   SA_NEEDS_APPROVAL: 'The SDD has been created. Validate it — check all BRD requirements (FR-XXX) are mapped to architecture components. Create a decision for the user to approve or request changes using [APPROVE_DOCUMENT]{"type":"SDD"}.',
   DO_WORKING: 'You are DevOps. Read the SDD from context. Scaffold the project structure: package.json, tsconfig.json, framework configuration, directory structure, Dockerfile, .gitignore, and entry point files. After writing all files, run `npm install` and `npx tsc --noEmit` to verify the build. Then call task_progress to signal completion.',
   DO_NEEDS_APPROVAL: 'The project scaffold is complete. Review the scaffolded files and summarize them for the user. Create a decision for the user to approve using create_decision with title "Scaffolding Approval" and trigger "scaffolding". Include options: "Approve scaffold and start development" or "Request changes".',
-  DEV_WORKING: 'You are the Tech Lead. Read the approved BRD and SDD from context. Break down the SDD into development task cards — one card per component/feature. Assign each card to JD (Junior Developer) or SD (Senior Developer). Each task goes through: code → QA → SEC → DO → PE sign-off cycle. Pick ONE card at a time.',
+  UX_WORKING: 'You are the UX Designer. The project scaffold is approved. Now create the Design System / UI Kit document using [CREATE_DOCUMENT]{"type":"DESIGN_SYSTEM"}. Include: branding guidelines, color palette (primary, secondary, neutral, semantic), typography scale, spacing system, component inventory (buttons, inputs, cards, modals, navigation), and design tokens. After the UI Kit is complete, delegate to UID to create wireframes based on the design system and BRD user flows.',
+  UI_NEEDS_APPROVAL: 'The UI Kit and wireframes are ready. Review the design system and wireframes for completeness — all pages from the BRD user flows must have wireframe coverage. Create a decision for the user to approve using create_decision with title "UI Design Approval" and trigger "ui approval". Include options: "Approve UI designs and start development" or "Request changes to designs".',
+  DEV_WORKING: 'You are the Tech Lead. Read the approved BRD, SDD, UI Kit, and wireframes from context. Break down the SDD into development task cards — one card per component/feature. Create cards for: Frontend (based on wireframes + UI Kit), Backend (based on SDD APIs), and Integration. Assign each card to JD (Junior Developer) or SD (Senior Developer). Each task goes through: code → QA → SEC → DO → PE sign-off cycle. Pick ONE card at a time.',
   COMPLETE: 'All development is complete! Provide a final summary to the user: what was built, key decisions made, and next steps for deployment.',
 };
 
@@ -165,6 +174,7 @@ export async function transition(
     const cardTitleMap: Record<string, string> = {
       SA_WORKING: 'Solution Design',
       DO_WORKING: 'Scaffolding',
+      UX_WORKING: 'UX Design',
       DEV_WORKING: 'Development',
     };
     const cardTitle = cardTitleMap[nextPhase];
