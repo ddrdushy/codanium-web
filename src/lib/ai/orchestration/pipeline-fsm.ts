@@ -79,9 +79,22 @@ const PHASE_AGENT: Record<PipelinePhase, string> = {
 // Phase context — what the agent should know when activated in this phase
 const PHASE_CONTEXT: Record<PipelinePhase, string> = {
   PM_GREETING: 'Greet the user, summarize the project, and tell them the BA will start gathering requirements.',
-  BA_WORKING: 'You are the Business Analyst. Ask the user clarifying questions ONE AT A TIME about their project requirements. After gathering enough information (5-10 questions), produce the full Business Requirements Document (BRD) using [CREATE_DOCUMENT]. Include: Executive Summary, Functional Requirements (FR-001, FR-002...), User Personas, User Flows, NFRs, and Acceptance Criteria.',
+  BA_WORKING: `You are the Business Analyst. Ask the user clarifying questions ONE AT A TIME about their project requirements. After gathering enough information (5-10 questions), generate the BRD using SECTION-BY-SECTION approach:
+
+1. First call: [CREATE_DOCUMENT]{"type":"BRD","title":"Business Requirements Document","content":"# Business Requirements Document\\n\\n## 1. Overview\\n..."} — write Overview + Business Objectives
+2. Then call: [UPDATE_DOCUMENT]{"type":"BRD","mode":"append","content":"## 3. Stakeholders\\n..."} — add Stakeholders
+3. Then call: [UPDATE_DOCUMENT]{"type":"BRD","mode":"append","content":"## 4. Functional Requirements\\n\\nFR-001: ...\\nFR-002: ..."} — add FRs
+4. Continue for: Non-Functional Requirements, Assumptions, Constraints, Success Criteria
+
+RULES: Generate 1-2 sections per tool call (max ~1500 tokens each). NEVER put the entire BRD in one call. Each section is saved immediately. Tell the user your progress: "Generating section 3/8: Stakeholders..."`,
   BA_NEEDS_APPROVAL: 'The BRD has been created. Validate it — check for completeness, functional requirements with FR-IDs, user personas, and acceptance criteria. Create a decision for the user to approve or request changes using [APPROVE_DOCUMENT]{"type":"BRD"}.',
-  SA_WORKING: 'You are the Solution Architect. Read the approved BRD from context. Design the system architecture and produce the System Design Document (SDD) using [CREATE_DOCUMENT]. Include: tech stack with rationale, database schema, API design, component architecture, security, and deployment strategy. Reference BRD requirement IDs (FR-XXX) for traceability.',
+  SA_WORKING: `You are the Solution Architect. Read the approved BRD from context. Generate the SDD using SECTION-BY-SECTION approach:
+
+1. First call: [CREATE_DOCUMENT]{"type":"SDD","title":"System Design Document","content":"# System Design Document\\n\\n## 1. System Overview\\n..."} — write System Overview
+2. Then call: [UPDATE_DOCUMENT]{"type":"SDD","mode":"append","content":"## 2. Architecture\\n..."} — add Architecture + diagrams
+3. Continue for: Components, Data Flow, APIs & Integrations, Tech Stack, Security, Scalability, Error Handling, Assumptions
+
+RULES: Reference BRD requirement IDs (FR-XXX) for traceability. Generate 1-2 sections per tool call (max ~1500 tokens each). NEVER put the entire SDD in one call. Each section is saved immediately. Tell the user your progress: "Generating section 4/10: Data Flow..."`,
   SA_NEEDS_APPROVAL: 'The SDD has been created. Validate it — check all BRD requirements (FR-XXX) are mapped to architecture components. Create a decision for the user to approve or request changes using [APPROVE_DOCUMENT]{"type":"SDD"}.',
   DO_WORKING: 'You are DevOps. Read the SDD from context. Scaffold the project structure: package.json, tsconfig.json, framework configuration, directory structure, Dockerfile, .gitignore, and entry point files. After writing all files, run `npm install` and `npx tsc --noEmit` to verify the build. Then call task_progress to signal completion.',
   DO_NEEDS_APPROVAL: 'The project scaffold is complete. Review the scaffolded files and summarize them for the user. Create a decision for the user to approve using create_decision with title "Scaffolding Approval" and trigger "scaffolding". Include options: "Approve scaffold and start development" or "Request changes".',

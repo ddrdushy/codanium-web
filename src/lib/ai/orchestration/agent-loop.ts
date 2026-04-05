@@ -891,8 +891,19 @@ RULES:
             }
           }
 
-          // Detect truncation — if a document agent's response ends abruptly
+          // ── Output Guard: detect oversized responses and truncation ──
           if (iterContent && DOCUMENT_AGENTS.includes(currentAgent)) {
+            // Guard 1: Response too large without using tool calls (agent dumping doc in chat)
+            if (iterContent.length > 6000 && collectedToolCalls.length === 0) {
+              console.warn(`[OutputGuard] ${currentAgent} produced ${iterContent.length} chars in chat without tool calls — prompting section-based approach`);
+              messages.push({ role: 'assistant', content: iterContent });
+              messages.push({ role: 'user', content: 'IMPORTANT: Do NOT put document content directly in chat. Use [CREATE_DOCUMENT] and [UPDATE_DOCUMENT] tool calls to save content section-by-section. Generate 1-2 sections per tool call. Chat is for communication, artifacts are for content.' });
+              iterContent = '';
+              yield { type: 'info' as const, data: { message: 'Redirecting agent to use section-based document generation...' } };
+              throw new Error('Output guard — redirecting to tool-based generation');
+            }
+
+            // Guard 2: Detect truncation — response ends abruptly
             const hasOpenTags = (iterContent.match(/\[ARTIFACT/g) || []).length > (iterContent.match(/\[\/ARTIFACT\]/g) || []).length;
             const endsAbruptly = iterContent.length > 2000 && !iterContent.trimEnd().endsWith(']') && !iterContent.trimEnd().endsWith('.') && !iterContent.trimEnd().endsWith('\n');
             if (hasOpenTags || endsAbruptly) {
