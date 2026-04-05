@@ -76,10 +76,10 @@ const PHASE_CONTEXT: Record<PipelinePhase, string> = {
   BA_NEEDS_APPROVAL: 'The BRD has been created. Validate it — check for completeness, functional requirements with FR-IDs, user personas, and acceptance criteria. Create a decision for the user to approve or request changes using [APPROVE_DOCUMENT]{"type":"BRD"}.',
   SA_WORKING: 'You are the Solution Architect. Read the approved BRD from context. Design the system architecture and produce the System Design Document (SDD) using [CREATE_DOCUMENT]. Include: tech stack with rationale, database schema, API design, component architecture, security, and deployment strategy. Reference BRD requirement IDs (FR-XXX) for traceability.',
   SA_NEEDS_APPROVAL: 'The SDD has been created. Validate it — check all BRD requirements (FR-XXX) are mapped to architecture components. Create a decision for the user to approve or request changes using [APPROVE_DOCUMENT]{"type":"SDD"}.',
-  DO_WORKING: 'You are DevOps. Read the SDD from context. Scaffold the project structure: package.json, tsconfig.json, framework configuration, directory structure, Dockerfile, .gitignore, and entry point files.',
-  DO_NEEDS_APPROVAL: 'The project scaffold is complete. Review it and inform the user. Create a decision for approval.',
-  DEV_WORKING: 'Coordinate the development cycle. Assign tasks from the board to JD (Junior Developer) and SD (Senior Developer). Each task goes through: code → QA → SEC → sign-off.',
-  COMPLETE: 'All phases are complete. Provide a final summary to the user.',
+  DO_WORKING: 'You are DevOps. Read the SDD from context. Scaffold the project structure: package.json, tsconfig.json, framework configuration, directory structure, Dockerfile, .gitignore, and entry point files. After writing all files, run `npm install` and `npx tsc --noEmit` to verify the build. Then call task_progress to signal completion.',
+  DO_NEEDS_APPROVAL: 'The project scaffold is complete. Review the scaffolded files and summarize them for the user. Create a decision for the user to approve using create_decision with title "Scaffolding Approval" and trigger "scaffolding". Include options: "Approve scaffold and start development" or "Request changes".',
+  DEV_WORKING: 'You are the Tech Lead. Read the approved BRD and SDD from context. Break down the SDD into development task cards — one card per component/feature. Assign each card to JD (Junior Developer) or SD (Senior Developer). Each task goes through: code → QA → SEC → DO → PE sign-off cycle. Pick ONE card at a time.',
+  COMPLETE: 'All development is complete! Provide a final summary to the user: what was built, key decisions made, and next steps for deployment.',
 };
 
 // ---------------------------------------------------------------------------
@@ -165,6 +165,7 @@ export async function transition(
     const cardTitleMap: Record<string, string> = {
       SA_WORKING: 'Solution Design',
       DO_WORKING: 'Scaffolding',
+      DEV_WORKING: 'Development',
     };
     const cardTitle = cardTitleMap[nextPhase];
     if (cardTitle) {

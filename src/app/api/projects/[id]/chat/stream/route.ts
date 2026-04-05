@@ -91,8 +91,20 @@ export async function POST(
           targetAgentShortName: body.agentShortName ?? undefined,
         });
 
+        // SSE heartbeat — keeps connection alive during long LLM calls / tool execution.
+        // Sends a comment line every 15s (not a named event, so clients ignore it).
+        const heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(': heartbeat\n\n'));
+          } catch { /* stream already closed */ }
+        }, 15_000);
+
+        try {
         for await (const event of events) {
           sendEvent(event.type, event.data);
+        }
+        } finally {
+          clearInterval(heartbeat);
         }
 
         // Mark OrchestrationRun as completed

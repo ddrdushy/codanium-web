@@ -377,6 +377,8 @@ export interface AgentStreamState {
   pipelineProgress: PipelineProgressData | null;
   /** VS Code gate: set when a dev agent requires VS Code to run */
   vscodeRequired: { agent: string; message: string; deepLink: string } | null;
+  /** Clear the VS Code required gate (e.g. after manual retry) */
+  clearVscodeRequired: () => void;
 }
 
 /**
@@ -405,6 +407,8 @@ export function useAgentStream(): AgentStreamState {
   const [error, setError] = useState<string | null>(null);
   const [pipelineProgress, setPipelineProgress] = useState<PipelineProgressData | null>(null);
   const [vscodeRequired, setVscodeRequired] = useState<{ agent: string; message: string; deepLink: string } | null>(null);
+
+  const clearVscodeRequired = useCallback(() => setVscodeRequired(null), []);
 
   const abortRef = useRef<AbortController | null>(null);
   // Batching refs — accumulate tokens and flush at ~30fps instead of per-token
@@ -614,5 +618,6 @@ export function useAgentStream(): AgentStreamState {
     error,
     pipelineProgress,
     vscodeRequired,
+    clearVscodeRequired,
   };
 }

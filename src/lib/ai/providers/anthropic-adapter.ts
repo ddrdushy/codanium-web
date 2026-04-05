@@ -201,6 +201,7 @@ export class AnthropicAdapter implements LLMProvider {
       method: 'POST',
       headers: headers(config),
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120_000), // 2 min timeout for non-streaming
     });
 
     const data = await res.json();
@@ -297,6 +298,7 @@ export class AnthropicAdapter implements LLMProvider {
       method: 'POST',
       headers: headers(config),
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(300_000), // 5 min timeout for streaming
     });
 
     if (!res.ok) {

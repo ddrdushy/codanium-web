@@ -25,6 +25,8 @@ export interface ProjectStreamState {
   backgroundToolActivities: ToolActivity[];
   backgroundPipelineProgress: PipelineProgressData | null;
   backgroundError: string | null;
+  /** Increments each time a background agent completes — use to trigger refetch */
+  backgroundDoneCounter: number;
 }
 
 /**
@@ -40,6 +42,7 @@ export function useProjectStream(projectId: string | undefined): ProjectStreamSt
   const [backgroundToolActivities, setBackgroundToolActivities] = useState<ToolActivity[]>([]);
   const [backgroundPipelineProgress, setBackgroundPipelineProgress] = useState<PipelineProgressData | null>(null);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  const [backgroundDoneCounter, setBackgroundDoneCounter] = useState(0);
 
   useEffect(() => {
     if (!projectId) return;
@@ -116,6 +119,8 @@ export function useProjectStream(projectId: string | undefined): ProjectStreamSt
 
       eventSource.addEventListener('done', (e: MessageEvent) => {
         setIsBackgroundStreaming(false);
+        // Signal chat page to refetch messages from DB
+        setBackgroundDoneCounter((c) => c + 1);
       });
 
       eventSource.addEventListener('error', (e: MessageEvent) => {
@@ -151,5 +156,6 @@ export function useProjectStream(projectId: string | undefined): ProjectStreamSt
     backgroundToolActivities,
     backgroundPipelineProgress,
     backgroundError,
+    backgroundDoneCounter,
   };
 }

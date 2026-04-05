@@ -101,7 +101,7 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'list_directory', 'glob', 'grep',
     'run_command', 'run_build',
     'git_commit', 'git_branch', 'git_diff',
-    'trigger_deploy',
+    'trigger_deploy', 'create_decision',
     'update_card', 'task_progress',
     'consult_agent', 'ask_user',
   ],

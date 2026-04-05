@@ -216,6 +216,65 @@ export async function PATCH(
         console.log(`[Decision] SDD approval complete — FSM will trigger DO`);
 
       }
+
+      // Scaffolding approval → move card to DONE, prepare for DEV_WORKING
+      if (trigger.includes('scaffold') || trigger.includes('project setup') || trigger.includes('devops')) {
+        console.log(`[Decision] Scaffolding approved for project ${projectId} — running side effects`);
+
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { name: true },
+        });
+        const scaffoldProjectName = project?.name || 'this project';
+
+        // 1. Move Scaffolding card to DONE
+        try {
+          const scaffoldCard = await prisma.card.findFirst({
+            where: { projectId, title: { contains: 'Scaffolding' } },
+          });
+          if (scaffoldCard) {
+            await prisma.card.update({
+              where: { id: scaffoldCard.id },
+              data: { state: 'DONE' },
+            });
+            console.log(`[Decision] Scaffolding card → DONE`);
+          }
+        } catch (e) {
+          console.error('[Decision] Failed to update scaffolding card:', e);
+        }
+
+        // 2. Create Development card for TL
+        try {
+          const tlAgent = await prisma.agent.findFirst({
+            where: { projectId, shortName: 'TL' },
+            select: { id: true },
+          });
+
+          const existingDevCard = await prisma.card.findFirst({
+            where: { projectId, title: { contains: 'Development' }, type: 'TASK' },
+          });
+
+          if (!existingDevCard) {
+            await prisma.card.create({
+              data: {
+                title: `Development: ${scaffoldProjectName}`,
+                description: `Phase 4: Tech Lead breaks down the SDD into development cards, assigns to JD/SD, and coordinates the build cycle.`,
+                type: 'TASK',
+                state: 'IN_PROGRESS',
+                priority: 'HIGH',
+                ownerAgentId: tlAgent?.id,
+                projectId,
+              },
+            });
+            console.log(`[Decision] Created Development card for TL`);
+          }
+        } catch (e) {
+          console.error('[Decision] Failed to create dev card:', e);
+        }
+
+        // FSM auto-trigger handles enqueuing TL agent — no manual enqueue needed
+        console.log(`[Decision] Scaffolding approval complete — FSM will trigger TL`);
+      }
     }
 
     return NextResponse.json(updated);

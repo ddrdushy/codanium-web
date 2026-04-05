@@ -1223,11 +1223,13 @@ RULES:
             // PM just greeted → advance to BA
             trigger = 'agent_done';
           } else if (currentPhase === 'BA_WORKING') {
-            // BA created/updated/approved BRD → needs user approval
-            // Use completedSignals (actual tool calls) — parsed.actions only has text-extracted ones
+            // BA finalized the BRD → needs user approval
+            // IMPORTANT: Do NOT trigger on update_document(BRD) — BA calls that on every
+            // response for staging notes. Only trigger on create_document (final BRD),
+            // approve_document, or create_decision (explicit approval request).
             const hasBrdSignal = completedSignals.some(
-              (s) => s.startsWith('create_document(BRD') || s.startsWith('update_document(BRD') || s.startsWith('approve_document(BRD') ||
-                     s.startsWith('create_document(brd') || s.startsWith('update_document(brd') || s.startsWith('approve_document(brd') ||
+              (s) => s.startsWith('create_document(BRD') || s.startsWith('approve_document(BRD') ||
+                     s.startsWith('create_document(brd') || s.startsWith('approve_document(brd') ||
                      s.startsWith('create_decision')
             );
             if (hasBrdSignal) {
@@ -1236,10 +1238,11 @@ RULES:
             }
             // If no BRD signal, BA is still asking questions — stay in BA_WORKING
           } else if (currentPhase === 'SA_WORKING') {
-            // SA created/updated/approved SDD → needs user approval
+            // SA finalized the SDD → needs user approval
+            // Same as BA: do NOT trigger on update_document (staging). Only create/approve/decision.
             const hasSddSignal = completedSignals.some(
-              (s) => s.startsWith('create_document(SDD') || s.startsWith('update_document(SDD') || s.startsWith('approve_document(SDD') ||
-                     s.startsWith('create_document(sdd') || s.startsWith('update_document(sdd') || s.startsWith('approve_document(sdd') ||
+              (s) => s.startsWith('create_document(SDD') || s.startsWith('approve_document(SDD') ||
+                     s.startsWith('create_document(sdd') || s.startsWith('approve_document(sdd') ||
                      s.startsWith('create_decision')
             );
             if (hasSddSignal) {
@@ -1247,16 +1250,20 @@ RULES:
               console.log(`[AgentLoop] FSM: SA produced SDD (signals: ${completedSignals.join(', ')})`);
             }
           } else if (currentPhase === 'DO_WORKING') {
-            // DO produced scaffold — check signals and artifacts
-            const hasDOSignal = completedSignals.some(
-              (s) => s.startsWith('write_file') || s.startsWith('run_command') || s.startsWith('create_card') || s.startsWith('update_card') || s.startsWith('task_progress')
+            // DO produced scaffold — only trigger when build is verified or scaffold is complete.
+            // IMPORTANT: Do NOT trigger on individual write_file calls — DO writes many files.
+            // Require: (a) run_build/run_command (build verification), or
+            //          (b) task_progress (explicit "done" signal), or
+            //          (c) create_decision (DO requests approval), or
+            //          (d) git_commit (scaffold committed = complete)
+            const hasDoneSignal = completedSignals.some(
+              (s) => s.startsWith('run_build') || s.startsWith('run_command') ||
+                     s.startsWith('task_progress') || s.startsWith('create_decision') ||
+                     s.startsWith('git_commit')
             );
-            const hasScaffold = (parsed.artifacts ?? []).some(
-              (a) => a.name === 'package.json' || a.name.includes('tsconfig') ||
-                     a.name.includes('Dockerfile') || a.name.includes('.gitignore')
-            );
-            if (hasDOSignal || hasScaffold) {
+            if (hasDoneSignal) {
               trigger = 'agent_done';
+              console.log(`[AgentLoop] FSM: DO scaffold complete (signals: ${completedSignals.join(', ')})`);
             }
           } else if (currentPhase.endsWith('_NEEDS_APPROVAL')) {
             // In approval phase — agent (PM) just presented the approval decision
@@ -1319,6 +1326,29 @@ RULES:
               nextAgent = fallback.next;
               nextContext = fallback.context;
               console.log(`[AgentLoop] Dev cycle fallback: ${currentAgent} -> ${nextAgent}`);
+            }
+          }
+
+          // Check if ALL dev cards are DONE → trigger COMPLETE
+          if (!nextAgent || currentAgent === 'PE' || currentAgent === 'TL') {
+            try {
+              const openCards = await prisma.card.count({
+                where: {
+                  projectId: input.projectId,
+                  type: 'TASK',
+                  state: { notIn: ['DONE', 'RELEASED'] },
+                },
+              });
+              if (openCards === 0) {
+                const newPhase = await pipelineFSM.transition(input.projectId, 'all_cards_done');
+                if (newPhase === 'COMPLETE') {
+                  nextAgent = pipelineFSM.getActiveAgent(newPhase);
+                  nextContext = pipelineFSM.getPhaseContext(newPhase);
+                  console.log(`[AgentLoop] FSM: All cards DONE → COMPLETE. PM for final summary.`);
+                }
+              }
+            } catch (e) {
+              console.error('[AgentLoop] all_cards_done check failed:', e);
             }
           }
         }

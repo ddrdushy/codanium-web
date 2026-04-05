@@ -48,6 +48,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [pendingDecisions, setPendingDecisions] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -74,6 +75,25 @@ export function Sidebar() {
 
   // Generate nav items for current project
   const navItems = getNavItems(currentProjectId);
+
+  // Poll for pending decisions count
+  useEffect(() => {
+    if (!currentProjectId) return;
+    let cancelled = false;
+    const fetchCount = () => {
+      fetch(`/api/projects/${currentProjectId}/decisions`)
+        .then(r => r.json())
+        .then((data: any[]) => {
+          if (!cancelled && Array.isArray(data)) {
+            setPendingDecisions(data.filter((d: any) => d.status === 'AWAITING_APPROVAL').length);
+          }
+        })
+        .catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 10_000); // Poll every 10s
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [currentProjectId, pathname]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -324,15 +344,27 @@ export function Sidebar() {
                         </motion.span>
                       )}
                     </AnimatePresence>
+                    {item.label === 'My Decisions' && pendingDecisions > 0 && !collapsed && (
+                      <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber text-black text-[10px] font-bold animate-pulse">
+                        {pendingDecisions}
+                      </span>
+                    )}
                   </Link>
                 );
 
                 if (collapsed) {
                   return (
                     <Tooltip key={item.href}>
-                      <TooltipTrigger asChild>{itemElement}</TooltipTrigger>
+                      <TooltipTrigger asChild>
+                        <div className="relative">
+                          {itemElement}
+                          {item.label === 'My Decisions' && pendingDecisions > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber animate-pulse" />
+                          )}
+                        </div>
+                      </TooltipTrigger>
                       <TooltipContent side="right" className="font-medium">
-                        {item.label}
+                        {item.label}{pendingDecisions > 0 && item.label === 'My Decisions' ? ` (${pendingDecisions})` : ''}
                       </TooltipContent>
                     </Tooltip>
                   );

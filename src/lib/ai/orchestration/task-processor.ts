@@ -49,14 +49,29 @@ export class TaskProcessor {
         isPipeline: true,
       });
 
-      // Broadcast the generator events over EventBus so connected clients can watch the stream
+      // Broadcast the generator events over EventBus so connected clients can watch the stream.
+      // Track if the agent was gated by VS Code so we can re-queue instead of completing.
+      let vsCodeGated = false;
+
       for await (const _event of events) {
+        const evt = _event as unknown as Record<string, unknown>;
+        if (evt.type === 'vscode_required') {
+          vsCodeGated = true;
+        }
         await eventBus.emit({
           type: 'project.stream',
           actor: task.routedTo,
           projectId: task.projectId,
-          payload: _event as unknown as Record<string, unknown>,
+          payload: evt,
         });
+      }
+
+      // If the agent-loop halted due to VS Code gate, re-queue as WAITING_FOR_VSCODE
+      // so it auto-resumes when the IDE heartbeat arrives.
+      if (vsCodeGated) {
+        console.log(`[TaskProcessor] Agent-loop gated by VS Code — re-queuing ${task.routedTo} task ${task.id}`);
+        await taskQueue.fail(task.id, 'WAITING_FOR_VSCODE');
+        return false;
       }
 
       await taskQueue.complete(task.id, {

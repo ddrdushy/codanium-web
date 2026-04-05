@@ -56,8 +56,11 @@ export async function executeTool(
   let { name, arguments: args } = toolCall;
 
   // ── Normalize tool name ──
-  // Some models return tool names with JSON embedded (e.g., "UPDATE_DOCUMENT {json}")
-  // or in UPPERCASE. Normalize to lowercase snake_case name only.
+  // Models return tool names in various formats:
+  //   "[UPDATE_DOCUMENT]", "UPDATE_DOCUMENT {json}", "[update_document] {...}"
+  //   "REMEMBER] {json}" (partial bracket)
+  // Normalize to lowercase snake_case name only.
+  name = name.replace(/[\[\]]/g, ''); // Strip ALL brackets anywhere in name
   if (name.includes('{') || name.includes(' ')) {
     const cleanName = name.split(/[\s{]/)[0].trim();
     if (cleanName) {
