@@ -32,7 +32,7 @@ export type OutputType =
   | 'agent_assignment' | 'code_artifact' | 'wireframe';
 
 export type AgentAction =
-  | { type: 'create_card'; data: { title: string; description?: string; type?: string; priority?: string; parentId?: string; module?: string } }
+  | { type: 'create_card'; data: { title: string; description?: string; type?: string; priority?: string; parentId?: string; module?: string; assigneeId?: string; assignee?: string } }
   | { type: 'update_card'; cardId: string; data: { state?: string; title?: string; priority?: string } }
   | { type: 'create_decision'; data: { trigger: string; context?: string; riskRating?: string; recommendation?: string; options?: Array<{ name: string; description?: string; pros?: string[]; cons?: string[]; risk?: string; effort?: string }> } }
   | { type: 'update_agent_status'; agentId: string; status: string; task?: string }

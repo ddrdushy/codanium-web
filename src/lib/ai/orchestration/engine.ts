@@ -2255,9 +2255,9 @@ export async function executeSideEffects(
             where: {
               projectId,
               type: approveDocType,
-              status: { in: ['DRAFT', 'REVIEW'] },
+              status: { in: ['DRAFT'] },
             },
-            data: { status: 'AWAITING_APPROVAL' },
+            data: { status: 'REVIEW' },
           });
 
           console.log(
