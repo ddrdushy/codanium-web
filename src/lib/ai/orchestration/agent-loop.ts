@@ -168,31 +168,10 @@ The system resolves these automatically. NEVER ask the user for IDs again. Just 
   return corrections[agent] || '';
 }
 
-// Pipeline: PM → BA → PM → SA → PM → DO → PM → TL → UX → TL → UID → TL → PM → TL → (JD/SD) → QA → SEC → DO/PE → TL (loop)
-// PM is the gatekeeper — every phase routes back through PM for validation.
+// Pipeline Rules — DEV CYCLE ONLY (PM/BA/SA/DO routing handled by FSM in pipeline-fsm.ts)
+// Dev cycle: TL → JD/SD → QA → SEC → DO → PE → TL (loop)
 const PIPELINE_RULES: PipelineRule[] = [
-  // ── PHASE 1: REQUIREMENTS ──────────────────────────────────────────
-  // BA approves BRD → routes to PM for validation
-  { from: 'BA', signals: ['approve_document(BRD)'], next: 'PM', context: 'The BRD is complete and APPROVED. Validate it — check for completeness, acceptance criteria coverage, and content inventory. If gaps exist, add a card comment explaining what is missing and send back to BA. If the BRD is satisfactory, mark the Requirements phase card as COMPLETE, then create a "Solution Design" card assigned to SA and route to SA for architecture.' },
-  // BA updates/creates BRD but doesn't approve → still routes to PM to check
-  { from: 'BA', signals: ['update_document(BRD)', 'create_document(BRD)'], next: 'PM', context: 'BA has updated the BRD. Check BRD quality — if it has all required sections (Executive Summary, Functional Requirements with FR-IDs, User Personas, User Flows, NFRs, Content Inventory), approve it and create SA card. Otherwise send feedback to BA.' },
-
-  // ── PM ROUTING — PM routes to the NEXT phase agent ─────────────────
-  // PM creates a card for SA → routes to SA
-  { from: 'PM', signals: ['create_card'], next: 'SA', context: 'Read the BRD document carefully. Design the technical architecture and produce the System Design Document (SDD). Include: tech stack with rationale, database schema, API endpoints, component architecture, security, and deployment strategy. Reference BRD requirement IDs (FR-XXX) for traceability.' },
-  // PM approves BRD → routes to SA
-  { from: 'PM', signals: ['approve_document(BRD)'], next: 'SA', context: 'The BRD has been approved by PM. Now design the system architecture. Read the BRD and produce the SDD with tech stack, database schema, API design, and security architecture.' },
-
-  // ── PHASE 2: ARCHITECTURE ──────────────────────────────────────────
-  // SA approves SDD → routes to PM
-  { from: 'SA', signals: ['approve_document(SDD)'], next: 'PM', context: 'The SDD is complete. Validate it — check that all BRD requirements (FR-XXX) are mapped to architecture components. If gaps exist, add a card comment and send back to SA. If satisfactory, mark the Architecture phase card as COMPLETE and create the Scaffolding phase card for DO.' },
-  // SA creates/updates SDD → routes to PM for validation
-  { from: 'SA', signals: ['update_document(SDD)', 'create_document(SDD)'], next: 'PM', context: 'SA has produced the SDD. Validate it — check all FR-XXX mapped, database schema present, API design complete. If satisfactory, approve it and create DO card. Otherwise send feedback to SA.' },
-
-  // ── PHASE 3: SCAFFOLDING ───────────────────────────────────────────
-  { from: 'DO', signals: ['write_file()', 'git_commit()', 'trigger_deploy()', 'run_build()'], next: 'PM', context: 'The project scaffold is ready. Verify the build compiles. Mark the Scaffolding phase card as COMPLETE. Hand control to TL for the UI/UX phase.' },
-
-  // ── PHASE 4: UI/UX DESIGN ─────────────────────────────────────────
+  // ── UI/UX DESIGN ──────────────────────────────────────────────────
   { from: 'UX', signals: ['create_document(DESIGN_SYSTEM)', 'approve_document(DESIGN_SYSTEM)', 'create_document()'], next: 'TL', context: 'The UI Kit / Design System is complete. Review the design system document. If satisfactory, mark the UI Kit card as DONE. Then create a "UI Interfaces" card and assign it to UID (UI Designer) to build page layouts and wireframes based on the design system.' },
   { from: 'UID', signals: ['create_document(WIREFRAME)', 'create_document()', 'update_document()'], next: 'TL', context: 'UI interfaces and wireframes are complete. Review the wireframe documents. Get user approval via ask_user. If approved, mark the UI Interfaces card as DONE and report to PM that the UI phase is complete.' },
   { from: 'TL', signals: ['update_card(IN_PROGRESS)', 'update_card(PLANNED)'], next: 'DYNAMIC', context: 'Implement the assigned task. Read the card description carefully — it contains the exact content and acceptance criteria. Write production code, not placeholders. Run tests and commit when complete.' },
@@ -585,11 +564,21 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
 
     const sanitizedMessage = guardrailResult.sanitizedMessage;
 
-    // ── 2. Route Message ─────────────────────────────────────────────────
+    // ── 2. Route Message (FSM-first) ───────────────────────────────────
     if (input.targetAgentShortName) {
       currentAgent = input.targetAgentShortName;
     } else {
-      currentAgent = await messageRouter.route(sanitizedMessage, input.projectId);
+      // FSM-first: if in an active pipeline phase, route to phase agent
+      const routePhase = await pipelineFSM.getProjectPhase(input.projectId);
+      const isFSMControlled = routePhase !== 'DEV_WORKING' && routePhase !== 'COMPLETE';
+
+      if (isFSMControlled) {
+        currentAgent = pipelineFSM.getActiveAgent(routePhase);
+        console.log(`[AgentLoop] FSM phase routing: ${routePhase} → ${currentAgent}`);
+      } else {
+        // DEV_WORKING / COMPLETE: use keyword-based messageRouter
+        currentAgent = await messageRouter.route(sanitizedMessage, input.projectId);
+      }
     }
 
     console.log(`[AgentLoop] Routed to: ${currentAgent} (depth: ${pipelineDepth})`);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { taskQueue } from '@/lib/ai/orchestration/task-queue';
+// taskQueue removed — FSM auto-trigger in pipeline-fsm.ts handles agent enqueuing
 import * as pipelineFSM from '@/lib/ai/orchestration/pipeline-fsm';
 
 export const dynamic = 'force-dynamic';
@@ -105,40 +105,22 @@ export async function PATCH(
           console.error('[Decision] Failed to update card state:', e);
         }
 
-        // 3. Trigger PM to validate the BRD and create SA task
+        // 3. Create Solution Design card for SA (deterministic, not LLM-dependent)
+        // Note: Agent enqueuing is handled by FSM auto-trigger in pipeline-fsm.ts
         try {
-          // Find the project owner
-          const member = await prisma.projectMember.findFirst({
-            where: { projectId },
-            select: { userId: true },
-          });
-          const userId = member?.userId || 'usr-001';
-
-          // Get BRD content summary for PM context
           const brd = await prisma.document.findFirst({
             where: { projectId, type: 'BRD' },
             select: { content: true },
           });
           const brdSummary = brd?.content
-            ? brd.content.substring(0, 2000)
-            : 'BRD has been approved by the user.';
+            ? brd.content.substring(0, 500)
+            : 'BRD approved.';
 
-          // Create a system message for PM
-          await prisma.chatMessage.create({
-            data: {
-              role: 'SYSTEM',
-              content: `The user has APPROVED the BRD via My Decisions.\n\nBRD Summary (first 2000 chars):\n${brdSummary}\n\nThe BRD has been user-approved. Your job:\n1. Briefly acknowledge the BRD approval to the user\n2. Confirm the Requirements Gathering phase is COMPLETE\n3. Create a "Solution Design" card assigned to SA (Solution Architect) with BRD context\n4. Tell the user that the SA will now begin system design\n\nIMPORTANT: The user already approved this BRD. Do NOT re-validate or find gaps. Do NOT send it back to BA. The BRD is FINAL. Just create the SA card and move forward.`,
-              projectId,
-            },
-          });
-
-          // 4. Create Solution Design card for SA (deterministic, not LLM-dependent)
           const saAgent = await prisma.agent.findFirst({
             where: { projectId, shortName: 'SA' },
             select: { id: true },
           });
 
-          // Check if SA card already exists
           const existingSACard = await prisma.card.findFirst({
             where: { projectId, title: { contains: 'Solution Design' } },
           });
@@ -147,7 +129,7 @@ export async function PATCH(
             await prisma.card.create({
               data: {
                 title: `Solution Design: ${projectName}`,
-                description: `Phase 2: Solution Architect creates the System Design Document (SDD) based on the approved BRD.\n\nBRD Summary:\n${brdSummary.substring(0, 500)}`,
+                description: `Phase 2: Solution Architect creates the System Design Document (SDD) based on the approved BRD.\n\nBRD Summary:\n${brdSummary}`,
                 type: 'TASK',
                 state: 'IN_PROGRESS',
                 priority: 'HIGH',
@@ -157,31 +139,10 @@ export async function PATCH(
             });
             console.log(`[Decision] Created Solution Design card for SA`);
           }
-
-          // 5. Enqueue PM to acknowledge, then SA to start design
-          await taskQueue.enqueue({
-            projectId,
-            userId,
-            userMessage: `The user approved the BRD. Acknowledge the approval briefly, confirm Requirements phase is COMPLETE, and tell the user the Solution Architect (SA) will now begin system design. Do NOT re-validate or find gaps — the BRD is FINAL and user-approved.`,
-            targetAgent: 'PM',
-            autoRouted: true,
-            isBackground: true,
-            priority: 10,
-          });
-
-          // 6. Enqueue SA to start architecture design (delayed by lower priority)
-          await taskQueue.enqueue({
-            projectId,
-            userId,
-            userMessage: `The BRD has been approved. Read the BRD from your DOCUMENTS context and create the System Design Document (SDD). Define the technology stack, system architecture, API design, database schema, and deployment strategy. Save the SDD using update_document(type='SDD').`,
-            targetAgent: 'SA',
-            autoRouted: true,
-            isBackground: true,
-            priority: 5,
-          });
-          console.log(`[Decision] Triggered PM acknowledgment + SA design`);
+          // FSM auto-trigger handles enqueuing SA agent — no manual enqueue needed
+          console.log(`[Decision] BRD approval complete — FSM will trigger SA`);
         } catch (e) {
-          console.error('[Decision] Failed to trigger PM:', e);
+          console.error('[Decision] Failed to create SA card:', e);
         }
       }
 
@@ -251,36 +212,9 @@ export async function PATCH(
           console.error('[Decision] Failed to create scaffolding card:', e);
         }
 
-        // 4. Enqueue PM to acknowledge SDD approval + prompt user to open IDE
-        try {
-          const member = await prisma.projectMember.findFirst({
-            where: { projectId },
-            select: { userId: true },
-          });
-          const userId = member?.userId || 'usr-001';
+        // FSM auto-trigger handles enqueuing DO agent — no manual enqueue needed
+        console.log(`[Decision] SDD approval complete — FSM will trigger DO`);
 
-          // Create system message about IDE requirement
-          await prisma.chatMessage.create({
-            data: {
-              role: 'SYSTEM',
-              content: `SDD has been approved. Requirements and architecture phases are COMPLETE. The next phase (Project Scaffolding) requires the Codanium IDE. Inform the user to open the Codanium IDE to continue.`,
-              projectId,
-            },
-          });
-
-          await taskQueue.enqueue({
-            projectId,
-            userId,
-            userMessage: `The user approved the SDD. Architecture phase is COMPLETE. Tell the user: "Great news! Requirements and architecture are done. To continue with project scaffolding and development, please open the Codanium IDE. If you haven't installed it yet, download it from our releases page." Do NOT create any development task cards yet — scaffolding must happen first in the IDE.`,
-            targetAgent: 'PM',
-            autoRouted: true,
-            isBackground: true,
-            priority: 10,
-          });
-          console.log(`[Decision] Triggered PM for IDE handoff message`);
-        } catch (e) {
-          console.error('[Decision] Failed to trigger PM for IDE handoff:', e);
-        }
       }
     }
 
