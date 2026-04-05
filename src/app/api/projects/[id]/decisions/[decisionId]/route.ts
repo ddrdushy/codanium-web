@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { taskQueue } from '@/lib/ai/orchestration/task-queue';
+import * as pipelineFSM from '@/lib/ai/orchestration/pipeline-fsm';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +50,15 @@ export async function PATCH(
         options: { orderBy: { name: 'asc' } },
       },
     });
+
+    // ── Pipeline FSM Transition ────────────────────────────────────────
+    if (body.status === 'APPROVED') {
+      const newPhase = await pipelineFSM.transition(projectId, 'user_approved');
+      console.log(`[Decision] FSM transition: user_approved → ${newPhase}`);
+    } else if (body.status === 'REJECTED') {
+      const newPhase = await pipelineFSM.transition(projectId, 'user_rejected');
+      console.log(`[Decision] FSM transition: user_rejected → ${newPhase}`);
+    }
 
     // ── Post-Approval Side Effects ────────────────────────────────────
     if (body.status === 'APPROVED') {

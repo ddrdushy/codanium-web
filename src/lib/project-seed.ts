@@ -121,6 +121,12 @@ export async function autoKickoffPM(
     },
   });
 
+  // Set pipeline FSM initial phase
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { pipelinePhase: 'PM_GREETING' },
+  });
+
   // 3. Create system message as the initial trigger for PM
   await prisma.chatMessage.create({
     data: {

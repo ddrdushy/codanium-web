@@ -181,8 +181,9 @@ model Project {
   name         String
   description  String        @default("")
   status       ProjectStatus @default(ACTIVE)
-  currentStage String        @default("Idea & Planning")
-  completion   Int           @default(0) // 0-100
+  currentStage   String        @default("Idea & Planning")
+  pipelinePhase  String        @default("PM_GREETING") // FSM state: PM_GREETING, BA_WORKING, BA_NEEDS_APPROVAL, SA_WORKING, SA_NEEDS_APPROVAL, DO_WORKING, DO_NEEDS_APPROVAL, DEV_WORKING, COMPLETE
+  completion     Int           @default(0) // 0-100
   color        String        @default("#f59e0b")
 
   // Preview tier

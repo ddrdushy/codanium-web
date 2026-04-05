@@ -51,6 +51,7 @@ import { agentStateManager } from './state-manager';
 import { eventBus } from './event-bus';
 import { createTraceCollector, type TraceCollector } from './telemetry';
 import { prisma } from '@/lib/prisma';
+import * as pipelineFSM from './pipeline-fsm';
 import { isVSCodeConnected } from '@/lib/vscode-bridge';
 import type {
   LLMMessage,
@@ -1228,75 +1229,114 @@ RULES:
       // Track response for loop detection
       loopState.recentResponses = [...loopState.recentResponses, parsed.message].slice(-5);
 
-      // ── 5. Pipeline Routing (BEFORE break) ───────────────────────────
+      // ── 5. Pipeline Routing (FSM-driven) ─────────────────────────────
       if (pipelineDepth < MAX_PIPELINE_DEPTH) {
         let nextAgent: string | null = null;
         let nextContext: string | null = null;
 
-        // 5a. Try signal-based routing first (tool signals like approve_document)
-        if (completedSignals.length > 0) {
-          const matchedRule = matchPipelineRule(currentAgent, completedSignals);
-          if (matchedRule) {
-            let resolvedNext = matchedRule.next;
+        // 5a. FSM-driven routing for upstream pipeline (PM/BA/SA/DO phases)
+        const currentPhase = await pipelineFSM.getProjectPhase(input.projectId);
+        const isFSMPhase = ['PM_GREETING', 'BA_WORKING', 'BA_NEEDS_APPROVAL', 'SA_WORKING', 'SA_NEEDS_APPROVAL', 'DO_WORKING', 'DO_NEEDS_APPROVAL'].includes(currentPhase);
 
-            // Dynamic routing for TL: inspect which agent TL assigned the last card to
-            if (resolvedNext === 'DYNAMIC' && currentAgent === 'TL') {
-              try {
-                // Find the most recently updated IN_PROGRESS card with an ownerAgent
-                const lastAssigned = await prisma.card.findFirst({
-                  where: {
-                    projectId: input.projectId,
-                    state: 'IN_PROGRESS',
-                    ownerAgentId: { not: null },
-                  },
-                  orderBy: { updatedAt: 'desc' },
-                  include: { ownerAgent: { select: { shortName: true } } },
-                });
-                const targetAgent = lastAssigned?.ownerAgent?.shortName;
-                resolvedNext = (targetAgent && ['JD', 'SD', 'UX', 'UID', 'DO'].includes(targetAgent))
-                  ? targetAgent : 'JD';
-              } catch {
-                resolvedNext = 'JD';
-              }
-              console.log(`[AgentLoop] TL dynamic routing -> ${resolvedNext}`);
+        if (isFSMPhase) {
+          // Determine trigger based on what the agent produced
+          let trigger: pipelineFSM.PipelineTrigger | null = null;
+
+          if (currentPhase === 'PM_GREETING') {
+            // PM just greeted → advance to BA
+            trigger = 'agent_done';
+          } else if (currentPhase === 'BA_WORKING') {
+            // BA created/updated BRD → needs approval
+            const hasBrdAction = (parsed.actions ?? []).some(
+              (a) => (a.type === 'create_document' || a.type === 'update_document' || a.type === 'approve_document') &&
+                     (a.data?.type === 'BRD' || a.data?.type === 'brd')
+            );
+            if (hasBrdAction) {
+              trigger = 'document_created';
             }
+            // If no BRD action, BA is still asking questions — stay in BA_WORKING (no trigger)
+          } else if (currentPhase === 'SA_WORKING') {
+            // SA created/updated SDD → needs approval
+            const hasSddAction = (parsed.actions ?? []).some(
+              (a) => (a.type === 'create_document' || a.type === 'update_document' || a.type === 'approve_document') &&
+                     (a.data?.type === 'SDD' || a.data?.type === 'sdd')
+            );
+            if (hasSddAction) {
+              trigger = 'document_created';
+            }
+          } else if (currentPhase === 'DO_WORKING') {
+            // DO produced scaffold artifacts → needs approval
+            const hasScaffold = (parsed.artifacts ?? []).some(
+              (a) => a.name === 'package.json' || a.name.includes('tsconfig') ||
+                     a.name.includes('Dockerfile') || a.name.includes('.gitignore')
+            );
+            const hasDOAction = (parsed.actions ?? []).some(
+              (a) => a.type === 'create_card' || a.type === 'update_card'
+            );
+            if (hasScaffold || hasDOAction) {
+              trigger = 'agent_done';
+            }
+          } else if (currentPhase.endsWith('_NEEDS_APPROVAL')) {
+            // In approval phase — agent (PM) just presented the approval decision
+            // Do NOT auto-advance — wait for user to approve via My Decisions
+            console.log(`[AgentLoop] FSM: In approval phase ${currentPhase} — waiting for user decision`);
+          }
 
-            nextAgent = resolvedNext;
-            nextContext = matchedRule.context;
-            console.log(`[AgentLoop] Signal-based routing: ${currentAgent} -> ${nextAgent}`);
+          if (trigger) {
+            const newPhase = await pipelineFSM.transition(input.projectId, trigger);
+            nextAgent = pipelineFSM.getActiveAgent(newPhase);
+            nextContext = pipelineFSM.getPhaseContext(newPhase);
+            console.log(`[AgentLoop] FSM routing: ${currentAgent} -> ${nextAgent} (phase: ${currentPhase} → ${newPhase})`);
           }
         }
 
-        // 5b. Check parsed delegation markers ([DELEGATE:AGENT]...[/DELEGATE])
-        if (!nextAgent && parsed.delegateTo) {
-          // Block self-delegation (agent delegating to itself is a no-op)
-          if (parsed.delegateTo === currentAgent) {
-            console.log(`[AgentLoop] Blocked self-delegation: ${currentAgent} -> ${currentAgent} (no-op)`);
-          } else {
-            nextAgent = parsed.delegateTo;
-            nextContext = parsed.delegateContext || `Continue from ${currentAgent}. Previous output available in chat history.`;
-            console.log(`[AgentLoop] Delegation routing: ${currentAgent} -> ${nextAgent} (via [DELEGATE] marker)`);
-          }
-        }
+        // 5b. Dev cycle routing (TL/JD/QA/SEC/DO/PE) — use existing DEFAULT_NEXT_AGENT
+        if (!nextAgent && currentPhase === 'DEV_WORKING') {
+          // Signal-based routing for dev cycle
+          if (completedSignals.length > 0) {
+            const matchedRule = matchPipelineRule(currentAgent, completedSignals);
+            if (matchedRule) {
+              let resolvedNext = matchedRule.next;
 
-        // 5c. Fallback: use default next agent map (works even on first call now)
-        if (!nextAgent) {
-          const fallback = DEFAULT_NEXT_AGENT[currentAgent];
-          if (fallback) {
-            // Check approval gate if required (e.g., BA->SA only if BRD is APPROVED)
-            let gateOpen = true;
-            if (fallback.requiresApproval) {
-              gateOpen = await isDocumentApproved(input.projectId, fallback.requiresApproval);
-              if (!gateOpen) {
-                // Gate not open — agent stays in current phase (e.g., BA keeps asking questions)
-                // This is normal during requirement gathering before BRD is approved
-                console.log(`[AgentLoop] Fallback gate not open: ${fallback.requiresApproval} not yet APPROVED — ${currentAgent} stays in current phase`);
+              // Dynamic routing for TL: inspect which agent TL assigned the last card to
+              if (resolvedNext === 'DYNAMIC' && currentAgent === 'TL') {
+                try {
+                  const lastAssigned = await prisma.card.findFirst({
+                    where: { projectId: input.projectId, state: 'IN_PROGRESS', ownerAgentId: { not: null } },
+                    orderBy: { updatedAt: 'desc' },
+                    include: { ownerAgent: { select: { shortName: true } } },
+                  });
+                  const targetAgent = lastAssigned?.ownerAgent?.shortName;
+                  resolvedNext = (targetAgent && ['JD', 'SD', 'UX', 'UID', 'DO'].includes(targetAgent))
+                    ? targetAgent : 'JD';
+                } catch {
+                  resolvedNext = 'JD';
+                }
+                console.log(`[AgentLoop] TL dynamic routing -> ${resolvedNext}`);
               }
+
+              nextAgent = resolvedNext;
+              nextContext = matchedRule.context;
+              console.log(`[AgentLoop] Signal-based routing (dev cycle): ${currentAgent} -> ${nextAgent}`);
             }
-            if (gateOpen) {
+          }
+
+          // Delegation markers
+          if (!nextAgent && parsed.delegateTo) {
+            if (parsed.delegateTo !== currentAgent) {
+              nextAgent = parsed.delegateTo;
+              nextContext = parsed.delegateContext || `Continue from ${currentAgent}.`;
+              console.log(`[AgentLoop] Delegation routing: ${currentAgent} -> ${nextAgent}`);
+            }
+          }
+
+          // DEFAULT_NEXT_AGENT fallback for dev cycle only
+          if (!nextAgent) {
+            const fallback = DEFAULT_NEXT_AGENT[currentAgent];
+            if (fallback) {
               nextAgent = fallback.next;
               nextContext = fallback.context;
-              console.log(`[AgentLoop] Fallback routing: ${currentAgent} -> ${nextAgent}`);
+              console.log(`[AgentLoop] Dev cycle fallback: ${currentAgent} -> ${nextAgent}`);
             }
           }
         }
