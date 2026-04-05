@@ -69,12 +69,13 @@ export function HeroSection() {
         <div className="mt-20 relative w-full max-w-[1200px] animate-fade-up opacity-0 [animation-delay:750ms]" style={{ animationFillMode: 'forwards' }}>
           <div className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-2 shadow-2xl backdrop-blur-xl">
             <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg border border-slate-800 ring-1 ring-white/10">
-              <Image 
-                src="/marketing/hero-dashboard.png" 
-                alt="Codanium Agent Dashboard" 
+              <Image
+                src="/marketing/hero-dashboard.png"
+                alt="Codanium Agent Dashboard"
                 fill
                 className="object-cover object-top"
                 priority
+                unoptimized
               />
             </div>
           </div>

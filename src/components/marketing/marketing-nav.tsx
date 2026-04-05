@@ -34,6 +34,7 @@ function CodaniumLogo() {
           height={128}
           className="h-full w-full object-cover object-top"
           priority
+          unoptimized
         />
       </div>
     </div>

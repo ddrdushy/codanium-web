@@ -39,12 +39,13 @@ export function FeaturesSection() {
           >
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-2xl relative overflow-hidden group">
               <div className="absolute inset-0 bg-blue-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-              <Image 
+              <Image
                 src="/marketing/progress-ui.png"
                 alt="Quad-Layer Sign-offs Progress UI"
                 width={800}
                 height={600}
                 className="rounded-xl border border-white/5 object-cover"
+                unoptimized
               />
             </div>
           </motion.div>
@@ -114,12 +115,13 @@ export function FeaturesSection() {
           >
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-2xl relative overflow-hidden group">
               <div className="absolute inset-0 bg-purple-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-              <Image 
+              <Image
                 src="/marketing/architecture-ui.png"
                 alt="System Design Architecture Diagram"
                 width={800}
                 height={600}
                 className="rounded-xl border border-white/5 object-cover"
+                unoptimized
               />
             </div>
           </motion.div>
