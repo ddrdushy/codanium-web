@@ -44,6 +44,35 @@ interface ExecuteOptions {
   userId?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Persona-Document Ownership Map (Enterprise Spec §5.4 ART Controller)
+// ---------------------------------------------------------------------------
+// Only the designated persona can create/update a document type.
+// This prevents SA from writing BRD, BA from writing SDD, etc.
+// Multiple personas can be listed for shared ownership.
+const DOCUMENT_OWNERSHIP: Record<string, string[]> = {
+  BRD:           ['BA'],
+  SDD:           ['SA'],
+  API_SPEC:      ['SA'],
+  DESIGN_SYSTEM: ['UX'],
+  WIREFRAME:     ['UID', 'UX'],
+  RUNBOOK:       ['DO'],
+  ADR:           ['SA', 'TL'],
+  CONSTITUTION:  ['PM'],
+};
+
+/**
+ * Check if an agent persona is allowed to write a specific document type.
+ * Returns null if allowed, or an error string if blocked.
+ */
+function checkDocumentOwnership(agentShortName: string, docType: string): string | null {
+  const allowedPersonas = DOCUMENT_OWNERSHIP[docType.toUpperCase()];
+  if (!allowedPersonas) return null; // Unknown doc type — allow (no restriction)
+  if (allowedPersonas.includes(agentShortName.toUpperCase())) return null; // Authorized
+
+  return `Agent "${agentShortName}" is not authorized to write ${docType} documents. Only [${allowedPersonas.join(', ')}] can write ${docType}. This action was blocked by the Artifact Controller (persona-document ownership).`;
+}
+
 /**
  * Execute a single tool call.
  * Returns a ToolResult with success/failure and result data.
@@ -133,10 +162,23 @@ async function executeToolInternal(
       return handleCreateCard(args, projectId, agentId);
     case 'update_card':
       return handleUpdateCard(args, projectId);
-    case 'create_document':
-      return handleCreateDocument(args, projectId, agentId);
-    case 'update_document':
-      return handleUpdateDocument(args, projectId);
+    case 'create_document': {
+      // Persona-document ownership enforcement
+      const createDocBlock = checkDocumentOwnership(agentShortName || '', args.type || '');
+      if (createDocBlock) {
+        console.warn(`[ToolExecutor] ⛔ ${createDocBlock}`);
+        return { error: createDocBlock, blocked: true };
+      }
+      return handleCreateDocument(args, projectId, agentId, agentShortName);
+    }
+    case 'update_document': {
+      const updateDocBlock = checkDocumentOwnership(agentShortName || '', args.type || '');
+      if (updateDocBlock) {
+        console.warn(`[ToolExecutor] ⛔ ${updateDocBlock}`);
+        return { error: updateDocBlock, blocked: true };
+      }
+      return handleUpdateDocument(args, projectId, agentShortName);
+    }
     case 'approve_document':
       return handleApproveDocument(args, projectId);
     case 'create_decision':
@@ -570,6 +612,7 @@ async function handleCreateDocument(
   args: Record<string, any>,
   projectId: string,
   agentId?: string,
+  agentShortName?: string,
 ) {
   const content = args.content || '';
   const title = args.title || `${args.type || 'Document'} - Draft`;
@@ -615,7 +658,7 @@ async function handleCreateDocument(
   return { documentId: doc.id, type: doc.type, title: doc.title, status: doc.status };
 }
 
-async function handleUpdateDocument(args: Record<string, any>, projectId: string) {
+async function handleUpdateDocument(args: Record<string, any>, projectId: string, agentShortName?: string) {
   const existing = await prisma.document.findFirst({
     where: { projectId, type: args.type },
     orderBy: { createdAt: 'desc' },
