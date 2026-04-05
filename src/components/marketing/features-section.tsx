@@ -2,144 +2,129 @@
 
 import { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import {
-  Bot,
-  Workflow,
-  KanbanSquare,
-  Scale,
-  MessageSquare,
-  BarChart3,
-} from 'lucide-react';
-
-const features = [
-  {
-    icon: Bot,
-    title: 'A Full AI Team',
-    description:
-      '23 specialists — from requirements analyst to quality tester — work around the clock to build your software.',
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-400/10',
-    border: 'border-emerald-400/20',
-    glow: 'group-hover:shadow-emerald-500/10',
-  },
-  {
-    icon: Workflow,
-    title: 'End-to-End Delivery',
-    description:
-      'Your project moves through 8 phases from idea to launch, with quality checks at every step.',
-    color: 'text-amber-400',
-    bg: 'bg-amber-400/10',
-    border: 'border-amber-400/20',
-    glow: 'group-hover:shadow-amber-500/10',
-  },
-  {
-    icon: KanbanSquare,
-    title: 'Live Progress Tracking',
-    description:
-      'See exactly what your AI team is working on, what\'s done, and what needs your attention — all in real time.',
-    color: 'text-blue-400',
-    bg: 'bg-blue-400/10',
-    border: 'border-blue-400/20',
-    glow: 'group-hover:shadow-blue-500/10',
-  },
-  {
-    icon: Scale,
-    title: 'You Stay In Control',
-    description:
-      'When a key choice needs to be made, your AI team presents clear options with recommendations. You approve.',
-    color: 'text-purple-400',
-    bg: 'bg-purple-400/10',
-    border: 'border-purple-400/20',
-    glow: 'group-hover:shadow-purple-500/10',
-  },
-  {
-    icon: MessageSquare,
-    title: 'Talk To Your AI Team',
-    description:
-      'Ask questions, give feedback, or request changes. Your AI team responds instantly and explains their thinking.',
-    color: 'text-rose-400',
-    bg: 'bg-rose-400/10',
-    border: 'border-rose-400/20',
-    glow: 'group-hover:shadow-rose-500/10',
-  },
-  {
-    icon: BarChart3,
-    title: 'Budget & Progress Dashboard',
-    description:
-      'Track how your project is progressing, what it\'s costing, and when it\'ll be ready — all in one place.',
-    color: 'text-cyan-400',
-    bg: 'bg-cyan-400/10',
-    border: 'border-cyan-400/20',
-    glow: 'group-hover:shadow-cyan-500/10',
-  },
-];
+import Image from 'next/image';
+import { ShieldCheck, Eye, TerminalSquare } from 'lucide-react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export function FeaturesSection() {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: '-80px' });
 
   return (
-    <section id="features" className="relative py-24 sm:py-32">
-      <div className="mx-auto max-w-7xl px-6">
-        {/* Heading */}
+    <section id="features" className="relative py-32 bg-background">
+      <div className="mx-auto max-w-7xl px-6" ref={ref}>
+        {/* Global Heading */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.5 }}
-          className="mx-auto max-w-2xl text-center mb-16"
+          className="max-w-3xl mb-24"
         >
-          <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber">
-            Features
-          </span>
-          <h2 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-            Everything Handled{' '}
-            <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
-              For You
-            </span>
+          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-5xl mb-6">
+            Drive execution with faster decisions and complete transparency
           </h2>
-          <p className="mt-4 text-lg text-muted-foreground">
-            From your first idea to a working product — our AI team manages every step
-            of the software development lifecycle.
+          <p className="text-xl text-slate-400">
+            Automate routine scaffolding, enforce robust architecture, and verify security protocols seamlessly.
           </p>
         </motion.div>
 
-        {/* Grid */}
-        <div ref={ref} className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature, i) => (
-            <motion.div
-              key={feature.title}
-              initial={{ opacity: 0, y: 30 }}
-              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-              transition={{
-                duration: 0.5,
-                delay: i * 0.1,
-                ease: 'easeOut' as const,
-              }}
-              className={`group relative rounded-2xl border border-border bg-[var(--surface)] p-7 card-lift transition-shadow ${feature.glow} hover:shadow-xl`}
-            >
-              {/* Icon */}
-              <div
-                className={`mb-5 flex h-12 w-12 items-center justify-center rounded-xl ${feature.bg} border ${feature.border} transition-transform group-hover:scale-110`}
-              >
-                <feature.icon className={`h-6 w-6 ${feature.color}`} />
-              </div>
-
-              {/* Content */}
-              <h3 className="text-lg font-bold text-foreground mb-2">
-                {feature.title}
-              </h3>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {feature.description}
-              </p>
-
-              {/* Subtle hover glow */}
-              <div
-                className={`absolute inset-0 -z-10 rounded-2xl opacity-0 transition-opacity group-hover:opacity-100 blur-2xl ${feature.bg}`}
+        {/* Feature 1: Progress Tracking (Left Text, Right Image) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mb-32">
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            className="order-2 lg:order-1"
+          >
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-2xl relative overflow-hidden group">
+              <div className="absolute inset-0 bg-blue-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Image 
+                src="/marketing/progress-ui.png"
+                alt="Quad-Layer Sign-offs Progress UI"
+                width={800}
+                height={600}
+                className="rounded-xl border border-white/5 object-cover"
               />
-            </motion.div>
-          ))}
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            className="order-1 lg:order-2 space-y-6"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-400 mb-2">
+              <Eye className="h-4 w-4" /> Quad-Layer Validation
+            </div>
+            <h3 className="text-3xl font-bold text-white tracking-tight">Ship faster with fewer regressions</h3>
+            <p className="text-lg text-slate-400 leading-relaxed">
+              Every feature code branch passes through an automated quad-layer sign-off system. QA, Security, DevOps, and Platform Engineering agents audit the work concurrently before it reaches human stakeholders.
+            </p>
+            <div className="pt-4">
+              <Link href="/platform">
+                <Button variant="link" className="text-blue-400 hover:text-blue-300 p-0 text-base h-auto font-semibold">
+                  See how Sign-offs work <span className="ml-2">→</span>
+                </Button>
+              </Link>
+            </div>
+          </motion.div>
         </div>
+
+        {/* Feature 2: Architecture Diagram (Left Image, Right Text... wait, reverse it: Left Text, Right Image usually alternates, but let's do Left Text, Right Image since the first was Left Image) */}
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            className="space-y-6"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-sm font-medium text-purple-400 mb-2">
+              <ShieldCheck className="h-4 w-4" /> Enterprise SDD
+            </div>
+            <h3 className="text-3xl font-bold text-white tracking-tight">Interactive Systems Engineering</h3>
+            <p className="text-lg text-slate-400 leading-relaxed">
+              Generate full System Design Documents (SDD) automatically. Your AI architect plans out database models, infra layout, and microservices logic with real-time optimization recommendations.
+            </p>
+            <ul className="space-y-4 pt-4 text-slate-300">
+              <li className="flex items-center gap-3">
+                <TerminalSquare className="h-5 w-5 text-purple-400" />
+                <span>Automated Redis/Postgres modeling</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <TerminalSquare className="h-5 w-5 text-purple-400" />
+                <span>Instant infra cost & latency estimates</span>
+              </li>
+            </ul>
+            <div className="pt-4">
+              <Link href="/architecture">
+                <Button variant="link" className="text-blue-400 hover:text-blue-300 p-0 text-base h-auto font-semibold">
+                  Explore AI Architecture <span className="ml-2">→</span>
+                </Button>
+              </Link>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+          >
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-2xl relative overflow-hidden group">
+              <div className="absolute inset-0 bg-purple-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Image 
+                src="/marketing/architecture-ui.png"
+                alt="System Design Architecture Diagram"
+                width={800}
+                height={600}
+                className="rounded-xl border border-white/5 object-cover"
+              />
+            </div>
+          </motion.div>
+        </div>
+
       </div>
     </section>
   );

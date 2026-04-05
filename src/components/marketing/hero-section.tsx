@@ -1,213 +1,86 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Bot, CheckCircle2, Zap, GitBranch, BarChart3, Download, Sparkles, Shield, Clock } from 'lucide-react';
+import { ArrowRight, Shield, Activity, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-const agentAvatars = [
-  { name: 'PM', color: 'bg-amber-500', label: 'Project Manager' },
-  { name: 'BA', color: 'bg-emerald-500', label: 'Business Analyst' },
-  { name: 'SA', color: 'bg-blue-500', label: 'System Architect' },
-  { name: 'UX', color: 'bg-purple-500', label: 'UX Designer' },
-  { name: 'QA', color: 'bg-rose-500', label: 'QA Engineer' },
-];
-
-const miniCards = [
-  { title: 'Requirements BRD', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
-  { title: 'Architecture SDD', status: 'Done', color: 'text-emerald-400 bg-emerald-400/10' },
-  { title: 'Auth Module', status: 'In Progress', color: 'text-amber-400 bg-amber-400/10' },
-];
-
-const stats = [
-  { label: 'AI Agents', value: '23+', description: 'Specialized team members' },
-  { label: 'SDLC Phases', value: '8', description: 'End-to-end coverage' },
-  { label: 'Uptime', value: '99.9%', description: 'Enterprise reliability' },
-];
+import Image from 'next/image';
 
 export function HeroSection() {
   return (
-    <section className="relative min-h-screen overflow-hidden pt-24 pb-20">
-      {/* Background effects */}
-      <div className="hero-gradient absolute inset-0" />
-      <div className="grid-pattern absolute inset-0" />
+    <section className="relative min-h-screen overflow-hidden pt-32 pb-20 bg-background flex flex-col items-center justify-center">
+      {/* Sleek, deep background effects */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900/40 via-background to-background" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1000px] h-[500px] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* Animated orbs */}
-      <div className="absolute top-1/4 left-1/4 h-72 w-72 rounded-full bg-amber/5 blur-[120px] animate-float" />
-      <div className="absolute bottom-1/4 right-1/4 h-96 w-96 rounded-full bg-purple-500/5 blur-[120px] animate-float-slow" />
+      <div className="relative mx-auto max-w-7xl px-6 w-full z-10 flex flex-col items-center text-center">
+        {/* SafetyKit style badge */}
+        <div className="animate-fade-in opacity-0" style={{ animationFillMode: 'forwards' }}>
+          <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-semibold text-blue-400 mb-8 uppercase tracking-wider">
+            <Zap className="h-3.5 w-3.5" />
+            Agentic SDLC Orchestration
+          </span>
+        </div>
 
-      <div className="relative mx-auto max-w-7xl px-6">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
-          {/* Left — Copy */}
-          <div className="max-w-2xl animate-fade-in">
-            {/* Badge */}
-            <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-amber/20 bg-amber/5 px-4 py-1.5 text-sm font-medium text-amber mb-6">
-                <Sparkles className="h-3.5 w-3.5" />
-                AI-Powered Software Delivery
-              </span>
-            </div>
+        {/* Main heading */}
+        <h1 className="max-w-4xl animate-fade-in opacity-0 [animation-delay:150ms] text-5xl font-bold leading-[1.1] tracking-tight text-white sm:text-6xl lg:text-7xl" style={{ animationFillMode: 'forwards' }}>
+          Deploy AI agents to automate your software lifecycle.
+        </h1>
 
-            {/* Main heading */}
-            <h1 className="mt-4 text-5xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
-              Describe Your Idea.{' '}
-              <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 bg-clip-text text-transparent">
-                We&apos;ll Build It.
-              </span>
-            </h1>
+        {/* Subheading */}
+        <p className="mt-8 max-w-2xl mx-auto text-lg leading-relaxed text-slate-400 animate-fade-in opacity-0 [animation-delay:300ms]" style={{ animationFillMode: 'forwards' }}>
+          Orchestrate a team of 23+ specialized AI agents for requirements, architecture, coding, and testing. Trusted by forward-thinking engineering teams to increase velocity and reduce regressions.
+        </p>
 
-            {/* Subheading */}
-            <p className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl">
-              Tell us what you need — even a rough idea. Codanium&apos;s team of 23 AI agents
-              handles everything: requirements, architecture, design, coding, testing,
-              and deployment.
-            </p>
+        {/* CTA buttons */}
+        <div className="mt-10 flex items-center justify-center gap-6 animate-fade-in opacity-0 [animation-delay:450ms]" style={{ animationFillMode: 'forwards' }}>
+          <Link href="/signup">
+            <Button
+              size="lg"
+              className="bg-blue-600 text-white hover:bg-blue-700 font-semibold text-base px-8 h-14 rounded-md transition-all hover:shadow-[0_0_20px_rgba(37,99,235,0.4)]"
+            >
+              Start orchestrating
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+          <Link href="/contact">
+            <Button
+              variant="outline"
+              size="lg"
+              className="font-semibold text-base h-14 px-8 rounded-md border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+            >
+              Contact Sales
+            </Button>
+          </Link>
+        </div>
 
-            {/* CTA buttons */}
-            <div className="mt-10 flex flex-wrap items-center gap-4">
-              <Link href="/signup">
-                <Button
-                  size="lg"
-                  className="bg-amber text-background hover:bg-amber/90 font-semibold text-base px-8 h-12 glow-amber group"
-                >
-                  Start Your Project Free
-                  <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-                </Button>
-              </Link>
-              <Link href="/#download">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="font-semibold text-base h-12 px-8 gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  Download Desktop App
-                </Button>
-              </Link>
-            </div>
+        {/* Trust indicators */}
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-8 text-sm text-slate-500 font-medium animate-fade-in opacity-0 [animation-delay:600ms]" style={{ animationFillMode: 'forwards' }}>
+          <span className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-slate-400" />
+            Enterprise-grade security
+          </span>
+          <span className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-slate-400" />
+            Automated quality gates
+          </span>
+        </div>
 
-            {/* Trust indicators */}
-            <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                No credit card required
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Shield className="h-4 w-4 text-blue-500" />
-                Enterprise-grade security
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-purple-500" />
-                Setup in under 2 min
-              </span>
-            </div>
-
-            {/* Stats strip */}
-            <div className="mt-12 grid grid-cols-3 gap-6 border-t border-border pt-8">
-              {stats.map((stat) => (
-                <div key={stat.label}>
-                  <div className="text-2xl font-extrabold text-foreground sm:text-3xl">
-                    {stat.value}
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-amber">{stat.label}</div>
-                  <div className="text-xs text-muted-foreground">{stat.description}</div>
-                </div>
-              ))}
+        {/* The Hero Mockup Image */}
+        <div className="mt-20 relative w-full max-w-[1200px] animate-fade-up opacity-0 [animation-delay:750ms]" style={{ animationFillMode: 'forwards' }}>
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-2 shadow-2xl backdrop-blur-xl">
+            <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg border border-slate-800 ring-1 ring-white/10">
+              <Image 
+                src="/marketing/hero-dashboard.png" 
+                alt="Codanium Agent Dashboard" 
+                fill
+                className="object-cover object-top"
+                priority
+              />
             </div>
           </div>
-
-          {/* Right — Dashboard Mockup */}
-          <div className="relative hidden lg:block animate-slide-in-right">
-            <div className="animate-float-slow rounded-2xl border border-border bg-[var(--surface)] p-5 shadow-2xl">
-              {/* Mockup top bar */}
-              <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-red-500/60" />
-                  <div className="h-3 w-3 rounded-full bg-amber-500/60" />
-                  <div className="h-3 w-3 rounded-full bg-emerald-500/60" />
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Zap className="h-3 w-3 text-amber" />
-                  <span className="font-semibold">Codanium</span>
-                </div>
-                <div className="w-16" />
-              </div>
-
-              {/* Stats row */}
-              <div className="grid grid-cols-4 gap-3 mb-4">
-                {[
-                  { label: 'Active Tasks', value: '47', icon: GitBranch, color: 'text-blue-400' },
-                  { label: 'AI Agents', value: '20', icon: Bot, color: 'text-emerald-400' },
-                  { label: 'Your Approvals', value: '3', icon: CheckCircle2, color: 'text-purple-400' },
-                  { label: 'Progress', value: '94%', icon: BarChart3, color: 'text-amber-400' },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-lg border border-border bg-[var(--surface-raised)] p-3"
-                  >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <stat.icon className={`h-3 w-3 ${stat.color}`} />
-                      <span className="text-[10px] text-muted-foreground">{stat.label}</span>
-                    </div>
-                    <span className="text-lg font-bold text-foreground">{stat.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Progress bar */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-medium text-muted-foreground">Build Progress</span>
-                  <span className="text-[10px] text-amber font-semibold">Phase 5 — Development</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-[var(--surface-overlay)]">
-                  <div className="h-2 w-[60%] rounded-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-1000" />
-                </div>
-              </div>
-
-              {/* Agent avatars + mini cards */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-border bg-[var(--surface-raised)] p-3">
-                  <span className="text-[10px] font-medium text-muted-foreground mb-2 block">
-                    Your AI Team
-                  </span>
-                  <div className="flex -space-x-2">
-                    {agentAvatars.map((agent) => (
-                      <div
-                        key={agent.name}
-                        title={agent.label}
-                        className={`flex h-7 w-7 items-center justify-center rounded-full ${agent.color} text-[9px] font-bold text-white ring-2 ring-[var(--surface)] transition-transform hover:scale-110 hover:z-10`}
-                      >
-                        {agent.name}
-                      </div>
-                    ))}
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--surface-overlay)] text-[9px] font-medium text-muted-foreground ring-2 ring-[var(--surface)]">
-                      +18
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-border bg-[var(--surface-raised)] p-3">
-                  <span className="text-[10px] font-medium text-muted-foreground mb-2 block">
-                    Current Work
-                  </span>
-                  <div className="space-y-1.5">
-                    {miniCards.map((card) => (
-                      <div key={card.title} className="flex items-center justify-between">
-                        <span className="text-[10px] text-foreground">{card.title}</span>
-                        <span className={`text-[8px] font-medium px-1.5 py-0.5 rounded ${card.color}`}>
-                          {card.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Glow effect behind card */}
-            <div className="absolute -inset-4 -z-10 rounded-3xl bg-amber/5 blur-3xl" />
-            <div className="absolute -inset-8 -z-20 rounded-3xl bg-purple-500/3 blur-[60px]" />
-          </div>
+          
+          {/* Subtle backglow for the image */}
+          <div className="absolute -inset-4 -z-10 bg-gradient-to-b from-blue-500/20 to-transparent blur-2xl rounded-[3rem] opacity-50" />
         </div>
       </div>
     </section>

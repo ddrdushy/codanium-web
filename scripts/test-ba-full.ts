@@ -1,4 +1,5 @@
 #!/usr/bin/env npx tsx
+export {}; // Prevent global TS scope clashes with other scripts
 // Full BA Q&A E2E test: Create project, answer all questions, check BRD quality
 const BASE = "http://localhost:14001";
 
