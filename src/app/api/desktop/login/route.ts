@@ -5,9 +5,7 @@ import { generateApiKey } from '@/lib/api-keys';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    console.log('[Desktop Login] Received body keys:', Object.keys(body), 'email:', body.email);
-    const { email, password } = body;
+    const { email, password } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json(
