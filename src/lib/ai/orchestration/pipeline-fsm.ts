@@ -12,6 +12,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { taskQueue } from './task-queue';
 
 // ---------------------------------------------------------------------------
 // Pipeline Phases
@@ -146,6 +147,56 @@ export async function transition(
   console.log(
     `[PipelineFSM] ✅ ${currentPhase} → ${nextPhase} (trigger: ${trigger}) for project ${projectId}`,
   );
+
+  // Auto-trigger: when entering a WORKING phase after user approval,
+  // enqueue a background task for the target agent
+  if (trigger === 'user_approved' && isWorkingPhase(nextPhase)) {
+    const targetAgent = getActiveAgent(nextPhase);
+    const context = getPhaseContext(nextPhase);
+
+    // Get project owner for task queue
+    const member = await prisma.projectMember.findFirst({
+      where: { projectId },
+      select: { userId: true },
+    });
+    const userId = member?.userId || 'usr-001';
+
+    // Move relevant card to IN_PROGRESS
+    const cardTitleMap: Record<string, string> = {
+      SA_WORKING: 'Solution Design',
+      DO_WORKING: 'Scaffolding',
+    };
+    const cardTitle = cardTitleMap[nextPhase];
+    if (cardTitle) {
+      try {
+        const card = await prisma.card.findFirst({
+          where: { projectId, title: { contains: cardTitle }, state: { not: 'DONE' } },
+        });
+        if (card) {
+          await prisma.card.update({ where: { id: card.id }, data: { state: 'IN_PROGRESS' } });
+          console.log(`[PipelineFSM] Card "${cardTitle}" → IN_PROGRESS`);
+        }
+      } catch (e) {
+        console.error('[PipelineFSM] Failed to update card:', e);
+      }
+    }
+
+    // Enqueue agent task
+    try {
+      await taskQueue.enqueue({
+        projectId,
+        userId,
+        userMessage: `[PIPELINE] ${context}`,
+        targetAgent,
+        autoRouted: true,
+        isBackground: true,
+        priority: 10,
+      });
+      console.log(`[PipelineFSM] Enqueued ${targetAgent} agent for phase ${nextPhase}`);
+    } catch (e) {
+      console.error(`[PipelineFSM] Failed to enqueue ${targetAgent}:`, e);
+    }
+  }
 
   return nextPhase;
 }
