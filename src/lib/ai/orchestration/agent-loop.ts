@@ -322,21 +322,9 @@ async function autoAdvanceSDLC(projectId: string, agentShortName: string): Promi
 // ---------------------------------------------------------------------------
 
 const DEFAULT_NEXT_AGENT: Record<string, { next: string; context: string; requiresApproval?: string }> = {
-  // ── PHASE 1: REQUIREMENTS ──────────────────────────────────────────
-  // PM is FIRST agent on project start. PM routes to BA for requirements.
-  PM: { next: 'BA', context: 'Start requirements gathering. Your FIRST question must ask the user about their technical background (Non-technical / Vibe Coder / Developer / Team Lead) and save it with remember(key="user_profile"). Then ask discovery questions ONE AT A TIME with clickable options, saving each Q&A pair with remember(key="qa_N"). After enough answers, generate the full BRD.' },
-
-  // BA completes BRD → always routes back to PM for validation.
-  // NO approval gate here — BA is the AUTHOR, PM is the VALIDATOR.
-  BA: { next: 'PM', context: 'BA has finished working. Check the BRD status: if BRD is APPROVED, create a "Solution Design" card for SA and route to SA. If BRD is still DRAFT, validate it — if complete, approve it and create SA card. If gaps exist, send comments back to BA.' },
-
-  // ── PHASE 2: ARCHITECTURE ──────────────────────────────────────────
-  // SA completes SDD → always routes back to PM for validation.
-  // NO approval gate here — SA is the AUTHOR, PM is the VALIDATOR.
-  SA: { next: 'PM', context: 'SA has finished working. Check the SDD status: if SDD is APPROVED, create a "Scaffolding" card for DO and route to DO. If SDD is still DRAFT, validate it — if complete, approve it and create DO card. If gaps exist, send comments back to SA.' },
-
-  // ── PHASE 3: SCAFFOLDING ───────────────────────────────────────────
-  DO: { next: 'PM', context: 'Scaffold complete. Verify build compiles. Mark Scaffolding phase COMPLETE. Hand to TL for UI/UX phase.' },
+  // ── PM, BA, SA, DO are FSM-controlled — NOT in this map ───────────
+  // Their routing is handled exclusively by pipeline-fsm.ts.
+  // DO NOT add PM, BA, SA, or DO here — it will bypass the FSM.
 
   // ── PHASE 4: UI/UX ────────────────────────────────────────────────
   TL: { next: 'JD', context: 'Implement the assigned task. Read the card description. Write production code. Run npx tsc --noEmit for zero compile errors. When done, request sign-off from QA, SEC, DO, and PE.' },
