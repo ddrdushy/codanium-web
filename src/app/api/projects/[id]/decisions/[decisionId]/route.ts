@@ -167,6 +167,20 @@ export async function PATCH(
           console.error('[Decision] Failed to update SDD status:', e);
         }
 
+        // IDE Handover: BRD + SDD approved → notify user to open IDE for execution
+        try {
+          await prisma.chatMessage.create({
+            data: {
+              projectId,
+              role: 'SYSTEM',
+              content: `**BRD and SDD are approved and locked.** The design phase is complete.\n\nTo continue with scaffolding, UX design, and development, please open the **Codanium Desktop IDE**. Development agents (DO, JD, SD, QA, PE, IE) require an active IDE connection.\n\n[Download Codanium Desktop](https://github.com/AiSenseiMY/Codanium/releases)`,
+            },
+          });
+          console.log(`[Decision] IDE_HANDOVER_EVENT — prompted user to open IDE`);
+        } catch (e) {
+          console.error('[Decision] Failed to create IDE handover message:', e);
+        }
+
         // 2. Move Solution Design card to DONE
         try {
           const sdCard = await prisma.card.findFirst({
