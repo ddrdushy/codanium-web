@@ -1226,7 +1226,7 @@ RULES:
 
         // 5a. FSM-driven routing for upstream pipeline (PM/BA/SA/DO/UX phases)
         const currentPhase = await pipelineFSM.getProjectPhase(input.projectId);
-        const isFSMPhase = ['PM_GREETING', 'BA_WORKING', 'BA_NEEDS_APPROVAL', 'SA_WORKING', 'SA_NEEDS_APPROVAL', 'DO_WORKING', 'DO_NEEDS_APPROVAL', 'UX_WORKING', 'UI_NEEDS_APPROVAL'].includes(currentPhase);
+        const isFSMPhase = ['PM_GREETING', 'BA_WORKING', 'BA_NEEDS_APPROVAL', 'SA_WORKING', 'SA_NEEDS_APPROVAL', 'DO_WORKING', 'DO_NEEDS_APPROVAL', 'UX_WORKING', 'UID_WORKING', 'UI_NEEDS_APPROVAL'].includes(currentPhase);
 
         if (isFSMPhase) {
           // Determine trigger based on what the agent produced
@@ -1279,20 +1279,31 @@ RULES:
               console.log(`[AgentLoop] FSM: DO scaffold complete (signals: ${completedSignals.join(', ')})`);
             }
           } else if (currentPhase === 'UX_WORKING') {
-            // UX created design system / UI Kit → needs UI approval
+            // UX created design system / UI Kit → hand off to UID for wireframes
             // Trigger on: create_document(DESIGN_SYSTEM), task_progress, or create_decision
             // Do NOT trigger on update_document — UX may call that for incremental updates
             const hasUxDoneSignal = completedSignals.some(
               (s) => s.startsWith('create_document(DESIGN_SYSTEM') ||
                      s.startsWith('create_document(design_system') ||
-                     s.startsWith('create_document(WIREFRAME') ||
-                     s.startsWith('create_document(wireframe') ||
                      s.startsWith('task_progress') ||
                      s.startsWith('create_decision')
             );
             if (hasUxDoneSignal) {
               trigger = 'agent_done';
-              console.log(`[AgentLoop] FSM: UX design complete (signals: ${completedSignals.join(', ')})`);
+              console.log(`[AgentLoop] FSM: UX design system complete → UID next (signals: ${completedSignals.join(', ')})`);
+            }
+          } else if (currentPhase === 'UID_WORKING') {
+            // UID created wireframes → needs UI approval from TL
+            // Trigger on: create_document(WIREFRAME), task_progress, or create_decision
+            const hasUidDoneSignal = completedSignals.some(
+              (s) => s.startsWith('create_document(WIREFRAME') ||
+                     s.startsWith('create_document(wireframe') ||
+                     s.startsWith('task_progress') ||
+                     s.startsWith('create_decision')
+            );
+            if (hasUidDoneSignal) {
+              trigger = 'agent_done';
+              console.log(`[AgentLoop] FSM: UID wireframes complete → UI approval next (signals: ${completedSignals.join(', ')})`);
             }
           } else if (currentPhase.endsWith('_NEEDS_APPROVAL')) {
             // In approval phase — agent (PM) just presented the approval decision

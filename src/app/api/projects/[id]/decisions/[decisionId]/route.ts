@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 // taskQueue removed — FSM auto-trigger in pipeline-fsm.ts handles agent enqueuing
 import * as pipelineFSM from '@/lib/ai/orchestration/pipeline-fsm';
+import { logDecisionEvent, logDocumentEvent, logCardTransition } from '@/lib/ai/orchestration/event-logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,9 +56,11 @@ export async function PATCH(
     if (body.status === 'APPROVED') {
       const newPhase = await pipelineFSM.transition(projectId, 'user_approved');
       console.log(`[Decision] FSM transition: user_approved → ${newPhase}`);
+      logDecisionEvent(projectId, 'decision.approved', 'user', { decisionId, trigger: decision.trigger || '' }).catch(() => {});
     } else if (body.status === 'REJECTED') {
       const newPhase = await pipelineFSM.transition(projectId, 'user_rejected');
       console.log(`[Decision] FSM transition: user_rejected → ${newPhase}`);
+      logDecisionEvent(projectId, 'decision.rejected', 'user', { decisionId, trigger: decision.trigger || '' }).catch(() => {});
     }
 
     // ── Post-Approval Side Effects ────────────────────────────────────
@@ -364,6 +367,35 @@ export async function PATCH(
           }
         } catch (e) {
           console.error('[Decision] Failed to create UX card:', e);
+        }
+
+        // 3. Create UI Interfaces card for UID (runs after UX completes)
+        try {
+          const uidAgent = await prisma.agent.findFirst({
+            where: { projectId, shortName: 'UID' },
+            select: { id: true },
+          });
+
+          const existingUIDCard = await prisma.card.findFirst({
+            where: { projectId, title: { contains: 'UI Interfaces' } },
+          });
+
+          if (!existingUIDCard) {
+            await prisma.card.create({
+              data: {
+                title: `UI Interfaces: ${scaffoldProjectName}`,
+                description: `Create page layouts and wireframes for all screens identified in the BRD user flows. Reference the Design System / UI Kit created by UX. Each wireframe should specify component usage, layout, and interactions.`,
+                type: 'TASK',
+                state: 'PLANNED',
+                priority: 'HIGH',
+                ownerAgentId: uidAgent?.id,
+                projectId,
+              },
+            });
+            console.log(`[Decision] Created UI Interfaces card for UID agent`);
+          }
+        } catch (e) {
+          console.error('[Decision] Failed to create UID card:', e);
         }
 
         // FSM auto-trigger handles enqueuing UX agent — no manual enqueue needed

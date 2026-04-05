@@ -14,6 +14,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { taskQueue } from './task-queue';
+import { logPhaseTransition } from './event-logger';
 
 // ---------------------------------------------------------------------------
 // Pipeline Phases
@@ -28,6 +29,7 @@ export type PipelinePhase =
   | 'DO_WORKING'
   | 'DO_NEEDS_APPROVAL'
   | 'UX_WORKING'
+  | 'UID_WORKING'
   | 'UI_NEEDS_APPROVAL'
   | 'DEV_WORKING'
   | 'COMPLETE';
@@ -52,7 +54,8 @@ const TRANSITIONS: Record<PipelinePhase, Partial<Record<PipelineTrigger, Pipelin
   SA_NEEDS_APPROVAL:  { user_approved: 'DO_WORKING', user_rejected: 'SA_WORKING' },
   DO_WORKING:         { agent_done: 'DO_NEEDS_APPROVAL' },
   DO_NEEDS_APPROVAL:  { user_approved: 'UX_WORKING', user_rejected: 'DO_WORKING' },
-  UX_WORKING:         { agent_done: 'UI_NEEDS_APPROVAL' },
+  UX_WORKING:         { agent_done: 'UID_WORKING' },          // UX creates design system → UID creates wireframes
+  UID_WORKING:        { agent_done: 'UI_NEEDS_APPROVAL' },    // UID creates wireframes → TL reviews for approval
   UI_NEEDS_APPROVAL:  { user_approved: 'DEV_WORKING', user_rejected: 'UX_WORKING' },
   DEV_WORKING:        { all_cards_done: 'COMPLETE' },
   COMPLETE:           {},
@@ -70,7 +73,8 @@ const PHASE_AGENT: Record<PipelinePhase, string> = {
   SA_NEEDS_APPROVAL:  'PM',
   DO_WORKING:         'DO',
   DO_NEEDS_APPROVAL:  'PM',
-  UX_WORKING:         'UX',   // UX creates design system, then UID creates wireframes
+  UX_WORKING:         'UX',   // UX creates design system / UI Kit
+  UID_WORKING:        'UID',  // UID creates wireframes based on design system
   UI_NEEDS_APPROVAL:  'TL',   // TL reviews UI and presents for user approval
   DEV_WORKING:        'TL',   // TL coordinates dev cycle
   COMPLETE:           'PM',   // PM for final summary
@@ -98,7 +102,8 @@ RULES: Reference BRD requirement IDs (FR-XXX) for traceability. Generate 1-2 sec
   SA_NEEDS_APPROVAL: 'The SDD has been created. Validate it — check all BRD requirements (FR-XXX) are mapped to architecture components. Create a decision for the user to approve or request changes using [APPROVE_DOCUMENT]{"type":"SDD"}.',
   DO_WORKING: 'You are DevOps. Read the SDD from context. Scaffold the project structure: package.json, tsconfig.json, framework configuration, directory structure, Dockerfile, .gitignore, and entry point files. After writing all files, run `npm install` and `npx tsc --noEmit` to verify the build. Then call task_progress to signal completion.',
   DO_NEEDS_APPROVAL: 'The project scaffold is complete. Review the scaffolded files and summarize them for the user. Create a decision for the user to approve using create_decision with title "Scaffolding Approval" and trigger "scaffolding". Include options: "Approve scaffold and start development" or "Request changes".',
-  UX_WORKING: 'You are the UX Designer. The project scaffold is approved. Now create the Design System / UI Kit document using [CREATE_DOCUMENT]{"type":"DESIGN_SYSTEM"}. Include: branding guidelines, color palette (primary, secondary, neutral, semantic), typography scale, spacing system, component inventory (buttons, inputs, cards, modals, navigation), and design tokens. After the UI Kit is complete, delegate to UID to create wireframes based on the design system and BRD user flows.',
+  UX_WORKING: 'You are the UX Designer. The project scaffold is approved. Now create the Design System / UI Kit document using [CREATE_DOCUMENT]{"type":"DESIGN_SYSTEM"}. Include: branding guidelines, color palette (primary, secondary, neutral, semantic), typography scale, spacing system, component inventory (buttons, inputs, cards, modals, navigation), and design tokens. Generate section-by-section (max ~1500 tokens each). After the UI Kit is complete, call task_progress to signal completion — the system will automatically activate UID for wireframe creation.',
+  UID_WORKING: 'You are the UI Designer. The Design System / UI Kit has been created by UX. Read the BRD user flows and the design system from context. Create wireframes for ALL pages mentioned in the BRD using [CREATE_DOCUMENT]{"type":"WIREFRAME"}. Each wireframe should reference the design system tokens and component library. After all wireframes are complete, call task_progress to signal completion.',
   UI_NEEDS_APPROVAL: 'The UI Kit and wireframes are ready. Review the design system and wireframes for completeness — all pages from the BRD user flows must have wireframe coverage. Create a decision for the user to approve using create_decision with title "UI Design Approval" and trigger "ui approval". Include options: "Approve UI designs and start development" or "Request changes to designs".',
   DEV_WORKING: 'You are the Tech Lead. Read the approved BRD, SDD, UI Kit, and wireframes from context. Break down the SDD into development task cards — one card per component/feature. Create cards for: Frontend (based on wireframes + UI Kit), Backend (based on SDD APIs), and Integration. Assign each card to JD (Junior Developer) or SD (Senior Developer). Each task goes through: code → QA → SEC → DO → PE sign-off cycle. Pick ONE card at a time.',
   COMPLETE: 'All development is complete! Provide a final summary to the user: what was built, key decisions made, and next steps for deployment.',
@@ -170,9 +175,14 @@ export async function transition(
     `[PipelineFSM] ✅ ${currentPhase} → ${nextPhase} (trigger: ${trigger}) for project ${projectId}`,
   );
 
-  // Auto-trigger: when entering a WORKING phase after user approval,
-  // enqueue a background task for the target agent
-  if (trigger === 'user_approved' && isWorkingPhase(nextPhase)) {
+  // Persist event for audit trail
+  logPhaseTransition(projectId, currentPhase, nextPhase, trigger).catch(() => {});
+
+  // Auto-trigger: when entering a WORKING phase (via user approval or agent handoff),
+  // enqueue a background task for the target agent.
+  // Covers: user_approved → SA/DO/UX/DEV, agent_done → UID (UX hands off to UID)
+  const shouldAutoTrigger = isWorkingPhase(nextPhase) && (trigger === 'user_approved' || trigger === 'agent_done');
+  if (shouldAutoTrigger) {
     const targetAgent = getActiveAgent(nextPhase);
     const context = getPhaseContext(nextPhase);
 
@@ -188,6 +198,7 @@ export async function transition(
       SA_WORKING: 'Solution Design',
       DO_WORKING: 'Scaffolding',
       UX_WORKING: 'UX Design',
+      UID_WORKING: 'UI Interfaces',
       DEV_WORKING: 'Development',
     };
     const cardTitle = cardTitleMap[nextPhase];

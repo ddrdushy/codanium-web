@@ -306,6 +306,7 @@ enum CardState {
   IN_PROGRESS
   UNDER_REVIEW
   TESTING
+  AWAITING_SIGNOFF
   BLOCKED
   DONE
   RELEASED
@@ -488,10 +489,42 @@ model Document {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sectionItems DocumentSection[]
 
   @@index([projectId])
   @@map("documents")
+}
+
+// Section-level tracking for resumable document generation (DGE)
+model DocumentSection {
+  id         String        @id @default(cuid())
+  sectionId  String        // e.g., "01_overview", "04_functional_requirements"
+  title      String        // Human-readable section title
+  status     SectionStatus @default(PENDING)
+  content    String        @default("")
+  wordCount  Int           @default(0)
+  sortOrder  Int           @default(0)
+  required   Boolean       @default(true)
+  error      String?       // Last error if generation failed
+  retries    Int           @default(0)
+  documentId String
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, sectionId])
+  @@index([documentId])
+  @@map("document_sections")
+}
+
+enum SectionStatus {
+  PENDING
+  GENERATING
+  SAVED
+  FAILED
+  SKIPPED
 }
 
 enum DocumentType {

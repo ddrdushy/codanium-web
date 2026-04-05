@@ -13,6 +13,7 @@ import {
   analyzeProjectArtifacts,
   formatAnalysisResults,
 } from '@/lib/ai/analysis/cross-artifact-analyzer';
+import { logDocumentEvent, logToolExecution } from '../orchestration/event-logger';
 import {
   readFileInWorkspace,
   writeFileInWorkspace,
@@ -655,6 +656,12 @@ async function handleCreateDocument(
       sections: (content.match(/^#{1,3}\s/gm) || []).length,
     },
   });
+
+  // Persist event for audit trail
+  logDocumentEvent(projectId, 'document.created', agentShortName || 'system', {
+    docType: args.type, documentId: doc.id,
+  }).catch(() => {});
+
   return { documentId: doc.id, type: doc.type, title: doc.title, status: doc.status };
 }
 
@@ -705,6 +712,12 @@ async function handleUpdateDocument(args: Record<string, any>, projectId: string
       sections: (newContent.match(/^#{1,3}\s/gm) || []).length,
     },
   });
+
+  // Persist event for audit trail
+  logDocumentEvent(projectId, 'document.updated', agentShortName || 'system', {
+    docType: args.type, documentId: doc.id, version: doc.version,
+  }).catch(() => {});
+
   return { documentId: doc.id, type: doc.type, version: doc.version, updated: true };
 }
 

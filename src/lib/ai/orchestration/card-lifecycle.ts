@@ -26,6 +26,7 @@ export type CardState =
   | 'IN_PROGRESS'
   | 'UNDER_REVIEW'
   | 'TESTING'
+  | 'AWAITING_SIGNOFF'
   | 'BLOCKED'
   | 'DONE'
   | 'RELEASED';
@@ -64,13 +65,14 @@ export interface DoDCriterion {
  * the previous state.
  */
 const VALID_TRANSITIONS: Record<CardState, CardState[]> = {
-  PLANNED:      ['IN_PROGRESS', 'BLOCKED'],
-  IN_PROGRESS:  ['UNDER_REVIEW', 'TESTING', 'BLOCKED', 'PLANNED', 'DONE'],
-  UNDER_REVIEW: ['IN_PROGRESS', 'TESTING', 'DONE', 'BLOCKED'],
-  TESTING:      ['IN_PROGRESS', 'UNDER_REVIEW', 'DONE', 'BLOCKED'],
-  BLOCKED:      ['PLANNED', 'IN_PROGRESS', 'UNDER_REVIEW', 'TESTING'],
-  DONE:         ['RELEASED', 'IN_PROGRESS'],  // Can reopen back to IN_PROGRESS
-  RELEASED:     [],                           // Terminal state — no transitions out
+  PLANNED:          ['IN_PROGRESS', 'BLOCKED'],
+  IN_PROGRESS:      ['UNDER_REVIEW', 'TESTING', 'AWAITING_SIGNOFF', 'BLOCKED', 'PLANNED', 'DONE'],
+  UNDER_REVIEW:     ['IN_PROGRESS', 'TESTING', 'AWAITING_SIGNOFF', 'DONE', 'BLOCKED'],
+  TESTING:          ['IN_PROGRESS', 'UNDER_REVIEW', 'AWAITING_SIGNOFF', 'DONE', 'BLOCKED'],
+  AWAITING_SIGNOFF: ['DONE', 'IN_PROGRESS', 'BLOCKED'],  // User approves → DONE, rejects → IN_PROGRESS
+  BLOCKED:          ['PLANNED', 'IN_PROGRESS', 'UNDER_REVIEW', 'TESTING', 'AWAITING_SIGNOFF'],
+  DONE:             ['RELEASED', 'IN_PROGRESS'],  // Can reopen back to IN_PROGRESS
+  RELEASED:         [],                           // Terminal state — no transitions out
 };
 
 // ---------------------------------------------------------------------------
