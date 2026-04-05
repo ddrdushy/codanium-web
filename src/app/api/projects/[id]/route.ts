@@ -106,6 +106,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       description: project.description,
       status: project.status,
       currentStage: project.currentStage,
+      pipelinePhase: project.pipelinePhase,
       completion: project.completion,
       color: project.color,
       owner: project.owner,

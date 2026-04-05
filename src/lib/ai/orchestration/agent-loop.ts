@@ -111,10 +111,12 @@ const TOOL_ERROR_CIRCUIT_BREAKER = 3;
  * Web-only agents (NOT gated): BA, SA, PM, UX, UID, DEC, ORC, CA, AUD, PRE, LLM, STC
  */
 export const DEV_AGENTS = new Set([
-  'TL', 'JD', 'SD',              // Engineering — code generation & review
+  'JD', 'SD',                    // Engineering — code generation
   'QA', 'AT', 'PF',              // Testing & Performance
-  'DO', 'PE', 'IE', 'SM', 'SR', 'SEC',  // Platform, DevOps & Security
-  'UX',                           // UX — when generating code artifacts (not design docs)
+  'DO', 'PE', 'IE', 'SM', 'SR',  // Platform, DevOps & Infrastructure
+  // NOT gated: TL (coordinator — creates/assigns cards, no file writes)
+  // NOT gated: SEC (reviewer — reads files only, no writes)
+  // NOT gated: UX (design docs, not code)
 ]);
 
 // ---------------------------------------------------------------------------

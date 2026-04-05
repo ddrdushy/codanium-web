@@ -3,8 +3,9 @@ import { eventBus } from './event-bus';
 import { agentLoop } from './agent-loop';
 import { isVSCodeConnected } from '@/lib/vscode-bridge';
 
-// Development agents that must run from VS Code
-const DEV_AGENTS = new Set(['TL', 'JD', 'SD', 'QA', 'DO', 'SEC']);
+// Development agents that must run from VS Code (code writers only)
+// TL (coordinator) and SEC (reviewer) are NOT gated — they don't write files
+const DEV_AGENTS = new Set(['JD', 'SD', 'QA', 'DO', 'PE', 'IE']);
 
 export class TaskProcessor {
   async processOne(): Promise<boolean> {
