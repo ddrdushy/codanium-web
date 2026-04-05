@@ -75,13 +75,13 @@ export async function PATCH(
         });
         const projectName = project?.name || 'this project';
 
-        // 1. Mark BRD document as APPROVED
+        // 1. Mark BRD document as APPROVED + LOCKED (artifact governance)
         try {
           await prisma.document.updateMany({
             where: { projectId, type: 'BRD' },
-            data: { status: 'APPROVED' },
+            data: { status: 'APPROVED', locked: true },
           });
-          console.log(`[Decision] BRD document status → APPROVED`);
+          console.log(`[Decision] BRD document status → APPROVED + LOCKED`);
         } catch (e) {
           console.error('[Decision] Failed to update BRD document status:', e);
         }
@@ -156,13 +156,13 @@ export async function PATCH(
         });
         const sddProjectName = project?.name || 'this project';
 
-        // 1. Mark SDD document as APPROVED
+        // 1. Mark SDD document as APPROVED + LOCKED (artifact governance)
         try {
           await prisma.document.updateMany({
             where: { projectId, type: 'SDD' },
-            data: { status: 'APPROVED' },
+            data: { status: 'APPROVED', locked: true },
           });
-          console.log(`[Decision] SDD document status → APPROVED`);
+          console.log(`[Decision] SDD document status → APPROVED + LOCKED`);
         } catch (e) {
           console.error('[Decision] Failed to update SDD status:', e);
         }

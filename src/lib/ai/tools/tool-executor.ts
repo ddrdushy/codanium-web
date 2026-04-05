@@ -621,6 +621,16 @@ async function handleUpdateDocument(args: Record<string, any>, projectId: string
     orderBy: { createdAt: 'desc' },
   });
 
+  // Enforce artifact lock — approved documents cannot be edited
+  if (existing?.locked) {
+    return {
+      documentId: existing.id,
+      type: args.type,
+      error: `${args.type} is locked after approval and cannot be modified. Create a change request decision to unlock.`,
+      locked: true,
+    };
+  }
+
   if (!existing) {
     // Auto-create the document if it doesn't exist (e.g., first update_document(BRD) call)
     console.log(`[ToolExecutor] Auto-creating ${args.type} document (didn't exist yet)`);
@@ -647,11 +657,12 @@ async function handleUpdateDocument(args: Record<string, any>, projectId: string
     where: { id: existing.id },
     data: {
       content: newContent,
+      version: { increment: 1 },
       wordCount: newContent.split(/\s+/).length,
       sections: (newContent.match(/^#{1,3}\s/gm) || []).length,
     },
   });
-  return { documentId: doc.id, type: doc.type, updated: true };
+  return { documentId: doc.id, type: doc.type, version: doc.version, updated: true };
 }
 
 async function handleApproveDocument(args: Record<string, any>, projectId: string) {

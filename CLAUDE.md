@@ -96,14 +96,37 @@ PROJECT CREATED → PM activated (gatekeeper)
   → TL picks next card → repeat → PM validates all DONE → deploy
 ```
 
-## Codanium Desktop (Tauri v2)
+## Codanium Desktop (Tauri v2) — v0.3.1
 - **Repo**: https://github.com/AiSenseiMY/Codanium
 - **Stack**: Tauri v2 (Rust) + React 19 + TypeScript + Tailwind CSS
-- **Features**: Login screen, file explorer, code viewer, agent panel, terminal
+- **Version**: 0.3.1 (package.json, tauri.conf.json, Cargo.toml all synced)
+- **Features**:
+  - Login with email/password (API key auth via `ats_sk_` tokens)
+  - Project selector with workspace directory picker
+  - Workspace file sync (polling 5s, client-side `deriveFilePath`)
+  - Pipeline status bar (live phase + progress percentage)
+  - Agent activity panel (grouped by team, live from server)
+  - Chat panel with SSE streaming + phase banners
+  - Board panel with auto-refresh (10s)
+  - File explorer + Code viewer (Monaco)
+  - Integrated terminal (xterm.js)
+  - IDE heartbeat (15s POST to `/api/projects/{id}/vscode-ping`, Redis TTL 30s)
+  - Auth persistence across app restarts (Zustand persist)
+  - Environment toggle (Production / Development)
+- **HTTP**: All API calls use `@tauri-apps/plugin-http` fetch (bypasses CORS)
+- **Stores**: connection-store, chat-store, board-store, project-store, pipeline-store
 - **Releases**: GitHub Releases with Mac (.dmg ARM64/x64), Windows (.msi/.exe), Linux (.deb/.AppImage/.rpm)
 - **CI**: Build & Release workflow triggered on v* tags
-- **Config**: `src-tauri/tauri.conf.json` — empty `plugins: {}`, permissions in `capabilities/default.json`
+- **Config**: `src-tauri/tauri.conf.json`, permissions + HTTP URL scope in `capabilities/default.json`
+- **IDE-Gated Agents**: JD, SD, QA, DO, PE, IE require IDE heartbeat active
 - **Mac Gatekeeper**: Users need to run `xattr -cr /Applications/Codanium.app` after install
+
+## BA & SA Orchestration
+- **Spec**: `docs/ba-sa-orchestration-spec.md`
+- **Pipeline FSM**: PM_GREETING → BA_WORKING → BA_NEEDS_APPROVAL → SA_WORKING → SA_NEEDS_APPROVAL → DO_WORKING → DO_NEEDS_APPROVAL → DEV_WORKING → COMPLETE
+- **Artifact Governance**: BRD/SDD auto-locked on approval (`locked: true`), version incremented on updates
+- **Gate Enforcement**: SA cannot start without BRD approval, DO cannot start without SDD approval
+- **Decision Tracking**: Every approval creates a Decision record for user sign-off
 
 ## Current Status
 

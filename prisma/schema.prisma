@@ -480,6 +480,7 @@ model Document {
   content    String       @default("")
   wordCount  Int          @default(0)
   sections   Int          @default(0)
+  version    Int          @default(1)
   locked     Boolean      @default(false)
   owner      String
   ownerAvatar String     @default("📋")
