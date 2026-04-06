@@ -212,142 +212,151 @@ function SpacingPreview({ spacing }: { spacing: DesignTokens['spacing'] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Calculator Visual Wireframe
+// Calculator Visual Wireframe — matches actual generated Calculator.tsx output
 // ---------------------------------------------------------------------------
 
 function CalculatorWireframe() {
-  const [display, setDisplay] = useState('579');
-  const [expression, setExpression] = useState('123 + 456 =');
+  const [display, setDisplay] = useState('0');
+  const [mode, setMode] = useState<'basic' | 'scientific'>('basic');
+  const [pendingOp, setPendingOp] = useState<string | null>(null);
+  const [prevValue, setPrevValue] = useState<number | null>(null);
+  const [freshResult, setFreshResult] = useState(false);
 
-  const buttonRows = [
-    [
-      { label: 'C', style: 'danger' },
-      { label: '\u00B1', style: 'secondary' },
-      { label: '%', style: 'secondary' },
-      { label: '\u00F7', style: 'primary' },
-    ],
-    [
-      { label: '7', style: 'secondary' },
-      { label: '8', style: 'secondary' },
-      { label: '9', style: 'secondary' },
-      { label: '\u00D7', style: 'primary' },
-    ],
-    [
-      { label: '4', style: 'secondary' },
-      { label: '5', style: 'secondary' },
-      { label: '6', style: 'secondary' },
-      { label: '\u2212', style: 'primary' },
-    ],
-    [
-      { label: '1', style: 'secondary' },
-      { label: '2', style: 'secondary' },
-      { label: '3', style: 'secondary' },
-      { label: '+', style: 'primary' },
-    ],
-    [
-      { label: 'sin', style: 'accent' },
-      { label: '0', style: 'secondary' },
-      { label: '.', style: 'secondary' },
-      { label: '=', style: 'success' },
-    ],
-  ];
-
-  const styleMap: Record<string, { bg: string; text: string; hover: string }> = {
-    primary: { bg: '#2563EB', text: '#FFFFFF', hover: '#3B82F6' },
-    secondary: { bg: '#F9FAFB', text: '#1F2937', hover: '#E5E7EB' },
-    success: { bg: '#10B981', text: '#FFFFFF', hover: '#34D399' },
-    danger: { bg: '#EF4444', text: '#FFFFFF', hover: '#F87171' },
-    accent: { bg: '#8B5CF6', text: '#FFFFFF', hover: '#A78BFA' },
+  const inputDigit = (digit: string) => {
+    setDisplay(prev => (prev === '0' || freshResult) ? digit : prev + digit);
+    setFreshResult(false);
   };
 
-  const handleClick = (label: string) => {
-    if (label === 'C') {
-      setDisplay('0');
-      setExpression('');
-    } else if (label === '=') {
-      try {
-        const expr = expression.replace(/=\s*$/, '').replace(/\u00D7/g, '*').replace(/\u00F7/g, '/').replace(/\u2212/g, '-');
-        const result = Function('"use strict"; return (' + expr + ')')();
-        setDisplay(String(result));
-        setExpression(expression + ' =');
-      } catch { /* ignore */ }
-    } else if (['+', '\u2212', '\u00D7', '\u00F7'].includes(label)) {
-      const op = label;
-      setExpression(display + ' ' + op + ' ');
-      setDisplay('0');
-    } else if (label === '%') {
-      setDisplay(String(parseFloat(display) / 100));
-    } else if (label === '\u00B1') {
-      setDisplay(String(parseFloat(display) * -1));
-    } else if (['sin', 'cos', 'tan', '\u221A', '^'].includes(label)) {
-      // Scientific
-      const val = parseFloat(display);
-      const ops: Record<string, () => number> = {
-        sin: () => Math.sin(val * Math.PI / 180),
-        cos: () => Math.cos(val * Math.PI / 180),
-        tan: () => Math.tan(val * Math.PI / 180),
-        '\u221A': () => Math.sqrt(val),
-      };
-      if (ops[label]) setDisplay(String(Number(ops[label]().toFixed(8))));
-    } else {
-      // Digit or dot
-      setDisplay(prev => prev === '0' && label !== '.' ? label : prev + label);
+  const inputDecimal = () => {
+    if (!display.includes('.')) setDisplay(prev => prev + '.');
+    setFreshResult(false);
+  };
+
+  const setOperation = (op: string) => {
+    setPrevValue(parseFloat(display));
+    setPendingOp(op);
+    setFreshResult(true);
+  };
+
+  const calculate = () => {
+    if (pendingOp === null || prevValue === null) return;
+    const curr = parseFloat(display);
+    let result = 0;
+    switch (pendingOp) {
+      case 'add': result = prevValue + curr; break;
+      case 'subtract': result = prevValue - curr; break;
+      case 'multiply': result = prevValue * curr; break;
+      case 'divide': result = curr !== 0 ? prevValue / curr : 0; break;
     }
+    setDisplay(String(Number(result.toFixed(10))));
+    setPendingOp(null);
+    setPrevValue(null);
+    setFreshResult(true);
   };
+
+  const clear = () => {
+    setDisplay('0');
+    setPendingOp(null);
+    setPrevValue(null);
+    setFreshResult(false);
+  };
+
+  const toggleSign = () => setDisplay(String(parseFloat(display) * -1));
+  const percentage = () => setDisplay(String(parseFloat(display) / 100));
+
+  const scientific = (op: string) => {
+    const val = parseFloat(display);
+    const rad = val * Math.PI / 180;
+    const ops: Record<string, () => number> = {
+      sqrt: () => Math.sqrt(val), square: () => val * val, cube: () => val ** 3,
+      sin: () => Math.sin(rad), cos: () => Math.cos(rad), tan: () => Math.tan(rad),
+      log: () => Math.log10(val), ln: () => Math.log(val),
+      factorial: () => { let f = 1; for (let i = 2; i <= val; i++) f *= i; return f; },
+      reciprocal: () => 1 / val, exp: () => Math.exp(val), pi: () => Math.PI,
+    };
+    if (ops[op]) { setDisplay(String(Number(ops[op]().toFixed(10)))); setFreshResult(true); }
+  };
+
+  // Exact button style from generated Calculator.tsx
+  const digitBtn = "p-4 bg-gray-200 rounded-lg hover:bg-gray-300 text-base font-medium cursor-pointer transition-colors active:scale-95";
+  const opBtn = "p-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-base font-medium cursor-pointer transition-colors active:scale-95";
+  const sciBtn = "p-4 bg-gray-300 rounded-lg hover:bg-gray-400 text-base font-medium cursor-pointer transition-colors active:scale-95";
 
   return (
-    <div className="flex items-center justify-center min-h-full p-8" style={{ backgroundColor: '#F3F4F6', fontFamily: "'Inter', sans-serif" }}>
-      <div
-        className="w-[400px] overflow-hidden"
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '12px',
-          border: '1px solid #E5E7EB',
-          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
-          padding: '24px',
-        }}
-      >
+    <div className="flex flex-col items-center justify-center min-h-full p-8" style={{ backgroundColor: '#F9FAFB', fontFamily: "'Inter', sans-serif" }}>
+      {/* Title — matches generated output */}
+      <h1 className="text-3xl font-bold text-blue-600 mb-6">Calculator App</h1>
+
+      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md">
         {/* Display */}
-        <div
-          style={{
-            backgroundColor: '#1F2937',
-            borderRadius: '8px',
-            padding: '16px 24px',
-            marginBottom: '16px',
-            textAlign: 'right',
-          }}
-        >
-          <div style={{ fontSize: '14px', color: '#9CA3AF', fontFamily: 'monospace', minHeight: '20px' }}>
-            {expression}
-          </div>
-          <div style={{ fontSize: '36px', fontWeight: 700, color: '#FFFFFF', fontFamily: 'monospace' }}>
-            {display}
-          </div>
+        <div className="mb-4 p-4 bg-gray-100 rounded-lg text-right text-2xl font-medium h-16 flex items-center justify-end">
+          <span className="overflow-hidden text-ellipsis max-w-full">{display}</span>
         </div>
 
-        {/* Button Grid */}
-        <div className="grid grid-cols-4 gap-2">
-          {buttonRows.flat().map((btn, i) => {
-            const s = styleMap[btn.style];
-            return (
-              <button
-                key={i}
-                onClick={() => handleClick(btn.label)}
-                className="aspect-square flex items-center justify-center transition-all active:scale-95 hover:opacity-90 cursor-pointer"
-                style={{
-                  backgroundColor: s.bg,
-                  color: s.text,
-                  borderRadius: '9999px',
-                  fontSize: '18px',
-                  fontWeight: 700,
-                  border: btn.style === 'secondary' ? '1px solid #E5E7EB' : 'none',
-                }}
-              >
-                {btn.label}
-              </button>
-            );
-          })}
+        {/* Row 1: AC (col-span-2), SCI, MC */}
+        <div className="grid grid-cols-4 gap-2 mb-2">
+          <button className={`col-span-2 ${digitBtn}`} onClick={clear}>AC</button>
+          <button className={digitBtn} onClick={() => setMode(mode === 'basic' ? 'scientific' : 'basic')}>
+            {mode === 'basic' ? 'SCI' : 'BASIC'}
+          </button>
+          <button className={digitBtn}>MC</button>
         </div>
+
+        {/* Row 2: MR, M+, +/-, % */}
+        <div className="grid grid-cols-4 gap-2 mb-2">
+          <button className={digitBtn}>MR</button>
+          <button className={digitBtn}>M+</button>
+          <button className={digitBtn} onClick={toggleSign}>+/-</button>
+          <button className={digitBtn} onClick={percentage}>%</button>
+        </div>
+
+        {mode === 'basic' ? (
+          /* Basic Mode Grid — exact match to generated code */
+          <div className="grid grid-cols-4 gap-2">
+            <button className={digitBtn} onClick={() => inputDigit('7')}>7</button>
+            <button className={digitBtn} onClick={() => inputDigit('8')}>8</button>
+            <button className={digitBtn} onClick={() => inputDigit('9')}>9</button>
+            <button className={opBtn} onClick={() => setOperation('divide')}>/</button>
+
+            <button className={digitBtn} onClick={() => inputDigit('4')}>4</button>
+            <button className={digitBtn} onClick={() => inputDigit('5')}>5</button>
+            <button className={digitBtn} onClick={() => inputDigit('6')}>6</button>
+            <button className={opBtn} onClick={() => setOperation('multiply')}>*</button>
+
+            <button className={digitBtn} onClick={() => inputDigit('1')}>1</button>
+            <button className={digitBtn} onClick={() => inputDigit('2')}>2</button>
+            <button className={digitBtn} onClick={() => inputDigit('3')}>3</button>
+            <button className={opBtn} onClick={() => setOperation('subtract')}>-</button>
+
+            <button className={digitBtn} onClick={() => inputDigit('0')}>0</button>
+            <button className={digitBtn} onClick={inputDecimal}>.</button>
+            <button className={digitBtn} onClick={calculate}>=</button>
+            <button className={opBtn} onClick={() => setOperation('add')}>+</button>
+          </div>
+        ) : (
+          /* Scientific Mode Grid — exact match to generated code */
+          <div className="grid grid-cols-4 gap-2">
+            <button className={sciBtn} onClick={() => scientific('sqrt')}>{'\u221A'}</button>
+            <button className={sciBtn} onClick={() => scientific('square')}>x{'\u00B2'}</button>
+            <button className={sciBtn} onClick={() => scientific('cube')}>x{'\u00B3'}</button>
+            <button className={opBtn} onClick={() => setOperation('divide')}>/</button>
+
+            <button className={sciBtn} onClick={() => scientific('sin')}>sin</button>
+            <button className={sciBtn} onClick={() => scientific('cos')}>cos</button>
+            <button className={sciBtn} onClick={() => scientific('tan')}>tan</button>
+            <button className={opBtn} onClick={() => setOperation('multiply')}>*</button>
+
+            <button className={sciBtn} onClick={() => scientific('log')}>log</button>
+            <button className={sciBtn} onClick={() => scientific('ln')}>ln</button>
+            <button className={sciBtn} onClick={() => scientific('exp')}>exp</button>
+            <button className={opBtn} onClick={() => setOperation('subtract')}>-</button>
+
+            <button className={sciBtn} onClick={() => scientific('pi')}>{'\u03C0'}</button>
+            <button className={sciBtn} onClick={() => scientific('factorial')}>n!</button>
+            <button className={digitBtn} onClick={calculate}>=</button>
+            <button className={opBtn} onClick={() => setOperation('add')}>+</button>
+          </div>
+        )}
       </div>
     </div>
   );
