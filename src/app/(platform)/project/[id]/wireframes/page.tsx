@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { WireframeModal, DeleteWireframeDialog } from '@/components/modals/wireframe-modal';
 import { PenRenderer, type PenDocument } from '@/components/pen-renderer/PenRenderer';
 import { penToHTML, penToReactComponent } from '@/lib/pen-to-html';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   PenTool, Plus, Grid3X3, Layers, Eye, Edit3,
   Smartphone, Monitor, Tablet, ChevronRight,
@@ -110,61 +112,54 @@ const deviceIcon: Record<string, React.ElementType> = {
   tablet: Tablet,
 };
 
-// Lightweight markdown renderer for document-based wireframes (no external dep)
+// Full markdown renderer for document-based wireframes using react-markdown
 function DocumentMarkdownRenderer({ content }: { content: string }) {
-  // Parse markdown into simple HTML-like structure
-  const lines = content.split('\n');
-  const elements: React.ReactNode[] = [];
-  let listItems: string[] = [];
-  let inList = false;
-
-  const flushList = () => {
-    if (listItems.length > 0) {
-      elements.push(
-        <ul key={`list-${elements.length}`}>
-          {listItems.map((li, j) => <li key={j}>{li}</li>)}
-        </ul>
-      );
-      listItems = [];
-    }
-    inList = false;
-  };
-
-  lines.forEach((line, i) => {
-    const trimmed = line.trim();
-
-    // Empty line
-    if (!trimmed) {
-      flushList();
-      return;
-    }
-
-    // Headings
-    if (trimmed.startsWith('### ')) { flushList(); elements.push(<h3 key={i}>{trimmed.slice(4)}</h3>); return; }
-    if (trimmed.startsWith('## ')) { flushList(); elements.push(<h2 key={i}>{trimmed.slice(3)}</h2>); return; }
-    if (trimmed.startsWith('# ')) { flushList(); elements.push(<h1 key={i}>{trimmed.slice(2)}</h1>); return; }
-
-    // Horizontal rule
-    if (/^[-*_]{3,}$/.test(trimmed)) { flushList(); elements.push(<hr key={i} />); return; }
-
-    // List items
-    if (/^[-*]\s/.test(trimmed)) {
-      inList = true;
-      listItems.push(trimmed.replace(/^[-*]\s+/, ''));
-      return;
-    }
-
-    // Paragraphs
-    flushList();
-    // Handle bold/code inline
-    const rendered = trimmed
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`(.+?)`/g, '<code>$1</code>');
-    elements.push(<p key={i} dangerouslySetInnerHTML={{ __html: rendered }} />);
-  });
-
-  flushList();
-  return <>{elements}</>;
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h1: ({ children }) => <h1 className="text-xl font-bold text-foreground mb-4 mt-6 pb-2 border-b border-border">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-lg font-bold text-foreground mb-3 mt-6">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground/90 mb-2 mt-4">{children}</h3>,
+        h4: ({ children }) => <h4 className="text-xs font-semibold text-foreground/80 mb-1.5 mt-3">{children}</h4>,
+        p: ({ children }) => <p className="text-sm text-muted-foreground leading-relaxed mb-3">{children}</p>,
+        ul: ({ children }) => <ul className="text-sm text-muted-foreground mb-3 ml-4 space-y-1 list-disc">{children}</ul>,
+        ol: ({ children }) => <ol className="text-sm text-muted-foreground mb-3 ml-4 space-y-1 list-decimal">{children}</ol>,
+        li: ({ children }) => <li className="text-sm text-muted-foreground leading-relaxed">{children}</li>,
+        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        em: ({ children }) => <em className="italic text-foreground/80">{children}</em>,
+        code: ({ children, className }) => {
+          const isBlock = className?.includes('language-');
+          if (isBlock) {
+            return (
+              <code className="block bg-black/40 text-amber text-xs font-mono rounded-lg p-4 overflow-x-auto my-3 border border-border">
+                {children}
+              </code>
+            );
+          }
+          return <code className="text-amber text-xs bg-amber/10 px-1.5 py-0.5 rounded font-mono">{children}</code>;
+        },
+        pre: ({ children }) => <pre className="my-3">{children}</pre>,
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-3 border-amber/40 pl-4 my-3 text-muted-foreground/80 italic">{children}</blockquote>
+        ),
+        hr: () => <hr className="border-border my-6" />,
+        a: ({ href, children }) => (
+          <a href={href} className="text-amber hover:text-amber/80 underline underline-offset-2" target="_blank" rel="noopener noreferrer">{children}</a>
+        ),
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-4 rounded-lg border border-border">
+            <table className="w-full text-xs">{children}</table>
+          </div>
+        ),
+        thead: ({ children }) => <thead className="bg-white/[0.04] border-b border-border">{children}</thead>,
+        th: ({ children }) => <th className="px-3 py-2 text-left font-semibold text-foreground/90">{children}</th>,
+        td: ({ children }) => <td className="px-3 py-2 text-muted-foreground border-t border-border/50">{children}</td>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 }
 
 // ASCII-art style wireframe preview components
@@ -835,10 +830,8 @@ export default function WireframesPage() {
               ) : selectedWireframe.content ? (
                 /* Document-based wireframe/design system — render markdown content */
                 <div className="flex-1 overflow-y-auto p-6 bg-[var(--sidebar-accent)]">
-                  <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-6">
-                    <div className="prose prose-invert prose-sm max-w-none [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-foreground [&_h1]:mb-3 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:text-foreground [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-foreground/80 [&_h3]:mt-4 [&_h3]:mb-1.5 [&_p]:text-xs [&_p]:text-muted-foreground [&_p]:leading-relaxed [&_p]:mb-2 [&_ul]:text-xs [&_ul]:text-muted-foreground [&_ul]:mb-2 [&_li]:mb-0.5 [&_li]:text-muted-foreground [&_hr]:border-border [&_hr]:my-4 [&_strong]:text-foreground/90 [&_code]:text-amber [&_code]:text-[11px] [&_code]:bg-amber/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded">
-                      <DocumentMarkdownRenderer content={selectedWireframe.content} />
-                    </div>
+                  <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-8">
+                    <DocumentMarkdownRenderer content={selectedWireframe.content} />
                   </div>
                 </div>
               ) : (
