@@ -666,7 +666,7 @@ export default function WireframesPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col overflow-hidden min-h-0"
             >
               {/* Toolbar */}
               <div className="px-6 py-2 border-b border-border flex items-center justify-between shrink-0">

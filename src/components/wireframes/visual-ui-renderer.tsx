@@ -361,7 +361,7 @@ export function DesignSystemRenderer({ content }: { content: string }) {
   const tokens = useMemo(() => parseDesignTokens(content), [content]);
 
   return (
-    <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#F3F4F6' }}>
+    <div className="flex-1 overflow-y-auto min-h-0" style={{ backgroundColor: '#F3F4F6' }}>
       <div className="max-w-4xl mx-auto p-8 space-y-8">
         {/* Header */}
         <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6">
@@ -422,7 +422,7 @@ export function DesignSystemRenderer({ content }: { content: string }) {
 
 export function WireframeVisualRenderer({ content: _content }: { content: string }) {
   return (
-    <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#F3F4F6' }}>
+    <div className="flex-1 overflow-y-auto min-h-0" style={{ backgroundColor: '#F3F4F6' }}>
       <div className="max-w-4xl mx-auto p-8 space-y-6">
         {/* Header */}
         <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6">
