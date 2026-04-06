@@ -1,4 +1,4 @@
-// ─── AI Team Studio — Prisma Schema ───
+// ─── Codanium — Prisma Schema ───
 // PostgreSQL database for the AI-Powered Product Delivery OS
 
 generator client {

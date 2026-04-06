@@ -1,4 +1,4 @@
-# Bug Report — AI Team Studio
+# Bug Report — Codanium
 
 **Project:** BA Test - Craft Store
 **Report Date:** 2026-03-30
@@ -223,7 +223,7 @@ The LLM's first token generation reflects uncertainty from the prompt contradict
 
 | Component | Version/Detail |
 |-----------|---------------|
-| App | AI Team Studio (Docker, port 14001) |
+| App | Codanium (Docker, port 14001) |
 | Framework | Next.js 16 |
 | Database | PostgreSQL (Docker, port 14000) |
 | LLM Provider | Mistral API |

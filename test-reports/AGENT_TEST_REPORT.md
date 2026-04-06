@@ -1,4 +1,4 @@
-# Agent Test Report — AI Team Studio
+# Agent Test Report — Codanium
 
 **Project:** BA Test - Craft Store
 **Project ID:** `cmnc1g0kz000001qbdtsdg910`

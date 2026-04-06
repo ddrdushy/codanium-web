@@ -35,7 +35,9 @@ const ACTION_REGEX = /\[\s*ACTION\s*:\s*(\w+)\s*\]([\s\S]*?)\[\s*\/\s*ACTION\s*\
 
 // [ARTIFACT:filename.ext]content here[/ARTIFACT]
 // Tolerates optional spaces: [ ARTIFACT:file.md ] or [ARTIFACT:file.md]
-const ARTIFACT_REGEX = /\[\s*ARTIFACT\s*:\s*([^\]]+?)\s*\]([\s\S]*?)\[\s*\/\s*ARTIFACT\s*\]/gi;
+// Uses greedy match with closing-tag anchor to avoid truncating content that
+// coincidentally contains "[/ARTIFACT]" inside code examples or docs.
+const ARTIFACT_REGEX = /\[\s*ARTIFACT\s*:\s*([^\]]+?)\s*\]([\s\S]*)\[\s*\/\s*ARTIFACT\s*\]/gi;
 
 // [DELEGATE:BA]context for the BA agent[/DELEGATE]
 // Also handles [/DELEGATE:AGENT_NAME] closing tag (LLMs sometimes add the name)

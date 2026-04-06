@@ -1,4 +1,4 @@
-# ─── AI Team Studio — Multi-stage Dockerfile ───
+# ─── Codanium — Multi-stage Dockerfile ───
 # Optimized for Next.js 16 + Prisma 7.x + PostgreSQL + BullMQ Worker
 
 # ── Stage 1: Dependencies ──────────────────────────────────────────────────────

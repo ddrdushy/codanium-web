@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "codanium-web",
+      "name": "dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "docker",
+      "runtimeExecutable": "echo",
+      "runtimeArgs": ["Docker app already running on port 14001"],
+      "port": 14001
     }
   ]
 }

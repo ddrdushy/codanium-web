@@ -1,5 +1,5 @@
 /**
- * AI Team Studio — Full End-to-End Test
+ * Codanium — Full End-to-End Test
  *
  * Simulates a real user creating a project and going through the
  * entire SDLC pipeline: BA discovery → SA architecture → PM planning.
@@ -57,7 +57,7 @@ async function waitForAgent(page: Page, agentName: string, timeout = 60_000) {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-test.describe('AI Team Studio — Full SDLC Flow', () => {
+test.describe('Codanium — Full SDLC Flow', () => {
 
   test.beforeEach(async ({ page }) => {
     // Navigate to home page

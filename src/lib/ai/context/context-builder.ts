@@ -698,8 +698,8 @@ function formatDocuments(data: unknown, agentShortName?: string): string {
         (agent === 'SA' && (d.type === 'BRD' || d.type === 'SDD'));
 
       if (needsFullContent) {
-        const truncated = d.content.length > 15000
-          ? d.content.substring(0, 15000) + '\n... (truncated — see full document in project)'
+        const truncated = d.content.length > 60000
+          ? d.content.substring(0, 60000) + '\n... (truncated — see full document in project)'
           : d.content;
         docContents.push(`\n--- ${d.type} CONTENT: ${d.title} ---\n${truncated}\n--- END ${d.type} ---`);
       } else {
@@ -709,8 +709,8 @@ function formatDocuments(data: unknown, agentShortName?: string): string {
     }
     // Include staging docs for BA to compile into final BRD
     else if (d.title.startsWith('Staging:') && d.status === 'DRAFT') {
-      const truncated = d.content.length > 3000
-        ? d.content.substring(0, 3000) + '\n... (truncated)'
+      const truncated = d.content.length > 12000
+        ? d.content.substring(0, 12000) + '\n... (truncated)'
         : d.content;
       docContents.push(`\n--- STAGING ${d.type} CONTENT ---\n${truncated}\n--- END STAGING ---`);
     }

@@ -1539,15 +1539,15 @@ Step 1: Create the System Design Document:
 
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| Frontend Framework | {e.g., Next.js 15 / React 19} | {why — e.g., "SSR for SEO, React ecosystem, fast iteration"} |
-| Styling | {e.g., Tailwind CSS 4} | {why — e.g., "Rapid UI development, consistent design system"} |
-| Backend / API | {e.g., Next.js API Routes / Node.js} | {why — e.g., "Unified stack, serverless-ready"} |
-| Database | {e.g., PostgreSQL + Prisma ORM} | {why — e.g., "Relational data model, type-safe queries"} |
-| Authentication | {e.g., NextAuth.js / Clerk} | {why — e.g., "Built-in OAuth providers, session management"} |
-| File Storage | {e.g., AWS S3 / Cloudflare R2} | {why — e.g., "Scalable object storage for uploads"} |
-| Email Service | {e.g., Resend / SendGrid} | {why — e.g., "Transactional emails, developer-friendly API"} |
-| Hosting | {e.g., Vercel / AWS} | {why — e.g., "Zero-config deploys, edge network, preview URLs"} |
-| CI/CD | {e.g., GitHub Actions} | {why — e.g., "Native GitHub integration, free for public repos"} |
+| Frontend Framework | {use the tech chosen in Q2 — e.g., React, Vue, Flutter, Swift} | {why this fits the project} |
+| Styling | {matching CSS framework — e.g., Tailwind, Material UI, native styling} | {why — e.g., "Rapid UI development, consistent design system"} |
+| Backend / API | {use the tech chosen in Q3 — e.g., Node.js, Python/FastAPI, Go, Java/Spring} | {why this fits the project} |
+| Database | {use the tech chosen in Q4 — e.g., PostgreSQL, MongoDB, MySQL} | {why this fits the data model} |
+| Authentication | {matching auth solution — e.g., NextAuth, Passport, Auth0, Firebase Auth} | {why — e.g., "Built-in OAuth providers, session management"} |
+| File Storage | {e.g., AWS S3 / Cloudflare R2 / GCS} | {why — e.g., "Scalable object storage for uploads"} |
+| Email Service | {e.g., Resend / SendGrid / SES} | {why — e.g., "Transactional emails, developer-friendly API"} |
+| Hosting | {use the platform chosen in Q1 — e.g., AWS, GCP, Azure, Vercel, self-hosted} | {why this fits the project} |
+| CI/CD | {e.g., GitHub Actions / GitLab CI / Jenkins} | {why — e.g., "Native integration, automated pipelines"} |
 
 ---
 
@@ -1564,10 +1564,10 @@ Step 1: Create the System Design Document:
           ▼                ▼                  ▼
 ┌─────────────────────────────────────────────────────────┐
 │                    FRONTEND (SSR/SPA)                     │
-│  {e.g., Next.js — Pages, Components, State Management}   │
+│  {chosen frontend — Pages, Components, State Management}  │
 │  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌───────────┐ │
 │  │  Pages/   │ │  Shared  │ │   State   │ │   Auth    │ │
-│  │  Routes   │ │Components│ │  (Zustand) │ │  Context  │ │
+│  │  Routes   │ │Components│ │  Manager   │ │  Context  │ │
 │  └──────────┘ └──────────┘ └───────────┘ └───────────┘ │
 └────────────────────────┬────────────────────────────────┘
                          │ HTTPS / REST / tRPC
@@ -1756,15 +1756,15 @@ model {EntityName} {
 ### 7.1 Project Structure
 \`\`\`
 src/
-├── app/                    # Next.js App Router pages
+├── {pages or routes dir}   # Page/route definitions (structure depends on chosen framework)
 │   ├── (marketing)/        # Public pages (landing, about, pricing)
 │   ├── (auth)/             # Login, signup, forgot password
 │   ├── (dashboard)/        # Authenticated app pages
-│   │   ├── layout.tsx      # Dashboard shell (sidebar, header)
-│   │   ├── page.tsx        # Dashboard home
+│   │   ├── layout.*        # Dashboard shell (sidebar, header)
+│   │   ├── index/home.*    # Dashboard home
 │   │   ├── {feature}/      # Feature-specific pages
 │   │   └── settings/       # User settings
-│   └── api/                # API routes
+│   └── api/                # API routes (or separate backend service)
 ├── components/
 │   ├── ui/                 # Reusable UI primitives (Button, Input, Modal)
 │   ├── {feature}/          # Feature-specific components
@@ -1842,7 +1842,7 @@ PR merged to production branch ────────────────�
 
 | Strategy | Implementation | Impact |
 |----------|---------------|--------|
-| Server-Side Rendering | {e.g., Next.js SSR for initial load} | Fast first paint, SEO |
+| Server-Side Rendering | {if applicable — e.g., SSR/SSG for initial load} | Fast first paint, SEO |
 | Code Splitting | {e.g., dynamic imports, route-based splitting} | Smaller initial bundle |
 | Image Optimization | {e.g., next/image with lazy loading, WebP} | Faster page loads |
 | Database Indexing | {e.g., indexes on frequently queried fields} | Faster queries |

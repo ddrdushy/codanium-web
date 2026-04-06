@@ -1,5 +1,5 @@
 /**
- * AI Team Studio — Smoke Test Suite
+ * Codanium — Smoke Test Suite
  *
  * Quick validation that all pages load, navigation works,
  * and key UI elements are present. Does NOT test LLM/agent
@@ -32,7 +32,7 @@ test.describe('Authentication', () => {
 test.describe('Landing Page', () => {
   test('homepage loads with correct branding', async ({ page }) => {
     await page.goto(BASE);
-    await expect(page).toHaveTitle(/AI Team Studio/i);
+    await expect(page).toHaveTitle(/Codanium/i);
   });
 
   test('marketing sections render', async ({ page }) => {

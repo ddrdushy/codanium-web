@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# AI Team Studio — LLM Provider Switcher
+# Codanium — LLM Provider Switcher
 # ============================================================================
 # Quick switch between LLM providers during development.
 #

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "AI Team Studio — Starting..."
+echo "Codanium — Starting..."
 
 # Detect if running as worker or app
 if [ "$1" = "node" ] && echo "$2" | grep -q "worker"; then

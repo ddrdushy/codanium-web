@@ -1,4 +1,4 @@
-# Codanium — AI Team Studio
+# Codanium — Your Vibe, Multiplied
 
 [![Build & Deploy](https://github.com/AiSenseiMY/Ai-Team_studio/actions/workflows/deploy.yml/badge.svg)](https://github.com/AiSenseiMY/Ai-Team_studio/actions/workflows/deploy.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
