@@ -9,8 +9,7 @@ import { Button } from '@/components/ui/button';
 import { WireframeModal, DeleteWireframeDialog } from '@/components/modals/wireframe-modal';
 import { PenRenderer, type PenDocument } from '@/components/pen-renderer/PenRenderer';
 import { penToHTML, penToReactComponent } from '@/lib/pen-to-html';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { DesignSystemRenderer, WireframeVisualRenderer } from '@/components/wireframes/visual-ui-renderer';
 import {
   PenTool, Plus, Grid3X3, Layers, Eye, Edit3,
   Smartphone, Monitor, Tablet, ChevronRight,
@@ -112,55 +111,7 @@ const deviceIcon: Record<string, React.ElementType> = {
   tablet: Tablet,
 };
 
-// Full markdown renderer for document-based wireframes using react-markdown
-function DocumentMarkdownRenderer({ content }: { content: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        h1: ({ children }) => <h1 className="text-xl font-bold text-foreground mb-4 mt-6 pb-2 border-b border-border">{children}</h1>,
-        h2: ({ children }) => <h2 className="text-lg font-bold text-foreground mb-3 mt-6">{children}</h2>,
-        h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground/90 mb-2 mt-4">{children}</h3>,
-        h4: ({ children }) => <h4 className="text-xs font-semibold text-foreground/80 mb-1.5 mt-3">{children}</h4>,
-        p: ({ children }) => <p className="text-sm text-muted-foreground leading-relaxed mb-3">{children}</p>,
-        ul: ({ children }) => <ul className="text-sm text-muted-foreground mb-3 ml-4 space-y-1 list-disc">{children}</ul>,
-        ol: ({ children }) => <ol className="text-sm text-muted-foreground mb-3 ml-4 space-y-1 list-decimal">{children}</ol>,
-        li: ({ children }) => <li className="text-sm text-muted-foreground leading-relaxed">{children}</li>,
-        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        em: ({ children }) => <em className="italic text-foreground/80">{children}</em>,
-        code: ({ children, className }) => {
-          const isBlock = className?.includes('language-');
-          if (isBlock) {
-            return (
-              <code className="block bg-black/40 text-amber text-xs font-mono rounded-lg p-4 overflow-x-auto my-3 border border-border">
-                {children}
-              </code>
-            );
-          }
-          return <code className="text-amber text-xs bg-amber/10 px-1.5 py-0.5 rounded font-mono">{children}</code>;
-        },
-        pre: ({ children }) => <pre className="my-3">{children}</pre>,
-        blockquote: ({ children }) => (
-          <blockquote className="border-l-3 border-amber/40 pl-4 my-3 text-muted-foreground/80 italic">{children}</blockquote>
-        ),
-        hr: () => <hr className="border-border my-6" />,
-        a: ({ href, children }) => (
-          <a href={href} className="text-amber hover:text-amber/80 underline underline-offset-2" target="_blank" rel="noopener noreferrer">{children}</a>
-        ),
-        table: ({ children }) => (
-          <div className="overflow-x-auto my-4 rounded-lg border border-border">
-            <table className="w-full text-xs">{children}</table>
-          </div>
-        ),
-        thead: ({ children }) => <thead className="bg-white/[0.04] border-b border-border">{children}</thead>,
-        th: ({ children }) => <th className="px-3 py-2 text-left font-semibold text-foreground/90">{children}</th>,
-        td: ({ children }) => <td className="px-3 py-2 text-muted-foreground border-t border-border/50">{children}</td>,
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  );
-}
+// (DocumentMarkdownRenderer removed — now using DesignSystemRenderer / WireframeVisualRenderer)
 
 // ASCII-art style wireframe preview components
 function WireframePreview({ screen }: { screen: string }) {
@@ -827,13 +778,15 @@ export default function WireframesPage() {
                   <PenRenderer document={selectedWireframe.penData} className="flex-1" />
                   <DesignTokensSidebar tokens={extractDesignTokens(selectedWireframe.penData)} />
                 </div>
+              ) : selectedWireframe.content && selectedWireframe.title?.toLowerCase().includes('ui kit') ? (
+                /* Design System — render as visual UI components */
+                <DesignSystemRenderer content={selectedWireframe.content} />
+              ) : selectedWireframe.content && selectedWireframe.title?.toLowerCase().includes('wireframe') ? (
+                /* Wireframe — render as actual UI preview */
+                <WireframeVisualRenderer content={selectedWireframe.content} />
               ) : selectedWireframe.content ? (
-                /* Document-based wireframe/design system — render markdown content */
-                <div className="flex-1 overflow-y-auto p-6 bg-[var(--sidebar-accent)]">
-                  <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-8">
-                    <DocumentMarkdownRenderer content={selectedWireframe.content} />
-                  </div>
-                </div>
+                /* Fallback for other document types — use visual wireframe renderer */
+                <WireframeVisualRenderer content={selectedWireframe.content} />
               ) : (
                 <div className="flex-1 flex items-center justify-center p-8 bg-[var(--sidebar-accent)]">
                   <div className={cn(
