@@ -25,6 +25,7 @@
     "@react-email/components": "^1.0.8",
     "@types/archiver": "^7.0.0",
     "@webcontainer/api": "^1.6.1",
+    "@xyflow/react": "^12.10.2",
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.70.4",

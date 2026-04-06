@@ -53,22 +53,42 @@ export async function PATCH(
     });
 
     // ── Pipeline FSM Transition ────────────────────────────────────────
+    // Capture phase BEFORE transition — used as guard for side effects
+    const phaseBeforeTransition = await pipelineFSM.getProjectPhase(projectId);
+
     if (body.status === 'APPROVED') {
       const newPhase = await pipelineFSM.transition(projectId, 'user_approved');
-      console.log(`[Decision] FSM transition: user_approved → ${newPhase}`);
+      console.log(`[Decision] FSM transition: ${phaseBeforeTransition} → ${newPhase} (user_approved)`);
       logDecisionEvent(projectId, 'decision.approved', 'user', { decisionId, trigger: decision.trigger || '' }).catch(() => {});
+
+      // Update SDLC currentStage to match the new phase
+      const stageMap: Record<string, string> = {
+        SA_WORKING: 'Solution Design',
+        DO_WORKING: 'Development',
+        UX_WORKING: 'UX/UI Design',
+        UID_WORKING: 'UX/UI Design',
+        DEV_WORKING: 'Development',
+        COMPLETE: 'Maintenance & Improvement',
+      };
+      const newStage = stageMap[newPhase];
+      if (newStage) {
+        await prisma.project.update({ where: { id: projectId }, data: { currentStage: newStage } }).catch(() => {});
+      }
     } else if (body.status === 'REJECTED') {
       const newPhase = await pipelineFSM.transition(projectId, 'user_rejected');
-      console.log(`[Decision] FSM transition: user_rejected → ${newPhase}`);
+      console.log(`[Decision] FSM transition: ${phaseBeforeTransition} → ${newPhase} (user_rejected)`);
       logDecisionEvent(projectId, 'decision.rejected', 'user', { decisionId, trigger: decision.trigger || '' }).catch(() => {});
     }
 
     // ── Post-Approval Side Effects ────────────────────────────────────
+    // Phase guards: side effects only run if the FSM was in the correct approval phase.
+    // This prevents duplicate side effects when stale decisions are approved after the pipeline advanced.
     if (body.status === 'APPROVED') {
       const trigger = (decision.trigger || '').toLowerCase();
 
       // BRD approval → update document + move card + trigger PM→SA
-      if (trigger.includes('brd')) {
+      // Phase guard: only run if FSM was in BA_NEEDS_APPROVAL
+      if (trigger.includes('brd') && phaseBeforeTransition === 'BA_NEEDS_APPROVAL') {
         console.log(`[Decision] BRD approved for project ${projectId} — running side effects`);
 
         // Get project name for card titles
@@ -150,7 +170,8 @@ export async function PATCH(
       }
 
       // SDD approval → mark document approved, move card, trigger PM→TL
-      if (trigger.includes('sdd') || trigger.includes('architecture') || trigger.includes('system design')) {
+      // Phase guard: only run if FSM was in SA_NEEDS_APPROVAL
+      if ((trigger.includes('sdd') || trigger.includes('architecture') || trigger.includes('system design')) && phaseBeforeTransition === 'SA_NEEDS_APPROVAL') {
         console.log(`[Decision] SDD approved for project ${projectId} — running side effects`);
 
         const project = await prisma.project.findUnique({
@@ -235,7 +256,8 @@ export async function PATCH(
       }
 
       // UI approval → lock wireframes, create dev cards, prepare for DEV_WORKING
-      if (trigger.includes('ui') && (trigger.includes('approval') || trigger.includes('design'))) {
+      // Phase guard: only run if FSM was in UI_NEEDS_APPROVAL
+      if (trigger.includes('ui') && (trigger.includes('approval') || trigger.includes('design')) && phaseBeforeTransition === 'UI_NEEDS_APPROVAL') {
         console.log(`[Decision] UI approved for project ${projectId} — running side effects`);
 
         const project = await prisma.project.findUnique({
@@ -255,18 +277,23 @@ export async function PATCH(
           console.error('[Decision] Failed to lock design system:', e);
         }
 
-        // 2. Approve wireframes
+        // 2. Approve wireframes (both wireframe table AND document records)
         try {
           await prisma.wireframe.updateMany({
             where: { projectId },
             data: { status: 'APPROVED' },
           });
-          console.log(`[Decision] Wireframes → APPROVED`);
+          // Also update WIREFRAME documents (UID stores wireframes as Document type=WIREFRAME)
+          await prisma.document.updateMany({
+            where: { projectId, type: 'WIREFRAME' },
+            data: { status: 'APPROVED', locked: true },
+          });
+          console.log(`[Decision] Wireframes → APPROVED (table + documents)`);
         } catch (e) {
           console.error('[Decision] Failed to approve wireframes:', e);
         }
 
-        // 3. Move UX Design card to DONE
+        // 3. Move UX Design + UI Interfaces cards to DONE
         try {
           const uxCard = await prisma.card.findFirst({
             where: { projectId, title: { contains: 'UX Design' } },
@@ -278,8 +305,18 @@ export async function PATCH(
             });
             console.log(`[Decision] UX Design card → DONE`);
           }
+          const uidCard = await prisma.card.findFirst({
+            where: { projectId, title: { contains: 'UI Interfaces' } },
+          });
+          if (uidCard) {
+            await prisma.card.update({
+              where: { id: uidCard.id },
+              data: { state: 'DONE' },
+            });
+            console.log(`[Decision] UI Interfaces card → DONE`);
+          }
         } catch (e) {
-          console.error('[Decision] Failed to update UX card:', e);
+          console.error('[Decision] Failed to update UX/UID cards:', e);
         }
 
         // 4. Create Development card for TL
@@ -315,7 +352,8 @@ export async function PATCH(
       }
 
       // Scaffolding approval → move card to DONE, prepare for UX_WORKING
-      if (trigger.includes('scaffold') || trigger.includes('project setup') || trigger.includes('devops')) {
+      // Phase guard: only run if FSM was in DO_NEEDS_APPROVAL
+      if ((trigger.includes('scaffold') || trigger.includes('project setup') || trigger.includes('devops')) && phaseBeforeTransition === 'DO_NEEDS_APPROVAL') {
         console.log(`[Decision] Scaffolding approved for project ${projectId} — running side effects`);
 
         const project = await prisma.project.findUnique({

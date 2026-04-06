@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Code2, FileText, Settings, TestTube, Copy, Download,
+  Code2, FileText, Settings, TestTube, Copy, Download, Archive,
   Search, ChevronRight, ChevronDown, Check, File, Upload,
   Play, Square, Terminal, Loader2, CheckCircle2, XCircle, Clock,
 } from 'lucide-react';
@@ -450,6 +450,9 @@ export default function CodePage() {
 
   // Push modal state
   const [pushModalOpen, setPushModalOpen] = useState(false);
+
+  // Download all state
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const [gitConfig, setGitConfig] = useState<{
     hasToken: boolean;
     repoOwner?: string;
@@ -608,6 +611,27 @@ export default function CodePage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadAll = async () => {
+    setDownloadingAll(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/export`);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `project-export.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download all failed:', err);
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
+
   // Code execution
   const executableLanguage = selected ? getExecutableLanguage(selected.name) : null;
   const canRun = !!executableLanguage && !!selectedContent && (selected?.type === 'CODE' || selected?.type === 'TEST');
@@ -753,9 +777,24 @@ export default function CodePage() {
               <Code2 className="w-5 h-5 text-amber" />
               Generated Files
             </h1>
-            <Badge variant="outline" className="text-[10px] bg-white/[0.04]">
-              {artifacts.length}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px] px-2 bg-amber/10 text-amber border-amber/20 hover:bg-amber/20"
+                onClick={handleDownloadAll}
+                disabled={downloadingAll || artifacts.length === 0}
+              >
+                {downloadingAll ? (
+                  <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Exporting...</>
+                ) : (
+                  <><Archive className="w-3 h-3 mr-1" /> Download All</>
+                )}
+              </Button>
+              <Badge variant="outline" className="text-[10px] bg-white/[0.04]">
+                {artifacts.length}
+              </Badge>
+            </div>
           </div>
 
           {/* Filter tabs */}

@@ -1,6 +1,9 @@
 import type {
   Project,
   Card,
+  CardWithSignoffs,
+  SignoffAgent,
+  SignoffInfo,
   Decision,
   Agent,
   AdminUser,
@@ -26,7 +29,7 @@ export const mapCardType = (t: string): Card['type'] => {
 export const mapCardState = (s: string): Card['state'] => {
   const map: Record<string, Card['state']> = {
     PLANNED: 'Planned', IN_PROGRESS: 'In Progress', UNDER_REVIEW: 'Under Review',
-    TESTING: 'Testing', BLOCKED: 'Blocked', DONE: 'Done', RELEASED: 'Released',
+    TESTING: 'Testing', AWAITING_SIGNOFF: 'Awaiting Signoff', BLOCKED: 'Blocked', DONE: 'Done', RELEASED: 'Released',
   };
   return map[s] ?? 'Planned';
 };
@@ -34,7 +37,7 @@ export const mapCardState = (s: string): Card['state'] => {
 export const cardStateToDb = (s: Card['state']): string => {
   const map: Record<Card['state'], string> = {
     'Planned': 'PLANNED', 'In Progress': 'IN_PROGRESS', 'Under Review': 'UNDER_REVIEW',
-    'Testing': 'TESTING', 'Blocked': 'BLOCKED', 'Done': 'DONE', 'Released': 'RELEASED',
+    'Testing': 'TESTING', 'Awaiting Signoff': 'AWAITING_SIGNOFF', 'Blocked': 'BLOCKED', 'Done': 'DONE', 'Released': 'RELEASED',
   };
   return map[s] ?? 'PLANNED';
 };
@@ -173,6 +176,64 @@ export async function updateCardState(projectId: string, cardId: string, newStat
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Failed to update card (${res.status})`);
   }
+}
+
+// ─── Cards with Quad-Layer Sign-offs ─────────────────────────────────────────
+
+const SIGNOFF_AGENTS: SignoffAgent[] = ['QA', 'SEC', 'DO', 'PE'];
+const SIGNOFF_AGENT_NAMES: Record<SignoffAgent, string> = {
+  QA: 'QA Engineer', SEC: 'Security Engineer', DO: 'DevOps Engineer', PE: 'Platform Engineer',
+};
+
+function computeSignoffs(comments: any[]): Record<SignoffAgent, SignoffInfo> {
+  const result = {} as Record<SignoffAgent, SignoffInfo>;
+  for (const agent of SIGNOFF_AGENTS) {
+    const match = comments?.find((c: any) => c.agentName?.toUpperCase() === agent);
+    if (match) {
+      const status = match.type === 'SIGN_OFF' ? 'approved' : match.type === 'REJECTION' || match.type === 'REWORK_REQUEST' ? 'rejected' : 'pending';
+      result[agent] = { agent, status, agentName: SIGNOFF_AGENT_NAMES[agent], content: match.content, timestamp: match.createdAt };
+    } else {
+      result[agent] = { agent, status: 'pending', agentName: SIGNOFF_AGENT_NAMES[agent] };
+    }
+  }
+  return result;
+}
+
+function computeStatusLabel(signoffs: Record<SignoffAgent, SignoffInfo>): string {
+  const statuses = Object.values(signoffs);
+  const approvedCount = statuses.filter(s => s.status === 'approved').length;
+  const hasRejected = statuses.some(s => s.status === 'rejected');
+  if (hasRejected) return 'Needs Rework';
+  if (approvedCount === 4) return 'Finalizing';
+  if (signoffs.SEC.status === 'pending' && approvedCount >= 1) return 'Needs Security Review';
+  if (approvedCount > 0) return 'Approvals Pending';
+  return 'In Review';
+}
+
+export async function fetchCardsWithSignoffs(projectId: string): Promise<CardWithSignoffs[]> {
+  const data = await apiFetch<any[]>(`/api/projects/${projectId}/cards?include=signoffs`);
+  return data.map((c) => {
+    const signoffs = computeSignoffs(c.comments ?? []);
+    const approvedCount = Object.values(signoffs).filter(s => s.status === 'approved').length;
+    return {
+      card_id: c.id,
+      type: mapCardType(c.type),
+      title: c.title,
+      description: c.description ?? '',
+      state: mapCardState(c.state),
+      owner_agent: c.ownerAgent?.shortName ?? c.ownerAgentId ?? '',
+      parent_id: c.parentId ?? null,
+      children: c.children?.map((ch: any) => ch.id) ?? [],
+      priority: mapPriority(c.priority),
+      created_at: c.createdAt,
+      updated_at: c.updatedAt,
+      linked_decision_id: c.linkedDecisionId ?? undefined,
+      module: c.module ?? undefined,
+      signoffs,
+      progress: Math.round((approvedCount / 4) * 100),
+      statusLabel: computeStatusLabel(signoffs),
+    };
+  });
 }
 
 // ─── Agents ──────────────────────────────────────────────────────────────────

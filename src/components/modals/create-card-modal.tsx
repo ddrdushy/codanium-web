@@ -16,7 +16,7 @@ import { Loader2 } from 'lucide-react';
 // Map frontend state/type/priority names to DB enum values
 const stateToDb: Record<CardState, string> = {
   'Planned': 'PLANNED', 'In Progress': 'IN_PROGRESS', 'Under Review': 'UNDER_REVIEW',
-  'Testing': 'TESTING', 'Blocked': 'BLOCKED', 'Done': 'DONE', 'Released': 'RELEASED',
+  'Testing': 'TESTING', 'Awaiting Signoff': 'AWAITING_SIGNOFF', 'Blocked': 'BLOCKED', 'Done': 'DONE', 'Released': 'RELEASED',
 };
 const typeToDb: Record<string, string> = {
   'Epic': 'EPIC', 'Feature': 'FEATURE', 'Task': 'TASK', 'QA': 'QA', 'DecisionBlocker': 'DECISION_BLOCKER',
@@ -31,7 +31,7 @@ const dbToType: Record<string, CardType> = {
 };
 const dbToState: Record<string, CardState> = {
   PLANNED: 'Planned', IN_PROGRESS: 'In Progress', UNDER_REVIEW: 'Under Review',
-  TESTING: 'Testing', BLOCKED: 'Blocked', DONE: 'Done', RELEASED: 'Released',
+  TESTING: 'Testing', AWAITING_SIGNOFF: 'Awaiting Signoff', BLOCKED: 'Blocked', DONE: 'Done', RELEASED: 'Released',
 };
 const dbToPriority: Record<string, string> = {
   LOW: 'low', MEDIUM: 'medium', HIGH: 'high', CRITICAL: 'critical',

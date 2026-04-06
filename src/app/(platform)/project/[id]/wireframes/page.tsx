@@ -29,6 +29,8 @@ interface Wireframe {
   components: number;
   version: number;
   penData?: PenDocument | null;
+  content?: string | null;       // Markdown content for document-based wireframes
+  isDocument?: boolean;           // True if this came from the documents table
 }
 
 // Sample .pen document for demo rendering
@@ -107,6 +109,63 @@ const deviceIcon: Record<string, React.ElementType> = {
   mobile: Smartphone,
   tablet: Tablet,
 };
+
+// Lightweight markdown renderer for document-based wireframes (no external dep)
+function DocumentMarkdownRenderer({ content }: { content: string }) {
+  // Parse markdown into simple HTML-like structure
+  const lines = content.split('\n');
+  const elements: React.ReactNode[] = [];
+  let listItems: string[] = [];
+  let inList = false;
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`list-${elements.length}`}>
+          {listItems.map((li, j) => <li key={j}>{li}</li>)}
+        </ul>
+      );
+      listItems = [];
+    }
+    inList = false;
+  };
+
+  lines.forEach((line, i) => {
+    const trimmed = line.trim();
+
+    // Empty line
+    if (!trimmed) {
+      flushList();
+      return;
+    }
+
+    // Headings
+    if (trimmed.startsWith('### ')) { flushList(); elements.push(<h3 key={i}>{trimmed.slice(4)}</h3>); return; }
+    if (trimmed.startsWith('## ')) { flushList(); elements.push(<h2 key={i}>{trimmed.slice(3)}</h2>); return; }
+    if (trimmed.startsWith('# ')) { flushList(); elements.push(<h1 key={i}>{trimmed.slice(2)}</h1>); return; }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}$/.test(trimmed)) { flushList(); elements.push(<hr key={i} />); return; }
+
+    // List items
+    if (/^[-*]\s/.test(trimmed)) {
+      inList = true;
+      listItems.push(trimmed.replace(/^[-*]\s+/, ''));
+      return;
+    }
+
+    // Paragraphs
+    flushList();
+    // Handle bold/code inline
+    const rendered = trimmed
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`(.+?)`/g, '<code>$1</code>');
+    elements.push(<p key={i} dangerouslySetInnerHTML={{ __html: rendered }} />);
+  });
+
+  flushList();
+  return <>{elements}</>;
+}
 
 // ASCII-art style wireframe preview components
 function WireframePreview({ screen }: { screen: string }) {
@@ -250,8 +309,14 @@ function WireframePreview({ screen }: { screen: string }) {
   );
 }
 
-const dbWfStatus: Record<string, Wireframe['status']> = { DRAFT: 'draft', REVIEW: 'review', APPROVED: 'approved' };
-const dbDevice: Record<string, Wireframe['device']> = { DESKTOP: 'desktop', MOBILE: 'mobile', TABLET: 'tablet' };
+const dbWfStatus: Record<string, Wireframe['status']> = {
+  DRAFT: 'draft', REVIEW: 'review', APPROVED: 'approved',
+  draft: 'draft', review: 'review', approved: 'approved',
+};
+const dbDevice: Record<string, Wireframe['device']> = {
+  DESKTOP: 'desktop', MOBILE: 'mobile', TABLET: 'tablet',
+  desktop: 'desktop', mobile: 'mobile', tablet: 'tablet',
+};
 
 function formatRelative(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -271,10 +336,12 @@ function mapApiWireframe(w: any): Wireframe {
     device: dbDevice[w.device] ?? 'desktop',
     owner: w.owner ?? 'Unknown',
     ownerAvatar: w.ownerAvatar ?? '🎨',
-    lastUpdated: w.updatedAt ? formatRelative(w.updatedAt) : 'just now',
+    lastUpdated: w.updatedAt ?? w.lastUpdated ? formatRelative(w.updatedAt ?? w.lastUpdated) : 'just now',
     components: w.components ?? 0,
     version: w.version ?? 1,
     penData: w.penData ?? null,
+    content: w.content ?? null,
+    isDocument: w.isDocument ?? false,
   };
 }
 
@@ -764,6 +831,15 @@ export default function WireframesPage() {
                 <div className="flex-1 flex overflow-hidden">
                   <PenRenderer document={selectedWireframe.penData} className="flex-1" />
                   <DesignTokensSidebar tokens={extractDesignTokens(selectedWireframe.penData)} />
+                </div>
+              ) : selectedWireframe.content ? (
+                /* Document-based wireframe/design system — render markdown content */
+                <div className="flex-1 overflow-y-auto p-6 bg-[var(--sidebar-accent)]">
+                  <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-6">
+                    <div className="prose prose-invert prose-sm max-w-none [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-foreground [&_h1]:mb-3 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:text-foreground [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-foreground/80 [&_h3]:mt-4 [&_h3]:mb-1.5 [&_p]:text-xs [&_p]:text-muted-foreground [&_p]:leading-relaxed [&_p]:mb-2 [&_ul]:text-xs [&_ul]:text-muted-foreground [&_ul]:mb-2 [&_li]:mb-0.5 [&_li]:text-muted-foreground [&_hr]:border-border [&_hr]:my-4 [&_strong]:text-foreground/90 [&_code]:text-amber [&_code]:text-[11px] [&_code]:bg-amber/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded">
+                      <DocumentMarkdownRenderer content={selectedWireframe.content} />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center p-8 bg-[var(--sidebar-accent)]">

@@ -24,11 +24,12 @@ import { cn } from '@/lib/utils';
 import { ColumnSkeleton } from '@/components/ui/skeleton';
 import {
   Filter, SlidersHorizontal, Layers, Box, Wrench,
-  FlaskConical, AlertOctagon, LayoutGrid, BarChart3,
+  FlaskConical, AlertOctagon, LayoutGrid, BarChart3, ClipboardCheck,
   CheckCircle2, Circle, Minus, AlertTriangle, Bot, Plus, GripVertical,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CreateCardModal } from '@/components/modals/create-card-modal';
+import { SignoffBoard } from './signoff-board';
 
 const STATES: CardState[] = ['Planned', 'In Progress', 'Under Review', 'Testing', 'Blocked', 'Done', 'Released'];
 
@@ -59,6 +60,7 @@ const MILESTONES: MilestonePhase[] = [
 const viewModes = [
   { key: 'board' as const, label: 'Board', icon: LayoutGrid },
   { key: 'milestones' as const, label: 'Milestones', icon: BarChart3 },
+  { key: 'signoffs' as const, label: 'Sign-offs', icon: ClipboardCheck },
 ];
 
 // ─── Milestone Card Component ───
@@ -256,7 +258,7 @@ export function BoardView() {
   const [activeFilter, setActiveFilter] = useState<CardType | 'All'>('All');
   const [createCardOpen, setCreateCardOpen] = useState(false);
   const [createCardState, setCreateCardState] = useState<CardState>('Planned');
-  const [viewMode, setViewMode] = useState<'board' | 'milestones'>('board');
+  const [viewMode, setViewMode] = useState<'board' | 'milestones' | 'signoffs'>('board');
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
 
@@ -439,7 +441,7 @@ export function BoardView() {
 
       {/* View content */}
       <AnimatePresence mode="wait">
-        {viewMode === 'board' ? (
+        {viewMode === 'board' && (
           <motion.div
             key="board"
             initial={{ opacity: 0, x: -12 }}
@@ -484,7 +486,9 @@ export function BoardView() {
               </DragOverlay>
             </DndContext>
           </motion.div>
-        ) : (
+        )}
+
+        {viewMode === 'milestones' && (
           <motion.div
             key="milestones"
             initial={{ opacity: 0, x: 12 }}
@@ -502,6 +506,19 @@ export function BoardView() {
             ) : (
               <MilestonesView cards={filteredCards} />
             )}
+          </motion.div>
+        )}
+
+        {viewMode === 'signoffs' && (
+          <motion.div
+            key="signoffs"
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 12 }}
+            transition={{ duration: 0.2 }}
+            className="flex-1 overflow-hidden flex flex-col"
+          >
+            <SignoffBoard projectId={projectId} />
           </motion.div>
         )}
       </AnimatePresence>

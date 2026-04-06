@@ -7,6 +7,7 @@ import {
   CardState as LifecycleCardState,
   CardType as LifecycleCardType,
 } from '@/lib/ai/orchestration/card-lifecycle';
+import { recalculateProjectCompletion } from '@/lib/completion-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -191,6 +192,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         console.error(`[Card PATCH] Git branch operation failed for card ${cardId}:`, gitErr);
         // Non-fatal: card state change succeeds even if git fails
       }
+    }
+
+    // Recalculate project completion when card state changes
+    if (body.state) {
+      await recalculateProjectCompletion(projectId).catch(console.error);
     }
 
     return NextResponse.json(card);

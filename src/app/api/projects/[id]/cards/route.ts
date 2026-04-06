@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuthOrApiKey } from '@/lib/auth-guard';
 import { validateBody } from '@/lib/validations/validate';
 import { createCardSchema } from '@/lib/validations/schemas';
+import { recalculateProjectCompletion } from '@/lib/completion-calculator';
 import type { CardState, CardType, Priority } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
@@ -63,22 +64,34 @@ export async function GET(request: NextRequest, context: RouteContext) {
       where.module = module;
     }
 
+    // Build include clause — optionally add sign-off comments
+    const includeSignoffs = searchParams.get('include') === 'signoffs';
+    const includeClause: Record<string, unknown> = {
+      assignee: {
+        select: { id: true, name: true, email: true, avatarColor: true },
+      },
+      ownerAgent: {
+        select: { id: true, name: true, shortName: true, avatar: true },
+      },
+      children: {
+        select: { id: true, title: true, state: true, priority: true },
+      },
+      _count: {
+        select: { children: true },
+      },
+    };
+
+    if (includeSignoffs) {
+      includeClause.comments = {
+        where: { type: { in: ['SIGN_OFF', 'REJECTION', 'REWORK_REQUEST'] } },
+        select: { id: true, agentName: true, type: true, content: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      };
+    }
+
     const cards = await prisma.card.findMany({
       where,
-      include: {
-        assignee: {
-          select: { id: true, name: true, email: true, avatarColor: true },
-        },
-        ownerAgent: {
-          select: { id: true, name: true, shortName: true, avatar: true },
-        },
-        children: {
-          select: { id: true, title: true, state: true, priority: true },
-        },
-        _count: {
-          select: { children: true },
-        },
-      },
+      include: includeClause,
       orderBy: [
         { priority: 'desc' },
         { updatedAt: 'desc' },
@@ -148,6 +161,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
         },
       },
     });
+
+    // Recalculate project completion when cards are created
+    await recalculateProjectCompletion(projectId).catch(console.error);
 
     return NextResponse.json(card, { status: 201 });
   } catch (error) {

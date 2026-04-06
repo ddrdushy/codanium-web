@@ -2,6 +2,8 @@ import { taskQueue } from './task-queue';
 import { eventBus } from './event-bus';
 import { agentLoop } from './agent-loop';
 import { isVSCodeConnected } from '@/lib/vscode-bridge';
+import { agentStateManager } from './state-manager';
+import { recalculateProjectCompletion } from '@/lib/completion-calculator';
 
 // Development agents that must run from VS Code (code writers only)
 // TL (coordinator) and SEC (reviewer) are NOT gated — they don't write files
@@ -79,6 +81,14 @@ export class TaskProcessor {
         latencyMs: Date.now() - startTime,
       });
 
+      // Reset agent status to IDLE after successful completion
+      if (task.routedTo) {
+        await agentStateManager.setIdle(task.projectId, task.routedTo);
+      }
+
+      // Recalculate project completion after task completes
+      await recalculateProjectCompletion(task.projectId).catch(console.error);
+
       await eventBus.emit({
         type: 'task.completed',
         actor: task.routedTo,
@@ -90,6 +100,11 @@ export class TaskProcessor {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       await taskQueue.fail(task.id, errorMsg);
+
+      // Reset agent status to IDLE on failure so it doesn't stay stuck in WORKING
+      if (task.routedTo) {
+        await agentStateManager.setIdle(task.projectId, task.routedTo);
+      }
 
       await eventBus.emit({
         type: 'task.failed',

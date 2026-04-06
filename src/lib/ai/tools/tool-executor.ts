@@ -700,16 +700,16 @@ async function handleUpdateDocument(args: Record<string, any>, projectId: string
   }
 
   const newContent = args.mode === 'append'
-    ? `${existing.content}\n\n${args.content}`
-    : args.content;
+    ? `${existing.content}\n\n${args.content || ''}`
+    : (args.content || existing.content);
 
   const doc = await prisma.document.update({
     where: { id: existing.id },
     data: {
       content: newContent,
       version: { increment: 1 },
-      wordCount: newContent.split(/\s+/).length,
-      sections: (newContent.match(/^#{1,3}\s/gm) || []).length,
+      wordCount: (newContent || '').split(/\s+/).length,
+      sections: ((newContent || '').match(/^#{1,3}\s/gm) || []).length,
     },
   });
 
@@ -807,14 +807,32 @@ async function handleCreateDecision(
   const options: Array<{ label: string; pros: string; cons: string }> = args.options || [];
   const hasOptions = options.length > 0;
 
-  // Deduplication: if a decision with the same trigger already exists for this project, return it
-  const existing = await prisma.decision.findFirst({
-    where: { projectId, trigger: args.title },
-    include: { options: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  // Deduplication: if a decision with a similar trigger already exists for this project, return it
+  // Uses keyword matching to catch LLM variations like "SDD Approval: calculator" vs "SDD Approval: Simple Calculator App"
+  const triggerTitle = args.title || '';
+  const triggerKeywords = triggerTitle.toLowerCase().match(/\b(brd|sdd|scaffold|ui design|ux|wireframe|architecture|deploy)\b/g);
+  const primaryKeyword = triggerKeywords?.[0] || '';
+
+  let existing = null;
+  if (primaryKeyword) {
+    // Fuzzy match: find any decision with the same primary keyword (brd/sdd/scaffold/ui)
+    const allDecisions = await prisma.decision.findMany({
+      where: { projectId },
+      include: { options: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    existing = allDecisions.find(d => d.trigger.toLowerCase().includes(primaryKeyword));
+  } else {
+    // Exact match fallback
+    existing = await prisma.decision.findFirst({
+      where: { projectId, trigger: triggerTitle },
+      include: { options: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   if (existing) {
-    console.log(`[ToolExecutor] Decision already exists: "${args.title}" (${existing.id}) — skipping duplicate`);
+    console.log(`[ToolExecutor] Decision already exists: "${existing.trigger}" (${existing.id}) — skipping duplicate for "${triggerTitle}"`);
     return {
       decisionId: existing.id,
       trigger: existing.trigger,

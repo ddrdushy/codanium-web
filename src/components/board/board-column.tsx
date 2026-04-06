@@ -8,13 +8,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus } from 'lucide-react';
 
 const stateConfig: Record<CardState, { color: string; dot: string; glow?: string }> = {
-  'Planned':      { color: 'text-zinc-400',     dot: 'bg-zinc-500' },
-  'In Progress':  { color: 'text-blue-400',     dot: 'bg-blue-500',     glow: 'shadow-[0_0_8px_rgba(59,130,246,0.3)]' },
-  'Under Review': { color: 'text-violet-400',   dot: 'bg-violet-500' },
-  'Testing':      { color: 'text-cyan-400',     dot: 'bg-cyan-500' },
-  'Blocked':      { color: 'text-red-400',      dot: 'bg-red-500',      glow: 'shadow-[0_0_8px_rgba(239,68,68,0.3)]' },
-  'Done':         { color: 'text-emerald-400',  dot: 'bg-emerald-500' },
-  'Released':     { color: 'text-amber',        dot: 'bg-amber',        glow: 'shadow-[0_0_8px_rgba(245,158,11,0.3)]' },
+  'Planned':           { color: 'text-zinc-400',     dot: 'bg-zinc-500' },
+  'In Progress':       { color: 'text-blue-400',     dot: 'bg-blue-500',     glow: 'shadow-[0_0_8px_rgba(59,130,246,0.3)]' },
+  'Under Review':      { color: 'text-violet-400',   dot: 'bg-violet-500' },
+  'Testing':           { color: 'text-cyan-400',     dot: 'bg-cyan-500' },
+  'Awaiting Signoff':  { color: 'text-orange-400',   dot: 'bg-orange-500',   glow: 'shadow-[0_0_8px_rgba(249,115,22,0.3)]' },
+  'Blocked':           { color: 'text-red-400',      dot: 'bg-red-500',      glow: 'shadow-[0_0_8px_rgba(239,68,68,0.3)]' },
+  'Done':              { color: 'text-emerald-400',  dot: 'bg-emerald-500' },
+  'Released':          { color: 'text-amber',        dot: 'bg-amber',        glow: 'shadow-[0_0_8px_rgba(245,158,11,0.3)]' },
 };
 
 interface BoardColumnProps {

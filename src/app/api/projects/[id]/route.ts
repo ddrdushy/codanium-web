@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuthOrApiKey } from '@/lib/auth-guard';
+import { recalculateProjectCompletion } from '@/lib/completion-calculator';
 
 export const dynamic = 'force-dynamic';
 
@@ -100,6 +101,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
       agentsByGroup[agent.group].push(agent);
     }
 
+    // Live-calculate completion from card states
+    const totalCards = project.cards.length;
+    const doneCards = project.cards.filter((c: { state: string }) => c.state === 'DONE').length;
+    const liveCompletion = totalCards > 0
+      ? Math.round((doneCards / totalCards) * 100)
+      : project.completion;
+
     const result = {
       id: project.id,
       name: project.name,
@@ -107,7 +115,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       status: project.status,
       currentStage: project.currentStage,
       pipelinePhase: project.pipelinePhase,
-      completion: project.completion,
+      completion: liveCompletion,
       color: project.color,
       owner: project.owner,
       members: project.members.map((m) => ({

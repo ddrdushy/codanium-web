@@ -1,6 +1,6 @@
 // ─── Card Types ───
 export type CardType = 'Epic' | 'Feature' | 'Task' | 'QA' | 'DecisionBlocker';
-export type CardState = 'Planned' | 'In Progress' | 'Under Review' | 'Testing' | 'Blocked' | 'Done' | 'Released';
+export type CardState = 'Planned' | 'In Progress' | 'Under Review' | 'Testing' | 'Awaiting Signoff' | 'Blocked' | 'Done' | 'Released';
 
 export interface Card {
   card_id: string;
@@ -16,6 +16,24 @@ export interface Card {
   updated_at: string;
   linked_decision_id?: string;
   module?: string;
+}
+
+// ─── Quad-Layer Sign-off Types ───
+export type SignoffAgent = 'QA' | 'SEC' | 'DO' | 'PE';
+export type SignoffStatus = 'approved' | 'rejected' | 'pending';
+
+export interface SignoffInfo {
+  agent: SignoffAgent;
+  status: SignoffStatus;
+  agentName: string;       // Full name for tooltip
+  content?: string;        // Sign-off message
+  timestamp?: string;
+}
+
+export interface CardWithSignoffs extends Card {
+  signoffs: Record<SignoffAgent, SignoffInfo>;
+  progress: number;        // 0-100
+  statusLabel: string;     // "In Review", "Approvals Pending", etc.
 }
 
 // ─── Decision Types ───

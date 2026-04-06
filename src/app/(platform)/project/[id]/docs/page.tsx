@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import {
   FileText, Plus, Search, ChevronRight, Clock, CheckCircle2,
   Edit3, Eye, Download, MoreHorizontal, BookOpen, Code2,
-  FileCode2, ScrollText, Layers, Bot, Lock, Users
+  FileCode2, ScrollText, Layers, Bot, Lock, Users, Network
 } from 'lucide-react';
+import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -232,6 +233,13 @@ export default function DocsPage() {
                   <Button size="sm" variant="outline" className="h-7 text-[11px]">
                     <Download className="w-3 h-3 mr-1" /> Export
                   </Button>
+                  {selectedDoc.type === 'sdd' && (
+                    <Link href={`/project/${projectId}/docs/architecture`}>
+                      <Button size="sm" variant="outline" className="h-7 text-[11px] bg-amber/10 text-amber border-amber/20 hover:bg-amber/20">
+                        <Network className="w-3 h-3 mr-1" /> View Architecture
+                      </Button>
+                    </Link>
+                  )}
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
                     <MoreHorizontal className="w-3.5 h-3.5" />
                   </Button>
