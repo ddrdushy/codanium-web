@@ -88,8 +88,9 @@ export async function GET(
         // Non-fatal — will discover artifacts on first poll
       }
 
-      // Poll for new/updated artifacts every 2s (faster than activity stream
-      // since code delivery should feel real-time)
+      // Poll for new/updated artifacts every 500ms for near-real-time code
+      // delivery. Lightweight query (indexed on projectId + updatedAt) so
+      // the faster cadence doesn't overload the DB.
       const pollInterval = setInterval(async () => {
         if (!alive) {
           clearInterval(pollInterval);
@@ -161,7 +162,7 @@ export async function GET(
         } catch (err) {
           console.error('[ArtifactStream] Poll error:', err);
         }
-      }, 2000);
+      }, 500);
 
       // Heartbeat every 15s
       const heartbeatInterval = setInterval(() => {

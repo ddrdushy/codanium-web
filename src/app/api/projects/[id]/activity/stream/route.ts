@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/projects/[id]/activity/stream
  * SSE endpoint for real-time project activity events.
- * Polls the Event table for project-level events every 3s.
+ * Polls the Event table for project-level events every 1s.
  */
 export async function GET(
   request: NextRequest,
@@ -41,7 +41,7 @@ export async function GET(
       // Send initial connection event
       send('connected', { projectId, timestamp: new Date().toISOString() });
 
-      // Poll loop — check for new events every 3s
+      // Poll loop — check for new events every 1s for snappy IDE updates
       const pollInterval = setInterval(async () => {
         if (!alive) {
           clearInterval(pollInterval);
@@ -77,7 +77,7 @@ export async function GET(
         } catch (err) {
           console.error('[ActivityStream] Poll error:', err);
         }
-      }, 3000);
+      }, 1000);
 
       // Heartbeat every 15s
       const heartbeatInterval = setInterval(() => {

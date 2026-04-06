@@ -231,6 +231,7 @@ model Project {
   webhookEndpoints     WebhookEndpoint[]
   memories             ProjectMemory[]
   codeExecutions       CodeExecution[]
+  terminalSessions     TerminalSession[]
 
   @@map("projects")
 }
@@ -1358,6 +1359,32 @@ model CodeExecution {
   @@index([projectId, status])
   @@index([createdAt])
   @@map("code_executions")
+}
+
+// ─── Terminal Sessions (IDE Terminal Execution) ──────────────────────────────
+
+model TerminalSession {
+  id          String        @id @default(cuid())
+  command     String        @db.Text         // Shell command to execute
+  cwd         String        @default("/app/workspaces") // Working directory
+  status      ExecutionStatus @default(QUEUED)
+  stdout      String        @default("") @db.Text
+  stderr      String        @default("") @db.Text
+  exitCode    Int?
+  durationMs  Int           @default(0)
+  errorMessage String?
+  triggeredBy String        @default("user") // "user" or agent shortName
+  projectId   String
+  createdAt   DateTime      @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([createdAt])
+  @@map("terminal_sessions")
 }
 
 enum ExecutionStatus {
