@@ -359,7 +359,33 @@ function checkLoops(loopState: LoopState): LoopWarning | null {
  * Strip raw tool call markup from ALL LLM providers before showing to user.
  * Handles XML, Anthropic, ChatML/Qwen, agent tags, and action markers.
  */
+// Complete list of all tool names that may appear in LLM output (case-insensitive).
+// Includes document tools, card/decision tools, filesystem tools, dev tools, and integrations.
+const ALL_TOOL_NAMES_PATTERN = '(?:' + [
+  // Document tools
+  'update_document', 'create_document', 'approve_document',
+  // Card / decision / memory
+  'create_card', 'update_card', 'create_decision', 'remember', 'task_progress',
+  // Filesystem
+  'read_file', 'write_file', 'edit_file', 'list_directory', 'glob', 'grep',
+  // Shell / build / test
+  'run_command', 'run_tests', 'run_build', 'run_code', 'run_analysis',
+  // Git
+  'git_commit', 'git_branch', 'git_diff',
+  // Pipeline / deploy
+  'trigger_deploy', 'create_pipeline', 'create_branch', 'create_pr', 'create_release',
+  // Web / consultation
+  'web_search', 'web_fetch', 'consult_agent', 'ask_user',
+  // Validation
+  'validate_code', 'validate_architecture', 'review_changes',
+].flatMap(n => [n, n.toUpperCase()]).join('|') + ')';
+
 function sanitizeContent(text: string): string {
+  // Build regex patterns dynamically from the complete tool list
+  const bracketlessRegex = new RegExp(`${ALL_TOOL_NAMES_PATTERN}\\s*\\{[\\s\\S]*?\\}`, 'g');
+  const arraySyntaxRegex = new RegExp(`\\[?\\s*${ALL_TOOL_NAMES_PATTERN}\\s*\\]?\\s*\\[[\\s\\S]*?\\]`, 'g');
+  const bracketedRegex = new RegExp(`\\[\\s*${ALL_TOOL_NAMES_PATTERN}\\s*(?:\\{[\\s\\S]*?\\}\\s*\\]|\\]\\s*\\{[\\s\\S]*?\\})\\s*`, 'g');
+
   return text
     // XML tool calls: <tool_call>...</tool_call>
     .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
@@ -370,13 +396,12 @@ function sanitizeContent(text: string): string {
     .replace(/<parameter=[^>]*>[\s\S]*?<\/parameter>/gi, '')
     // ChatML/Qwen: <|tool_call|>...<|end|>
     .replace(/<\|tool_call\|>[\s\S]*?<\|end\|>/gi, '')
-    // Bracketless tool calls: UPDATE_DOCUMENT{"type":"BRD",...} or create_document{"type":"SDD",...}
-    // Handles both UPPER and lower case tool names with JSON object {...}
-    .replace(/(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*\{[\s\S]*?\}/g, '')
-    // Tool calls with JSON array syntax: [create_document]["type","SDD","content","..."]
-    .replace(/\[?\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*\]?\s*\[[\s\S]*?\]/g, '')
-    // Bracketed tool calls: [UPDATE_DOCUMENT]{...} or [REMEMBER {...}]
-    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/g, '')
+    // Bracketless tool calls: tool_name {...}
+    .replace(bracketlessRegex, '')
+    // Array syntax: [tool_name][...] or tool_name [...]
+    .replace(arraySyntaxRegex, '')
+    // Bracketed: [tool_name]{...} or [tool_name {...}]
+    .replace(bracketedRegex, '')
     // Agent tags at start of lines: [BA], [SA], [TL], [ORC], etc.
     .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM|SEC|STC|JD|SD|AT|PF|SR|LLM|PRE|UI)\s*\]\s*/gm, '')
     // [ACTION:...] markers
@@ -658,19 +683,30 @@ export async function* agentLoop(input: AgentLoopInput): AsyncGenerator<SSEEvent
 HOW TO CALL TOOLS — MANDATORY FORMAT
 ═══════════════════════════════════════════════════════════
 
+You HAVE tools. You MUST use them. Never say "I don't have tools" — you DO.
+
 When you need to call a tool, you MUST output it in this EXACT format (one per line):
 
 [TOOL_NAME] {"param1": "value1", "param2": "value2"}
 
+YOUR AVAILABLE TOOLS:
+- [CREATE_DOCUMENT] {"type": "BRD"|"SDD"|"API_SPEC", "title": "...", "content": "# markdown content..."}
+- [UPDATE_DOCUMENT] {"type": "BRD"|"SDD", "title": "...", "content": "# updated content..."}
+- [APPROVE_DOCUMENT] {"type": "BRD"|"SDD"}
+- [CREATE_DECISION] {"title": "...", "description": "...", "options": [{"label": "...", "pros": "...", "cons": "..."}]}
+- [REMEMBER] {"key": "...", "value": "..."}
+- [UPDATE_CARD] {"cardId": "...", "state": "DONE"|"IN_PROGRESS"}
+- [TASK_PROGRESS] {"progress": 50, "message": "Working on section 2..."}
+
 Examples:
 [REMEMBER] {"key": "user_profile", "value": "Developer — technical, wants architecture control"}
-[REMEMBER] {"key": "qa_1", "value": "Q: First action on app open? | A: Dashboard view showing current spending vs budget"}
+[CREATE_DOCUMENT] {"type": "SDD", "title": "System Design Document", "content": "# System Design Document\\n\\n## 1. Architecture Overview\\n..."}
 [UPDATE_DOCUMENT] {"type": "BRD", "title": "Business Requirements Document", "content": "# Business Requirements Document\\n\\n## 1. Executive Summary\\n..."}
 [CREATE_DECISION] {"title": "BRD Approval: Project Name", "description": "Review the BRD", "options": [{"label": "Approve", "pros": "Ready to proceed"}, {"label": "Request Changes", "pros": "Refine further"}]}
-[UPDATE_CARD] {"cardId": "xxx", "state": "DONE"}
 
 RULES:
 - You MUST use this [TOOL_NAME] {json} format — never just describe what you would do
+- NEVER say "I don't have tools" — use the format above instead
 - Tool name must be UPPERCASE with underscores (e.g., REMEMBER, UPDATE_DOCUMENT, CREATE_DECISION)
 - The JSON must be valid and on the same line or immediately after the tool name
 - You can call multiple tools in one response — put each on its own line
@@ -818,6 +854,15 @@ RULES:
           const DOCUMENT_AGENTS = ['BA', 'SA', 'UX', 'TL'];
           const maxTokens = DOCUMENT_AGENTS.includes(currentAgent) ? 16384 : 4096;
 
+          // Only pass native tools to providers that reliably support function calling.
+          // Other providers use text-based tool extraction ([TOOL_NAME] {json} format).
+          // Only pass native OpenAI-style tools to providers known to handle them.
+          // Note: mistral-small-latest and mistral-large-latest support tools,
+          // but codestral models don't. We include mistral here since we switched to mistral-small.
+          const NATIVE_TOOL_PROVIDERS = ['openai', 'anthropic', 'groq', 'mistral'];
+          const currentProvider = lastResolvedProvider ?? '';
+          const useNativeTools = toolDefs.length > 0 && NATIVE_TOOL_PROVIDERS.includes(currentProvider);
+
           for await (const chunk of llmGateway.stream({
             messages,
             model: modelOverride,
@@ -826,8 +871,8 @@ RULES:
             agentId: currentAgent,
             projectId: input.projectId,
             metadata: { userId: input.userId },
-            tools: toolDefs.length > 0 ? toolDefs : undefined,
-            toolChoice: toolDefs.length > 0 ? 'auto' : undefined,
+            tools: useNativeTools ? toolDefs : undefined,
+            toolChoice: useNativeTools ? 'auto' : undefined,
           }, fallbackConfig)) {
             if (chunk.thinking) {
               iterThinking += chunk.thinking;
@@ -895,12 +940,37 @@ RULES:
           if (iterContent && DOCUMENT_AGENTS.includes(currentAgent)) {
             // Guard 1: Response too large without using tool calls (agent dumping doc in chat)
             if (iterContent.length > 6000 && collectedToolCalls.length === 0) {
-              console.warn(`[OutputGuard] ${currentAgent} produced ${iterContent.length} chars in chat without tool calls — prompting section-based approach`);
-              messages.push({ role: 'assistant', content: iterContent });
-              messages.push({ role: 'user', content: 'IMPORTANT: Do NOT put document content directly in chat. Use [CREATE_DOCUMENT] and [UPDATE_DOCUMENT] tool calls to save content section-by-section. Generate 1-2 sections per tool call. Chat is for communication, artifacts are for content.' });
-              iterContent = '';
-              yield { type: 'info' as const, data: { message: 'Redirecting agent to use section-based document generation...' } };
-              throw new Error('Output guard — redirecting to tool-based generation');
+              // On later attempts, auto-save the content as a document instead of retrying forever
+              if (attempt >= 2) {
+                console.log(`[OutputGuard] ${currentAgent} produced ${iterContent.length} chars — auto-saving as document (attempt ${attempt + 1})`);
+                const docType = currentAgent === 'BA' ? 'BRD' : currentAgent === 'SA' ? 'SDD' : 'BRD';
+                const docTitle = docType === 'BRD' ? 'Business Requirements Document' : 'System Design Document';
+                try {
+                  const agentRecord = await prisma.agent.findFirst({
+                    where: { projectId: input.projectId, shortName: currentAgent },
+                    select: { id: true },
+                  });
+                  const autoSaveResult = await executeToolCalls(
+                    [{ id: `auto-${Date.now()}`, name: 'create_document', arguments: { type: docType, title: docTitle, content: iterContent } }],
+                    { projectId: input.projectId, agentShortName: currentAgent, agentId: agentRecord?.id ?? undefined, userId: input.userId },
+                  );
+                  yield { type: 'info' as const, data: { message: `✓ Auto-saved ${docType} document (${iterContent.length} chars)` } };
+                  yield { type: 'tool_result', data: { name: 'create_document', success: true, result: `${docType} saved` } };
+                  console.log(`[OutputGuard] ✓ Auto-saved ${docType} (${iterContent.length} chars)`, autoSaveResult);
+                } catch (autoSaveErr) {
+                  console.error(`[OutputGuard] Auto-save failed:`, autoSaveErr);
+                }
+                // Strip the document content from chat, keep just a summary
+                iterContent = `I've generated the ${docTitle} for your project. You can review the full document in the **Documents** section. The SDD covers architecture, tech stack, components, data models, and deployment strategy based on the approved BRD.`;
+                // Don't throw — let it succeed with the summary
+              } else {
+                console.warn(`[OutputGuard] ${currentAgent} produced ${iterContent.length} chars in chat without tool calls — prompting section-based approach`);
+                messages.push({ role: 'assistant', content: iterContent });
+                messages.push({ role: 'user', content: 'IMPORTANT: Do NOT put document content directly in chat. Use [CREATE_DOCUMENT] and [UPDATE_DOCUMENT] tool calls to save content section-by-section. Generate 1-2 sections per tool call. Chat is for communication, artifacts are for content.' });
+                iterContent = '';
+                yield { type: 'info' as const, data: { message: 'Redirecting agent to use section-based document generation...' } };
+                throw new Error('Output guard — redirecting to tool-based generation');
+              }
             }
 
             // Guard 2: Detect truncation — response ends abruptly
@@ -913,6 +983,29 @@ RULES:
               messages.push({ role: 'user', content: 'Your previous response was truncated. Please continue from where you left off and complete the document. Do NOT restart from the beginning.' });
               iterContent = ''; // Reset so the retry appends
               throw new Error('Response truncated — retrying with continuation');
+            }
+          }
+
+          // Guard 3: Detect "I don't have tools" refusal — model ignoring tool instructions
+          if (iterContent && collectedToolCalls.length === 0) {
+            const lower = iterContent.toLowerCase();
+            const isToolRefusal = lower.includes("don't have the") && (lower.includes('tool') || lower.includes('capability'))
+              || lower.includes("don't have the necessary tool")
+              || lower.includes("don't have tools")
+              || lower.includes("cannot assist with that")
+              || lower.includes("i'm not able to")
+              || (lower.includes("don't have") && lower.includes("generate") && lower.includes("document"));
+            if (isToolRefusal && attempt < MAX_LLM_ATTEMPTS - 1) {
+              console.warn(`[AgentLoop] ${currentAgent} refused to use tools (attempt ${attempt + 1}), retrying with tool nudge`);
+              messages.push({ role: 'assistant', content: iterContent });
+              messages.push({ role: 'user', content: `You DO have tools available. Use the [TOOL_NAME] {"param": "value"} format described in your system instructions. For example, to create the document, output:
+
+[CREATE_DOCUMENT] {"type": "SDD", "title": "System Design Document", "content": "# System Design Document\\n\\n## 1. Architecture Overview\\n...full content here..."}
+
+Do NOT say you don't have tools. Use the format above NOW.` });
+              iterContent = '';
+              yield { type: 'info' as const, data: { message: `${currentAgent} confused about tools — nudging to use text-based format...` } };
+              throw new Error('Tool refusal — retrying with nudge');
             }
           }
 
@@ -945,7 +1038,10 @@ RULES:
             || lowerErr.includes('fetch failed') || lowerErr.includes('econnrefused')
             || lowerErr.includes('econnreset') || lowerErr.includes('socket hang up')
             || lowerErr.includes('network') || lowerErr.includes('unavailable')
-            || lowerErr.includes('unknown api error');
+            || lowerErr.includes('unknown api error')
+            || lowerErr.includes('terminated') || lowerErr.includes('controller')
+            || lowerErr.includes('closed') || lowerErr.includes('aborted')
+            || lowerErr.includes('stream') || lowerErr.includes('enotfound');
           if (isRetryable && attempt < MAX_LLM_ATTEMPTS - 1) {
             try {
               const failedProviderName = fallbackConfig?.config.provider || lastResolvedProvider || 'unknown';
@@ -955,11 +1051,20 @@ RULES:
                 // so the next retry uses the correct provider, not just a model name
                 fallbackConfig = nextProvider;
                 modelOverride = nextProvider.config.defaultModel;
-                yield { type: 'info', data: { message: `Switching to fallback provider: ${nextProvider.config.provider}` } };
+                console.log(`[AgentLoop] ↪ Fallback: ${failedProviderName} → ${nextProvider.config.provider} (${nextProvider.config.defaultModel})`);
+                yield { type: 'info', data: { message: `Provider ${failedProviderName} failed — switching to ${nextProvider.config.provider} (${nextProvider.config.defaultModel})` } };
               }
             } catch { /* continue with current provider */ }
           }
         }
+      }
+
+      // Auto-promote working fallback provider to primary so we stop retrying broken ones
+      if (llmSuccess && fallbackConfig) {
+        const promotedProvider = fallbackConfig.config.provider;
+        const promotedModel = fallbackConfig.config.defaultModel;
+        yield { type: 'info', data: { message: `✓ ${promotedProvider} (${promotedModel}) is working — promoting to primary provider` } };
+        llmGateway.autoPromote(promotedProvider).catch(() => {}); // fire-and-forget, non-blocking
       }
 
       if (!llmSuccess) {

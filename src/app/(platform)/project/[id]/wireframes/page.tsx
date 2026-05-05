@@ -712,30 +712,6 @@ export default function WireframesPage() {
                     </Button>
                   )}
 
-                  {/* Export buttons (only for .pen wireframes) */}
-                  {selectedWireframe.penData && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-[11px]"
-                        onClick={handleExportHTML}
-                      >
-                        <FileCode className="w-3 h-3 mr-1" />
-                        Export HTML
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-[11px]"
-                        onClick={handleExportReact}
-                      >
-                        <Code className="w-3 h-3 mr-1" />
-                        Export React
-                      </Button>
-                    </>
-                  )}
-
                   {/* Device toggles */}
                   <div className="flex gap-0.5 bg-[var(--sidebar-accent)] rounded-md p-0.5">
                     {(['desktop', 'tablet', 'mobile'] as const).map(dev => {
@@ -774,8 +750,8 @@ export default function WireframesPage() {
 
               {/* Canvas */}
               {selectedWireframe.penData ? (
-                <div className="flex-1 flex overflow-hidden">
-                  <PenRenderer document={selectedWireframe.penData} className="flex-1" />
+                <div className="flex-1 flex min-h-0 overflow-hidden">
+                  <PenRenderer document={selectedWireframe.penData} className="flex-1 min-w-0" />
                   <DesignTokensSidebar tokens={extractDesignTokens(selectedWireframe.penData)} />
                 </div>
               ) : selectedWireframe.content && selectedWireframe.title?.toLowerCase().includes('ui kit') ? (

@@ -78,16 +78,12 @@ function stripAgentMarkers(content: string): string {
     .replace(/^\s*\*{0,2}\[\s*\/\s*ACTION\s*\]\*{0,2}/gm, '')
     .replace(/\[\s*DELEGATE\s*:\s*\w+\s*\]\s*$/gm, '')
     .replace(/^\s*\[\s*\/\s*DELEGATE\s*(?::\s*\w+\s*)?\]/gm, '')
-    // Bracketless tool calls: UPDATE_DOCUMENT{"type":"BRD",...} or REMEMBER{"key":"x",...}
-    // Handles both UPPER and lower case tool names with JSON object {...}
-    .replace(/(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*\{[\s\S]*?\}/g, '')
-    // Tool calls with JSON array syntax: [create_document]["type","SDD","content","..."]
-    // Some models output tool args as arrays instead of objects
-    .replace(/\[?\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*\]?\s*\[[\s\S]*?\]/g, '')
-    // Bracketed tool calls in two formats:
-    //   [UPDATE_DOCUMENT]{ "type": "BRD", ... }    (bracket then JSON)
-    //   [REMEMBER {"key":"x","value":"y"}]          (JSON inside brackets)
-    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|trigger_deploy|create_pipeline|create_branch|create_pr|create_release)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/g, '')
+    // Bracketless tool calls: tool_name {"key":"x",...} (covers all tool types incl. write_file, read_file, run_command)
+    .replace(/(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|RUN_COMMAND|RUN_TESTS|RUN_BUILD|RUN_ANALYSIS|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|READ_FILE|WRITE_FILE|EDIT_FILE|LIST_DIRECTORY|GLOB|GREP|GIT_COMMIT|GIT_BRANCH|GIT_DIFF|WEB_SEARCH|WEB_FETCH|CONSULT_AGENT|ASK_USER|VALIDATE_CODE|VALIDATE_ARCHITECTURE|REVIEW_CHANGES|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|run_command|run_tests|run_build|run_analysis|trigger_deploy|create_pipeline|create_branch|create_pr|create_release|read_file|write_file|edit_file|list_directory|glob|grep|git_commit|git_branch|git_diff|web_search|web_fetch|consult_agent|ask_user|validate_code|validate_architecture|review_changes)\s*\{[\s\S]*?\}/g, '')
+    // Tool calls with JSON array syntax: [tool_name][...]
+    .replace(/\[?\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|RUN_COMMAND|RUN_TESTS|RUN_BUILD|RUN_ANALYSIS|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|READ_FILE|WRITE_FILE|EDIT_FILE|LIST_DIRECTORY|GLOB|GREP|GIT_COMMIT|GIT_BRANCH|GIT_DIFF|WEB_SEARCH|WEB_FETCH|CONSULT_AGENT|ASK_USER|VALIDATE_CODE|VALIDATE_ARCHITECTURE|REVIEW_CHANGES|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|run_command|run_tests|run_build|run_analysis|trigger_deploy|create_pipeline|create_branch|create_pr|create_release|read_file|write_file|edit_file|list_directory|glob|grep|git_commit|git_branch|git_diff|web_search|web_fetch|consult_agent|ask_user|validate_code|validate_architecture|review_changes)\s*\]?\s*\[[\s\S]*?\]/g, '')
+    // Bracketed tool calls: [TOOL_NAME]{...} or [TOOL_NAME {...}]
+    .replace(/\[\s*(?:UPDATE_DOCUMENT|CREATE_DOCUMENT|APPROVE_DOCUMENT|CREATE_CARD|UPDATE_CARD|CREATE_DECISION|REMEMBER|TASK_PROGRESS|RUN_CODE|RUN_COMMAND|RUN_TESTS|RUN_BUILD|RUN_ANALYSIS|TRIGGER_DEPLOY|CREATE_PIPELINE|CREATE_BRANCH|CREATE_PR|CREATE_RELEASE|READ_FILE|WRITE_FILE|EDIT_FILE|LIST_DIRECTORY|GLOB|GREP|GIT_COMMIT|GIT_BRANCH|GIT_DIFF|WEB_SEARCH|WEB_FETCH|CONSULT_AGENT|ASK_USER|VALIDATE_CODE|VALIDATE_ARCHITECTURE|REVIEW_CHANGES|update_document|create_document|approve_document|create_card|update_card|create_decision|remember|task_progress|run_code|run_command|run_tests|run_build|run_analysis|trigger_deploy|create_pipeline|create_branch|create_pr|create_release|read_file|write_file|edit_file|list_directory|glob|grep|git_commit|git_branch|git_diff|web_search|web_fetch|consult_agent|ask_user|validate_code|validate_architecture|review_changes)\s*(?:\{[\s\S]*?\}\s*\]|\]\s*\{[\s\S]*?\})\s*/g, '')
     // Strip agent name prefixes like "[BA]", "[SA]", "[DEC]", "[ORC]" at start of lines
     .replace(/^\s*\[\s*(?:BA|SA|DEC|ORC|QA|UX|TL|FE|BE|DB|SE|PE|DO|IE|SM|CA|AUD|PM|DA|ML|DOC|TE|COM)\s*\]\s*/gm, '')
     // Strip repetition loops — any short pattern repeated 5+ times (e.g. "[TL] [TL] [TL]...")
@@ -416,6 +412,7 @@ export default function ChatPage() {
     pipelineProgress,
     vscodeRequired,
     clearVscodeRequired,
+    infoMessages,
   } = useAgentStream();
 
   const {
@@ -1032,6 +1029,24 @@ export default function ChatPage() {
                       <Loader2 className="w-3 h-3 animate-spin text-amber" />
                       <span className="text-[10px] text-muted-foreground/40">streaming...</span>
                     </div>
+
+                    {/* Background status messages (provider fallbacks, auto-promote) */}
+                    {infoMessages.length > 0 && (
+                      <div className="space-y-0.5">
+                        {infoMessages.map((msg, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50"
+                          >
+                            <span className="w-1 h-1 rounded-full bg-amber/40 shrink-0" />
+                            <span>{msg}</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
 
                     {activeThinking && (
                       <>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, type CSSProperties, type ReactNode } from 'react';
+import { useState, useMemo, useRef, useLayoutEffect, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
@@ -252,7 +252,10 @@ function RenderNode({
 // ---------------------------------------------------------------------------
 
 export function PenRenderer({ document, className }: PenRendererProps) {
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState<number | null>(null); // null = auto-fit
+  const [autoFit, setAutoFit] = useState(true);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   // Build components lookup from top-level reusable frames
   const components = useMemo(() => {
@@ -270,63 +273,137 @@ export function PenRenderer({ document, className }: PenRendererProps) {
 
   const pages = document.pages ?? (document.children ? [{ name: document.name ?? 'Page', children: document.children, width: document.width, height: document.height }] : []);
 
+  // Measure container width via ResizeObserver for responsive auto-fit
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setContainerWidth(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Compute the natural total width of all pages laid out side-by-side
+  const naturalWidth = useMemo(() => {
+    if (pages.length === 0) return 375;
+    const widths = pages.map(p => p.width ?? 375);
+    // Single page: use its width. Multi-page: sum + gaps (32px between).
+    if (widths.length === 1) return widths[0];
+    return widths.reduce((sum, w) => sum + w, 0) + (widths.length - 1) * 32;
+  }, [pages]);
+
+  // Compute fit-to-width zoom: leave 48px padding for canvas margin
+  const fitZoom = useMemo(() => {
+    if (containerWidth === 0) return 1;
+    const targetWidth = containerWidth - 48; // 24px padding each side
+    if (naturalWidth <= targetWidth) return 1; // Don't upscale
+    return Math.max(0.1, targetWidth / naturalWidth);
+  }, [containerWidth, naturalWidth]);
+
+  // Effective zoom: manual override OR auto-fit value
+  const effectiveZoom = autoFit ? fitZoom : (zoom ?? 1);
+
+  // Compute scaled dimensions so the canvas content can scroll properly
+  const naturalHeight = useMemo(() => {
+    if (pages.length === 0) return 667;
+    return Math.max(...pages.map(p => p.height ?? 667));
+  }, [pages]);
+
+  const scaledWidth = naturalWidth * effectiveZoom;
+  const scaledHeight = (naturalHeight + 32) * effectiveZoom; // +32 for page label
+
+  const handleZoomOut = () => {
+    setAutoFit(false);
+    setZoom(z => Math.max(0.1, (z ?? effectiveZoom) - 0.1));
+  };
+  const handleZoomIn = () => {
+    setAutoFit(false);
+    setZoom(z => Math.min(3, (z ?? effectiveZoom) + 0.1));
+  };
+  const handleFit = () => {
+    setAutoFit(true);
+    setZoom(null);
+  };
+
   return (
-    <div className={cn('flex flex-col h-full', className)}>
+    <div className={cn('flex flex-col h-full min-h-0', className)}>
       {/* Zoom controls */}
       <div className="flex items-center justify-end gap-1 px-3 py-1.5 border-b border-border shrink-0">
         <button
-          onClick={() => setZoom(z => Math.max(0.25, z - 0.25))}
+          onClick={handleZoomOut}
           className="p-1 rounded hover:bg-[var(--sidebar-accent)] text-muted-foreground/60 transition-colors"
           aria-label="Zoom out"
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
-        <span className="text-[10px] text-muted-foreground/50 w-10 text-center tabular-nums">
-          {Math.round(zoom * 100)}%
+        <span className="text-[10px] text-muted-foreground/50 w-12 text-center tabular-nums">
+          {Math.round(effectiveZoom * 100)}%{autoFit ? ' fit' : ''}
         </span>
         <button
-          onClick={() => setZoom(z => Math.min(3, z + 0.25))}
+          onClick={handleZoomIn}
           className="p-1 rounded hover:bg-[var(--sidebar-accent)] text-muted-foreground/60 transition-colors"
           aria-label="Zoom in"
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
         <button
-          onClick={() => setZoom(1)}
-          className="p-1 rounded hover:bg-[var(--sidebar-accent)] text-muted-foreground/60 transition-colors"
-          aria-label="Reset zoom"
+          onClick={handleFit}
+          className={cn(
+            'p-1 rounded hover:bg-[var(--sidebar-accent)] transition-colors',
+            autoFit ? 'text-amber bg-[var(--sidebar-accent)]' : 'text-muted-foreground/60'
+          )}
+          aria-label="Fit to width"
+          title="Fit to width"
         >
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Canvas area */}
-      <div className="flex-1 overflow-auto bg-[var(--sidebar-accent)] p-6">
+      {/* Canvas area — scrollable both directions */}
+      <div
+        ref={containerRef}
+        className="flex-1 min-h-0 overflow-auto bg-[var(--sidebar-accent)] p-6"
+      >
+        {/* Outer wrapper with scaled dimensions so scrollbars match displayed size */}
         <div
-          className="flex flex-wrap gap-8 justify-center"
-          style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
+          className="mx-auto"
+          style={{
+            width: `${scaledWidth}px`,
+            height: `${scaledHeight}px`,
+          }}
         >
-          {pages.map((page, pi) => (
-            <div key={page.name ?? pi} className="flex flex-col items-center gap-2">
-              <span className="text-[10px] font-medium text-muted-foreground/50">{page.name}</span>
-              <div
-                className="bg-background border border-border rounded-lg shadow-lg overflow-hidden"
-                style={{
-                  width: page.width ? `${page.width}px` : '375px',
-                  minHeight: page.height ? `${page.height}px` : '667px',
-                }}
-              >
-                {page.children.map((node, i) => (
-                  <RenderNode
-                    key={node.id ?? i}
-                    node={node}
-                    components={components}
-                    variables={document.variables}
-                  />
-                ))}
+          {/* Inner wrapper with the actual unscaled size, transformed via CSS */}
+          <div
+            className="flex flex-wrap gap-8"
+            style={{
+              transform: `scale(${effectiveZoom})`,
+              transformOrigin: 'top left',
+              width: `${naturalWidth}px`,
+            }}
+          >
+            {pages.map((page, pi) => (
+              <div key={page.name ?? pi} className="flex flex-col items-center gap-2">
+                <span className="text-[10px] font-medium text-muted-foreground/50">{page.name}</span>
+                <div
+                  className="bg-background border border-border rounded-lg shadow-lg overflow-hidden"
+                  style={{
+                    width: page.width ? `${page.width}px` : '375px',
+                    minHeight: page.height ? `${page.height}px` : '667px',
+                  }}
+                >
+                  {page.children.map((node, i) => (
+                    <RenderNode
+                      key={node.id ?? i}
+                      node={node}
+                      components={components}
+                      variables={document.variables}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>

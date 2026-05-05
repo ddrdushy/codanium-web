@@ -103,7 +103,80 @@ RULES: Reference BRD requirement IDs (FR-XXX) for traceability. Generate 1-2 sec
   DO_WORKING: 'You are DevOps. Read the SDD from context. Scaffold the project structure: package.json, tsconfig.json, framework configuration, directory structure, Dockerfile, .gitignore, and entry point files. After writing all files, run `npm install` and `npx tsc --noEmit` to verify the build. Then call task_progress to signal completion.',
   DO_NEEDS_APPROVAL: 'The project scaffold is complete. Review the scaffolded files and summarize them for the user. Create a decision for the user to approve using create_decision with title "Scaffolding Approval" and trigger "scaffolding". Include options: "Approve scaffold and start development" or "Request changes".',
   UX_WORKING: 'You are the UX Designer. The project scaffold is approved. Now create the Design System / UI Kit document using [CREATE_DOCUMENT]{"type":"DESIGN_SYSTEM"}. Include: branding guidelines, color palette (primary, secondary, neutral, semantic), typography scale, spacing system, component inventory (buttons, inputs, cards, modals, navigation), and design tokens. Generate section-by-section (max ~1500 tokens each). After the UI Kit is complete, call task_progress to signal completion — the system will automatically activate UID for wireframe creation.',
-  UID_WORKING: 'You are the UI Designer. The Design System / UI Kit has been created by UX. Read the BRD user flows and the design system from context. Create wireframes for ALL pages mentioned in the BRD using [CREATE_DOCUMENT]{"type":"WIREFRAME"}. Each wireframe should reference the design system tokens and component library. After all wireframes are complete, call task_progress to signal completion.',
+  UID_WORKING: `You are the UI Designer. The Design System / UI Kit has been created by UX. Read the BRD user flows and the design system from context. Create VISUAL wireframes for ALL pages mentioned in the BRD by writing .pen files using [WRITE_FILE]{"path":"wireframes/<page-name>.pen","content":"<JSON>"}.
+
+The .pen file is a JSON wireframe format that renders visually (like Figma). Each .pen file MUST be valid JSON with this exact structure:
+
+{
+  "name": "Page Name",
+  "width": 1440,
+  "height": 900,
+  "children": [
+    {
+      "type": "frame",
+      "name": "App Container",
+      "layout": "vertical",
+      "width": "fill_container",
+      "height": "fill_container",
+      "fill": "#FFFFFF",
+      "padding": 24,
+      "gap": 16,
+      "children": [
+        {
+          "type": "frame",
+          "name": "Header",
+          "layout": "horizontal",
+          "width": "fill_container",
+          "height": 64,
+          "fill": "#F9FAFB",
+          "padding": [12, 24],
+          "alignItems": "center",
+          "justifyContent": "space_between",
+          "children": [
+            {
+              "type": "text",
+              "content": "App Title",
+              "fontSize": 20,
+              "fontWeight": 700,
+              "fill": "#111827"
+            },
+            {
+              "type": "rectangle",
+              "name": "Add Button",
+              "width": 80,
+              "height": 36,
+              "fill": "#2563EB",
+              "cornerRadius": 6
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "name": "Content Area",
+          "layout": "vertical",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "padding": 24,
+          "gap": 12,
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+
+Node types: "frame" (container), "text" (label/heading), "rectangle" (button/card/box), "ellipse" (avatar/icon).
+Layout: "vertical" stacks children top-to-bottom, "horizontal" stacks left-to-right.
+Sizing: numbers (px) or "fill_container" or "fit_content".
+Use design system colors from the UI Kit (e.g., #2563EB primary). Use real content for text (page titles, button labels, sample data).
+
+CRITICAL RULES:
+- Output ONLY valid JSON inside the content field — no markdown, no explanations
+- Each page = one .pen file (login.pen, dashboard.pen, settings.pen, etc.)
+- File paths MUST be: wireframes/<lowercase-page-name>.pen
+- After ALL .pen files are written, call [TASK_PROGRESS]{"status":"completed","percent":100} to finish
+
+Create one .pen file per page from the BRD user flows.`,
   UI_NEEDS_APPROVAL: 'The UI Kit and wireframes are ready. Review the design system and wireframes for completeness — all pages from the BRD user flows must have wireframe coverage. Create a decision for the user to approve using create_decision with title "UI Design Approval" and trigger "ui approval". Include options: "Approve UI designs and start development" or "Request changes to designs".',
   DEV_WORKING: 'You are the Tech Lead. Read the approved BRD, SDD, UI Kit, and wireframes from context. Break down the SDD into development task cards — one card per component/feature. Create cards for: Frontend (based on wireframes + UI Kit), Backend (based on SDD APIs), and Integration. Assign each card to JD (Junior Developer) or SD (Senior Developer). Each task goes through: code → QA → SEC → DO → PE sign-off cycle. Pick ONE card at a time.',
   COMPLETE: 'All development is complete! Provide a final summary to the user: what was built, key decisions made, and next steps for deployment.',
@@ -178,10 +251,15 @@ export async function transition(
   // Persist event for audit trail
   logPhaseTransition(projectId, currentPhase, nextPhase, trigger).catch(() => {});
 
-  // Auto-trigger: when entering a WORKING phase (via user approval or agent handoff),
-  // enqueue a background task for the target agent.
-  // Covers: user_approved → SA/DO/UX/DEV, agent_done → UID (UX hands off to UID)
-  const shouldAutoTrigger = isWorkingPhase(nextPhase) && (trigger === 'user_approved' || trigger === 'agent_done');
+  // Auto-trigger when:
+  //   1. Entering a WORKING phase (via user approval or agent handoff)
+  //      Covers: user_approved → SA/DO/UX/DEV, agent_done → UID (UX hands off to UID)
+  //   2. Entering an APPROVAL phase via agent_done (so PM creates the approval decision automatically)
+  //      Covers: DO_WORKING → DO_NEEDS_APPROVAL, UID_WORKING → UI_NEEDS_APPROVAL
+  const shouldAutoTrigger = (
+    (isWorkingPhase(nextPhase) && (trigger === 'user_approved' || trigger === 'agent_done')) ||
+    (isApprovalPhase(nextPhase) && trigger === 'agent_done')
+  );
   if (shouldAutoTrigger) {
     const targetAgent = getActiveAgent(nextPhase);
     const context = getPhaseContext(nextPhase);

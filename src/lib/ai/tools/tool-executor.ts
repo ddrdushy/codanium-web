@@ -832,6 +832,36 @@ async function handleCreateDecision(
   }
 
   if (existing) {
+    // If the existing decision is already approved/rejected but a new one is being created,
+    // it means the artifact was regenerated. Reset the decision back to AWAITING_APPROVAL
+    // so the user can re-approve the new version.
+    if (existing.status === 'APPROVED' || existing.status === 'REJECTED') {
+      console.log(`[ToolExecutor] Existing ${existing.status} decision found for "${existing.trigger}" — resetting to AWAITING_APPROVAL (artifact was regenerated)`);
+      try {
+        const reset = await prisma.decision.update({
+          where: { id: existing.id },
+          data: {
+            status: hasOptions ? 'AWAITING_APPROVAL' : 'DRAFTED',
+            approvedOption: null,
+            approvedAt: null,
+            // Update context to reflect the new artifact
+            context: args.description || existing.context,
+          },
+          include: { options: true },
+        });
+        return {
+          decisionId: reset.id,
+          trigger: reset.trigger,
+          status: reset.status,
+          optionCount: reset.options?.length || 0,
+          message: 'Existing approval reset for new version. User can re-approve in My Decisions.',
+          __reset: true,
+        };
+      } catch (e) {
+        console.error('[ToolExecutor] Failed to reset existing decision:', e);
+      }
+    }
+
     console.log(`[ToolExecutor] Decision already exists: "${existing.trigger}" (${existing.id}) — skipping duplicate for "${triggerTitle}"`);
     return {
       decisionId: existing.id,

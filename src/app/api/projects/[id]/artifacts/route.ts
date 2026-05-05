@@ -10,9 +10,12 @@ type RouteParams = { params: Promise<{ id: string }> };
 /**
  * GET /api/projects/[id]/artifacts
  * List all artifacts for a project (excludes content for performance).
+ *
+ * Query params:
+ *   ?since=ISO_TIMESTAMP — only return artifacts updated after this time (for incremental sync)
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: RouteParams
 ) {
   try {
@@ -20,9 +23,13 @@ export async function GET(
     const { session, error } = await requireAuthOrApiKey();
     if (error) return error;
 
+    // Optional incremental sync filter
+    const sinceParam = request.nextUrl.searchParams.get('since');
+    const sinceFilter = sinceParam ? { updatedAt: { gt: new Date(sinceParam) } } : {};
+
     const artifacts = await prisma.artifact.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'desc' },
+      where: { projectId, ...sinceFilter },
+      orderBy: { updatedAt: 'desc' },
       select: {
         id: true,
         name: true,
@@ -30,6 +37,7 @@ export async function GET(
         ownerAgent: true,
         version: true,
         createdAt: true,
+        updatedAt: true,
         messageId: true,
       },
     });

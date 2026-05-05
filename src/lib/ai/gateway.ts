@@ -442,6 +442,44 @@ export class LLMGateway {
     return null;
   }
 
+  /**
+   * Auto-promote a fallback provider to priority 0 when it succeeds after
+   * a higher-priority provider failed. This prevents repeated failures on
+   * broken providers — the working one becomes the new primary.
+   */
+  async autoPromote(workingProvider: string): Promise<void> {
+    try {
+      const configs = await prisma.lLMProviderConfig.findMany({
+        where: { scope: 'PLATFORM', isActive: true },
+        orderBy: { priority: 'asc' },
+      });
+
+      const workingCfg = configs.find(c => c.provider === workingProvider);
+      if (!workingCfg || workingCfg.priority === 0) return; // Already primary
+
+      // Swap: move all providers with lower priority number up by 1, set working to 0
+      const batch = [];
+      for (const cfg of configs) {
+        if (cfg.provider === workingProvider) {
+          batch.push(prisma.lLMProviderConfig.update({
+            where: { id: cfg.id },
+            data: { priority: 0 },
+          }));
+        } else if (cfg.priority < workingCfg.priority) {
+          batch.push(prisma.lLMProviderConfig.update({
+            where: { id: cfg.id },
+            data: { priority: cfg.priority + 1 },
+          }));
+        }
+      }
+
+      await prisma.$transaction(batch);
+      console.log(`[LLMGateway] ✓ Auto-promoted ${workingProvider} to priority 0 (was ${workingCfg.priority})`);
+    } catch (err) {
+      console.warn('[LLMGateway] Auto-promote failed (non-critical):', err);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Usage Logging + Credit Deduction
   // -------------------------------------------------------------------------

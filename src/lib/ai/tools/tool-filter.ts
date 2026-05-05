@@ -32,14 +32,15 @@ const AGENT_TOOL_MAP: Record<string, string[]> = {
     'web_search', 'web_fetch',
     'consult_agent', 'ask_user',
   ],
-  UID: [ // UI Designer
+  UID: [ // UI Designer — writes .pen wireframe files
     'create_document', 'update_document',
+    'write_file', 'read_file', 'list_directory',
     'remember', 'task_progress',
     'consult_agent', 'ask_user',
   ],
   PM: [
     'create_card', 'update_card',
-    'create_document', 'update_document',
+    'create_document', 'update_document', 'approve_document',
     'create_decision', 'remember', 'task_progress',
     'run_analysis',
     'consult_agent',

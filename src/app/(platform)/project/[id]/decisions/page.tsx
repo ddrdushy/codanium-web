@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchDecisions } from '@/lib/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { Decision } from '@/types';
 import { cn } from '@/lib/utils';
@@ -11,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import {
   CheckCircle2, Clock, XCircle, ChevronRight,
   Zap, ArrowRight, Sparkles, Loader2, CircleDot,
-  FileText, LayoutList, AlertCircle
+  FileText, LayoutList, AlertCircle, ChevronDown, ChevronUp, Eye
 } from 'lucide-react';
 
 // ── Status Visual Config ─────────────────────────────────────────────────────
@@ -41,6 +43,12 @@ export default function DecisionsPage() {
   const [selectedDecision, setSelectedDecision] = useState<Decision | null>(null);
   const [approving, setApproving] = useState(false);
 
+  // Document viewer state
+  const [docContent, setDocContent] = useState<string | null>(null);
+  const [docLoading, setDocLoading] = useState(false);
+  const [docExpanded, setDocExpanded] = useState(false);
+  const [docTitle, setDocTitle] = useState<string>('');
+
   useEffect(() => {
     fetchDecisions(projectId)
       .then((data) => {
@@ -56,6 +64,53 @@ export default function DecisionsPage() {
       .catch(() => setDecisions([]))
       .finally(() => setLoading(false));
   }, [projectId]);
+
+  // Get document type badge from trigger
+  const getDocType = (trigger: string): string | null => {
+    if (/brd/i.test(trigger)) return 'BRD';
+    if (/sdd/i.test(trigger)) return 'SDD';
+    if (/ui/i.test(trigger)) return 'UI';
+    if (/ux/i.test(trigger)) return 'UX';
+    return null;
+  };
+
+  // Fetch the related document (BRD/SDD) when a decision is selected
+  const fetchRelatedDocument = useCallback(async (decision: Decision) => {
+    const docType = getDocType(decision.trigger);
+    if (!docType) {
+      setDocContent(null);
+      return;
+    }
+    setDocLoading(true);
+    setDocContent(null);
+    setDocExpanded(true); // Auto-expand when loading
+    try {
+      const res = await fetch(`/api/projects/${projectId}/documents`);
+      if (!res.ok) throw new Error('Failed to fetch documents');
+      const docs = await res.json();
+      // Find the matching document by type (BRD or SDD)
+      const matchingDoc = docs.find((d: any) =>
+        d.type === docType && d.content?.trim()
+      );
+      if (matchingDoc) {
+        setDocContent(matchingDoc.content);
+        setDocTitle(matchingDoc.title || `${docType} Document`);
+      } else {
+        setDocContent(null);
+      }
+    } catch {
+      setDocContent(null);
+    } finally {
+      setDocLoading(false);
+    }
+  }, [projectId]);
+
+  // Auto-fetch document when decision changes
+  useEffect(() => {
+    if (selectedDecision) {
+      fetchRelatedDocument(selectedDecision);
+    }
+  }, [selectedDecision, fetchRelatedDocument]);
 
   const handleApprove = async (decisionId: string, optionName: string) => {
     setApproving(true);
@@ -102,15 +157,6 @@ export default function DecisionsPage() {
     return trigger
       .replace(/^(BRD|SDD|UI|UX)\s+Approval:\s*/i, '')
       .replace(/\s+Approval$/i, '');
-  };
-
-  // Get document type badge from trigger
-  const getDocType = (trigger: string): string | null => {
-    if (/brd/i.test(trigger)) return 'BRD';
-    if (/sdd/i.test(trigger)) return 'SDD';
-    if (/ui/i.test(trigger)) return 'UI';
-    if (/ux/i.test(trigger)) return 'UX';
-    return null;
   };
 
   return (
@@ -266,41 +312,143 @@ export default function DecisionsPage() {
                 </div>
               </div>
 
-              {/* ── AI Recommendation (Pending Only) ───────────────── */}
-              {isPending && selectedDecision.recommendation && (
+              {/* ── Document Viewer (BRD/SDD Content) ──────────── */}
+              {getDocType(selectedDecision.trigger) && (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="mb-8 rounded-2xl border border-amber/20 bg-gradient-to-br from-amber/[0.06] via-transparent to-orange-500/[0.03] p-5"
+                  className="mb-8"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber/15 flex items-center justify-center shrink-0 mt-0.5">
-                      <Sparkles className="w-4.5 h-4.5 text-amber" />
+                  <button
+                    onClick={() => setDocExpanded(!docExpanded)}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-amber/20 bg-amber/[0.04] hover:bg-amber/[0.07] transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-amber/15 flex items-center justify-center">
+                        <Eye className="w-4 h-4 text-amber" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[11px] font-semibold text-amber/70 uppercase tracking-wider">
+                          Review {getDocType(selectedDecision.trigger)} Document
+                        </p>
+                        <p className="text-xs text-muted-foreground/50">
+                          {docLoading ? 'Loading...' : docContent ? docTitle : 'No document found'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-[11px] font-semibold text-amber/70 uppercase tracking-wider mb-1">AI Recommendation</p>
-                      <p className="text-sm text-foreground/80 leading-relaxed">{selectedDecision.recommendation}</p>
-                      <Button
-                        size="sm"
-                        disabled={approving}
-                        onClick={() => {
-                          const recommended = selectedDecision.options.find(o => selectedDecision.recommendation?.includes(o.name));
-                          if (recommended) handleApprove(selectedDecision.decision_id, recommended.name);
-                        }}
-                        className="mt-4 bg-amber text-black hover:bg-amber/90 font-bold px-5 h-9 rounded-xl shadow-lg shadow-amber/10"
+                    {docExpanded ? (
+                      <ChevronUp className="w-4 h-4 text-amber/50" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-amber/50" />
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {docExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className="overflow-hidden"
                       >
-                        {approving ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-                            Approve Recommendation
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                        <div className="mt-2 rounded-xl border border-border/50 bg-[var(--surface-raised)] max-h-[500px] overflow-y-auto">
+                          {docLoading && (
+                            <div className="flex items-center justify-center py-12">
+                              <Loader2 className="w-5 h-5 text-amber/50 animate-spin" />
+                            </div>
+                          )}
+                          {!docLoading && docContent && (
+                            <div className="p-5">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  h1: ({ children }) => (
+                                    <h1 className="text-base font-bold text-foreground/90 border-b border-border/30 pb-2 mb-4 mt-6 first:mt-0">{children}</h1>
+                                  ),
+                                  h2: ({ children }) => (
+                                    <h2 className="text-[13px] font-bold text-amber/90 mt-6 mb-2 pb-1.5 border-b border-amber/10 first:mt-0">{children}</h2>
+                                  ),
+                                  h3: ({ children }) => (
+                                    <h3 className="text-xs font-semibold text-foreground/80 mt-4 mb-1.5">{children}</h3>
+                                  ),
+                                  h4: ({ children }) => (
+                                    <h4 className="text-[11px] font-semibold text-foreground/70 mt-3 mb-1">{children}</h4>
+                                  ),
+                                  p: ({ children }) => (
+                                    <p className="text-xs text-foreground/60 leading-relaxed mb-2.5">{children}</p>
+                                  ),
+                                  ul: ({ children }) => (
+                                    <ul className="list-disc list-outside ml-4 mb-3 space-y-1">{children}</ul>
+                                  ),
+                                  ol: ({ children }) => (
+                                    <ol className="list-decimal list-outside ml-4 mb-3 space-y-1">{children}</ol>
+                                  ),
+                                  li: ({ children }) => (
+                                    <li className="text-xs text-foreground/60 leading-relaxed pl-1">{children}</li>
+                                  ),
+                                  strong: ({ children }) => (
+                                    <strong className="font-semibold text-foreground/80">{children}</strong>
+                                  ),
+                                  em: ({ children }) => (
+                                    <em className="italic text-foreground/70">{children}</em>
+                                  ),
+                                  table: ({ children }) => (
+                                    <div className="overflow-x-auto my-3 rounded-lg border border-border/30">
+                                      <table className="w-full text-xs">{children}</table>
+                                    </div>
+                                  ),
+                                  thead: ({ children }) => (
+                                    <thead className="bg-white/[0.03]">{children}</thead>
+                                  ),
+                                  th: ({ children }) => (
+                                    <th className="text-left px-3 py-2 text-[11px] font-semibold text-foreground/70 border-b border-border/30">{children}</th>
+                                  ),
+                                  td: ({ children }) => (
+                                    <td className="px-3 py-1.5 text-foreground/55 border-b border-border/15">{children}</td>
+                                  ),
+                                  code: ({ children, className }) => {
+                                    const isInline = !className;
+                                    return isInline ? (
+                                      <code className="text-amber/80 bg-amber/[0.08] px-1.5 py-0.5 rounded text-[11px]">{children}</code>
+                                    ) : (
+                                      <code className={cn('block bg-black/30 border border-border/30 rounded-lg p-3 text-[11px] text-foreground/60 overflow-x-auto', className)}>{children}</code>
+                                    );
+                                  },
+                                  pre: ({ children }) => (
+                                    <pre className="my-3">{children}</pre>
+                                  ),
+                                  blockquote: ({ children }) => (
+                                    <blockquote className="border-l-2 border-amber/30 pl-3 my-3 text-foreground/50 italic">{children}</blockquote>
+                                  ),
+                                  hr: () => (
+                                    <hr className="border-border/30 my-4" />
+                                  ),
+                                  a: ({ href, children }) => (
+                                    <a href={href} className="text-amber/80 underline underline-offset-2 hover:text-amber" target="_blank" rel="noopener noreferrer">{children}</a>
+                                  ),
+                                }}
+                              >
+                                {docContent}
+                              </ReactMarkdown>
+                            </div>
+                          )}
+                          {!docLoading && !docContent && (
+                            <div className="flex flex-col items-center justify-center py-10 text-center">
+                              <FileText className="w-6 h-6 text-muted-foreground/20 mb-2" />
+                              <p className="text-xs text-muted-foreground/40">
+                                {getDocType(selectedDecision.trigger)} document not found or empty.
+                              </p>
+                              <p className="text-[10px] text-muted-foreground/25 mt-1">
+                                The AI team may still be generating it.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               )}
 

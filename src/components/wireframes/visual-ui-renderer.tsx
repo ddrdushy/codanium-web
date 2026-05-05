@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -363,26 +363,213 @@ function CalculatorWireframe() {
 }
 
 // ---------------------------------------------------------------------------
+// Markdown Renderer for wireframe / design system content
+// ---------------------------------------------------------------------------
+// Renders the actual stored markdown content with wireframe-friendly styling.
+// Replaces the previous hardcoded calculator demo.
+
+function MarkdownContentRenderer({ content }: { content: string }) {
+  return (
+    <div className="prose prose-sm max-w-none
+      prose-headings:text-neutral-900 prose-headings:font-bold
+      prose-h1:text-2xl prose-h1:mb-4 prose-h1:pb-2 prose-h1:border-b prose-h1:border-neutral-200
+      prose-h2:text-lg prose-h2:mt-6 prose-h2:mb-3 prose-h2:text-neutral-800
+      prose-h3:text-base prose-h3:mt-5 prose-h3:mb-2 prose-h3:text-neutral-700
+      prose-h4:text-sm prose-h4:mt-3 prose-h4:mb-1 prose-h4:text-neutral-700
+      prose-p:text-sm prose-p:text-neutral-600 prose-p:leading-relaxed prose-p:my-2
+      prose-ul:my-2 prose-ul:list-disc prose-ul:pl-5
+      prose-ol:my-2 prose-ol:list-decimal prose-ol:pl-5
+      prose-li:text-sm prose-li:text-neutral-600 prose-li:my-0.5
+      prose-strong:text-neutral-800 prose-strong:font-semibold
+      prose-em:text-neutral-600
+      prose-code:text-blue-600 prose-code:bg-blue-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-code:before:content-[''] prose-code:after:content-['']
+      prose-pre:bg-neutral-50 prose-pre:border prose-pre:border-neutral-200 prose-pre:rounded-lg
+      prose-table:text-xs prose-table:border-collapse
+      prose-th:bg-neutral-50 prose-th:text-neutral-800 prose-th:font-semibold prose-th:px-3 prose-th:py-2 prose-th:border prose-th:border-neutral-200
+      prose-td:text-neutral-600 prose-td:px-3 prose-td:py-2 prose-td:border prose-td:border-neutral-200
+      prose-hr:border-neutral-200 prose-hr:my-4
+      prose-blockquote:border-l-2 prose-blockquote:border-blue-300 prose-blockquote:pl-3 prose-blockquote:text-neutral-600 prose-blockquote:italic">
+      <SimpleMarkdown content={content} />
+    </div>
+  );
+}
+
+// Lightweight markdown renderer (no external lib needed for simple wireframe content)
+function SimpleMarkdown({ content }: { content: string }) {
+  // Split into blocks by double newlines, then render each block
+  const blocks = content.split(/\n\n+/);
+
+  return (
+    <>
+      {blocks.map((block, i) => {
+        const trimmed = block.trim();
+        if (!trimmed) return null;
+
+        // Heading
+        const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          const text = headingMatch[2];
+          const Tag = `h${level}` as keyof React.JSX.IntrinsicElements;
+          return <Tag key={i}>{renderInline(text)}</Tag>;
+        }
+
+        // Horizontal rule
+        if (/^-{3,}$/.test(trimmed) || /^\*{3,}$/.test(trimmed)) {
+          return <hr key={i} />;
+        }
+
+        // Unordered list
+        if (/^[-*+]\s+/m.test(trimmed)) {
+          const items = trimmed.split('\n').filter(l => /^[-*+]\s+/.test(l));
+          return (
+            <ul key={i}>
+              {items.map((item, j) => (
+                <li key={j}>{renderInline(item.replace(/^[-*+]\s+/, ''))}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        // Ordered list
+        if (/^\d+\.\s+/m.test(trimmed)) {
+          const items = trimmed.split('\n').filter(l => /^\d+\.\s+/.test(l));
+          return (
+            <ol key={i}>
+              {items.map((item, j) => (
+                <li key={j}>{renderInline(item.replace(/^\d+\.\s+/, ''))}</li>
+              ))}
+            </ol>
+          );
+        }
+
+        // Code block
+        if (trimmed.startsWith('```')) {
+          const code = trimmed.replace(/^```\w*\n?/, '').replace(/```$/, '');
+          return (
+            <pre key={i}>
+              <code>{code}</code>
+            </pre>
+          );
+        }
+
+        // Blockquote
+        if (trimmed.startsWith('>')) {
+          return (
+            <blockquote key={i}>
+              {renderInline(trimmed.replace(/^>\s*/gm, ''))}
+            </blockquote>
+          );
+        }
+
+        // Table (simple GFM)
+        if (trimmed.includes('|') && trimmed.includes('---')) {
+          const lines = trimmed.split('\n').filter(l => l.includes('|'));
+          if (lines.length >= 2) {
+            const headerCells = lines[0].split('|').map(c => c.trim()).filter(Boolean);
+            const bodyRows = lines.slice(2).map(l =>
+              l.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 || arr[0] !== '')
+            );
+            return (
+              <table key={i}>
+                <thead>
+                  <tr>{headerCells.map((cell, j) => <th key={j}>{renderInline(cell)}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {bodyRows.map((row, j) => (
+                    <tr key={j}>{row.map((cell, k) => <td key={k}>{renderInline(cell)}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          }
+        }
+
+        // Default: paragraph
+        return <p key={i}>{renderInline(trimmed)}</p>;
+      })}
+    </>
+  );
+}
+
+// Render inline markdown: **bold**, *italic*, `code`
+function renderInline(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let key = 0;
+
+  while (remaining.length > 0) {
+    // Bold **text**
+    const boldMatch = remaining.match(/^\*\*([^*]+)\*\*/);
+    if (boldMatch) {
+      parts.push(<strong key={key++}>{boldMatch[1]}</strong>);
+      remaining = remaining.slice(boldMatch[0].length);
+      continue;
+    }
+    // Italic *text*
+    const italicMatch = remaining.match(/^\*([^*]+)\*/);
+    if (italicMatch) {
+      parts.push(<em key={key++}>{italicMatch[1]}</em>);
+      remaining = remaining.slice(italicMatch[0].length);
+      continue;
+    }
+    // Inline code `code`
+    const codeMatch = remaining.match(/^`([^`]+)`/);
+    if (codeMatch) {
+      parts.push(<code key={key++}>{codeMatch[1]}</code>);
+      remaining = remaining.slice(codeMatch[0].length);
+      continue;
+    }
+    // Link [text](url)
+    const linkMatch = remaining.match(/^\[([^\]]+)\]\(([^)]+)\)/);
+    if (linkMatch) {
+      parts.push(<a key={key++} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{linkMatch[1]}</a>);
+      remaining = remaining.slice(linkMatch[0].length);
+      continue;
+    }
+    // Plain character
+    const nextSpecial = remaining.search(/[\*`\[]/);
+    if (nextSpecial === -1) {
+      parts.push(remaining);
+      break;
+    }
+    if (nextSpecial > 0) {
+      parts.push(remaining.slice(0, nextSpecial));
+      remaining = remaining.slice(nextSpecial);
+    } else {
+      parts.push(remaining[0]);
+      remaining = remaining.slice(1);
+    }
+  }
+
+  return parts;
+}
+
+// ---------------------------------------------------------------------------
 // Main: Design System Visual Renderer
 // ---------------------------------------------------------------------------
+// Renders the design system / UI Kit document. Parses design tokens for
+// the visual color/typography/spacing/button previews and falls back to
+// a markdown rendering for any sections that don't match the parsers.
 
 export function DesignSystemRenderer({ content }: { content: string }) {
   const tokens = useMemo(() => parseDesignTokens(content), [content]);
+
+  // Extract title from first H1 in the content
+  const titleMatch = content.match(/^#\s+(.+)$/m);
+  const title = titleMatch?.[1]?.trim() || 'Design System';
+
+  // Check if any tokens were extracted — if not, just render markdown
+  const hasTokens = tokens.colors.length > 0 || tokens.typography.length > 0 ||
+                    tokens.buttons.length > 0 || tokens.spacing.length > 0;
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0" style={{ backgroundColor: '#F3F4F6' }}>
       <div className="max-w-4xl mx-auto p-8 space-y-8">
         {/* Header */}
         <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#2563EB' }}>
-              <span className="text-white text-lg font-bold">=</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-neutral-900">Simple Calculator App</h1>
-              <p className="text-xs text-neutral-500">UI Kit v1.0 &middot; Clean, minimal, and functional</p>
-            </div>
-          </div>
+          <h1 className="text-xl font-bold text-neutral-900">{title}</h1>
+          <p className="text-xs text-neutral-500 mt-1">UI Kit / Design System</p>
         </div>
 
         {/* Color Palette */}
@@ -413,12 +600,10 @@ export function DesignSystemRenderer({ content }: { content: string }) {
           </div>
         )}
 
-        {/* Live Calculator Preview */}
+        {/* Full Markdown Content */}
         <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6">
-          <h3 className="text-sm font-semibold text-neutral-800 mb-4">Live Calculator Preview</h3>
-          <div className="rounded-xl overflow-hidden border border-neutral-200" style={{ backgroundColor: '#F3F4F6' }}>
-            <CalculatorWireframe />
-          </div>
+          {hasTokens && <h2 className="text-sm font-semibold text-neutral-800 mb-3 uppercase tracking-wider">Full Specification</h2>}
+          <MarkdownContentRenderer content={content} />
         </div>
       </div>
     </div>
@@ -426,50 +611,34 @@ export function DesignSystemRenderer({ content }: { content: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Wireframe Visual Renderer (Calculator Main Interface)
+// Wireframe Visual Renderer
 // ---------------------------------------------------------------------------
+// Renders the wireframe markdown content as a styled spec document.
 
-export function WireframeVisualRenderer({ content: _content }: { content: string }) {
+export function WireframeVisualRenderer({ content }: { content: string }) {
+  // Extract title from first H1 in the content
+  const titleMatch = content.match(/^#\s+(.+)$/m);
+  const title = titleMatch?.[1]?.replace(/^Wireframe:\s*/i, '').trim() || 'Wireframe';
+
   return (
     <div className="flex-1 overflow-y-auto min-h-0" style={{ backgroundColor: '#F3F4F6' }}>
       <div className="max-w-4xl mx-auto p-8 space-y-6">
         {/* Header */}
         <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6">
-          <h1 className="text-xl font-bold text-neutral-900">Calculator Main Interface</h1>
-          <p className="text-xs text-neutral-500 mt-1">Wireframe preview &middot; Desktop &middot; 400px fixed width</p>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-neutral-900">{title}</h1>
+          </div>
+          <p className="text-xs text-neutral-500 mt-1">Wireframe specification &middot; Page layout & components</p>
         </div>
 
-        {/* Interactive Calculator */}
-        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-          <CalculatorWireframe />
-        </div>
-
-        {/* Device Previews */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-            <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider mb-3">Desktop</p>
-            <div className="aspect-[16/10] bg-neutral-50 rounded-lg border border-neutral-200 flex items-center justify-center overflow-hidden">
-              <div className="scale-[0.35] origin-center">
-                <CalculatorWireframe />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-            <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider mb-3">Tablet</p>
-            <div className="aspect-[3/4] bg-neutral-50 rounded-lg border border-neutral-200 flex items-center justify-center overflow-hidden">
-              <div className="scale-[0.35] origin-center">
-                <CalculatorWireframe />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-            <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider mb-3">Mobile</p>
-            <div className="aspect-[9/16] bg-neutral-50 rounded-lg border border-neutral-200 flex items-center justify-center overflow-hidden">
-              <div className="scale-[0.3] origin-center">
-                <CalculatorWireframe />
-              </div>
-            </div>
-          </div>
+        {/* Wireframe Markdown Content */}
+        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6">
+          <MarkdownContentRenderer content={content} />
         </div>
       </div>
     </div>

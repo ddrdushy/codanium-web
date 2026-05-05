@@ -379,6 +379,8 @@ export interface AgentStreamState {
   vscodeRequired: { agent: string; message: string; deepLink: string } | null;
   /** Clear the VS Code required gate (e.g. after manual retry) */
   clearVscodeRequired: () => void;
+  /** Background status messages (provider fallbacks, auto-promote, etc.) */
+  infoMessages: string[];
 }
 
 /**
@@ -407,6 +409,7 @@ export function useAgentStream(): AgentStreamState {
   const [error, setError] = useState<string | null>(null);
   const [pipelineProgress, setPipelineProgress] = useState<PipelineProgressData | null>(null);
   const [vscodeRequired, setVscodeRequired] = useState<{ agent: string; message: string; deepLink: string } | null>(null);
+  const [infoMessages, setInfoMessages] = useState<string[]>([]);
 
   const clearVscodeRequired = useCallback(() => setVscodeRequired(null), []);
 
@@ -455,6 +458,7 @@ export function useAgentStream(): AgentStreamState {
       setError(null);
       setPipelineProgress(null);
       setVscodeRequired(null);
+      setInfoMessages([]);
       pipelineNextRef.current = null;
 
       try {
@@ -545,8 +549,11 @@ export function useAgentStream(): AgentStreamState {
             onPipelineProgress: (data) => {
               setPipelineProgress(data);
             },
-            onInfo: () => {
-              // Info events are logged but not displayed to user
+            onInfo: (data) => {
+              // Show background status messages (provider fallbacks, auto-promote, etc.)
+              if (data.message) {
+                setInfoMessages((prev) => [...prev, data.message]);
+              }
             },
             onVSCodeRequired: (data) => {
               setVscodeRequired(data);
@@ -619,5 +626,6 @@ export function useAgentStream(): AgentStreamState {
     pipelineProgress,
     vscodeRequired,
     clearVscodeRequired,
+    infoMessages,
   };
 }
