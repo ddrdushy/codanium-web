@@ -50,8 +50,11 @@ export function useCommandPaletteData(): CommandItem[] {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
 
   useEffect(() => {
-    fetchProjects().then(setProjects).catch(() => {});
-  }, []);
+    // Only fetch projects when authenticated — prevents 401 on marketing/landing pages
+    if (session?.user) {
+      fetchProjects().then(setProjects).catch(() => {});
+    }
+  }, [session]);
 
   useEffect(() => {
     if (currentProjectId) {

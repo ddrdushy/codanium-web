@@ -224,7 +224,10 @@ export function DownloadSection() {
 
   useEffect(() => {
     fetch(`https://api.github.com/repos/${REPO}/releases`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return []; // Suppress 404 when no releases exist
+        return r.json();
+      })
       .then((releases) => {
         if (!Array.isArray(releases) || releases.length === 0) return;
         const latest = releases.find((r: any) => !r.draft) || releases[0];
@@ -237,14 +240,7 @@ export function DownloadSection() {
           assets: (latest.assets || []).map((a: any) => a.name),
         });
       })
-      .catch(() => {
-        setRelease({
-          tag: 'v0.1.0',
-          version: '0.1.0',
-          baseUrl: `https://github.com/${REPO}/releases/download/v0.1.0`,
-          assets: [],
-        });
-      });
+      .catch(() => { /* Silently use fallback defaults */ });
   }, []);
 
   const version = release?.version || '0.1.0';

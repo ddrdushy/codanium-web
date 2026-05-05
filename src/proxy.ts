@@ -16,6 +16,19 @@ export async function proxy(request: NextRequest) {
   const isPublic = publicPaths.some(p => pathname === p);
   const isAuthPage = ['/login', '/signup'].includes(pathname);
 
+  // Allow static assets from public/ (images, fonts, etc.)
+  const isStaticAsset = /\.(png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|eot|css|js|json|txt|xml|mp4|webm|mp3|pdf)$/i.test(pathname);
+  if (isStaticAsset) {
+    return NextResponse.next();
+  }
+
+  // Allow marketing page paths (landing page, docs, help, etc.)
+  const marketingPaths = ['/docs', '/help', '/community', '/roadmap', '/about', '/careers', '/contact', '/privacy', '/terms', '/cookies', '/press'];
+  const isMarketing = marketingPaths.some(p => pathname === p || pathname.startsWith(p + '/'));
+  if (isMarketing) {
+    return NextResponse.next();
+  }
+
   // Allow public routes (let auth pages always render — client handles redirect after login)
   if (isPublic) {
     return NextResponse.next();
