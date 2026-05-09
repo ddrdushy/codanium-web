@@ -11,8 +11,9 @@
 #   ./scripts/switch-llm.sh status       # Show current config
 # ============================================================================
 
-export PGPASSWORD="ats_secret_2025"
-PG="psql -h localhost -p 14000 -U ats_user -d ai_team_studio"
+# Ensure PGPASSWORD is set in environment or default to local dev pass
+export PGPASSWORD="${PGPASSWORD:-ats_dev_password}"
+PG="psql -h localhost -p 14000 -U ats -d ai_team_studio"
 
 set_provider() {
   local provider="$1" model="$2" base_url="$3" api_key="$4"
@@ -40,7 +41,7 @@ case "${1:-}" in
       "openai" \
       "qwen/qwen3.5-122b-a10b" \
       "https://integrate.api.nvidia.com/v1" \
-      "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"
+      "${NVIDIA_API_KEY:-YOUR_NVIDIA_API_KEY_HERE}"
     ;;
   ollama)
     set_provider \
