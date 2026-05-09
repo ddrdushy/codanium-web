@@ -1,7 +1,12 @@
 {
   "name": "ai-team-studio",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AiSenseiMY/Ai-Team_studio.git"
+  },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
   },
@@ -48,7 +53,6 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
-    "stripe": "^20.4.0",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"

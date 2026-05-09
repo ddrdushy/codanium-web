@@ -21,7 +21,6 @@ const footerLinks: FooterGroup[] = [
     links: [
       { label: 'Features', href: '/#features' },
       { label: 'Download', href: '/#download' },
-      { label: 'Pricing', href: '/#pricing' },
       { label: 'Roadmap', href: '/roadmap' },
     ],
   },

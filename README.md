@@ -1,6 +1,7 @@
 # Codanium — Your Vibe, Multiplied
 
 [![Build & Deploy](https://github.com/AiSenseiMY/Ai-Team_studio/actions/workflows/deploy.yml/badge.svg)](https://github.com/AiSenseiMY/Ai-Team_studio/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
@@ -59,7 +60,6 @@ User Creates Project → BA Agent Auto-Kicks Off → BRD Generated
 | **Auth** | NextAuth.js (credentials, sessions) |
 | **AI/LLM** | Multi-provider gateway (OpenAI, Anthropic, Ollama, Mock) |
 | **Email** | SendGrid (transactional email with React templates) |
-| **Payments** | Stripe (subscriptions, billing portal, webhooks) |
 | **Git** | Octokit (GitHub integration, branches, PRs, releases) |
 | **Styling** | Tailwind CSS 4, custom dark theme (amber accent) |
 | **State** | Zustand, framer-motion transitions |
@@ -136,7 +136,6 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 ### Demo Credentials
 
 - **User**: user@demo.com / password123
-- **Admin**: admin@demo.com / admin123
 
 ## Project Structure
 
@@ -145,19 +144,15 @@ src/
   app/
     (marketing)/          # Landing page, auth (login, signup)
     (platform)/           # 12+ authenticated pages (projects, board, chat, etc.)
-    (admin)/              # Admin console (users, billing, agents, analytics, etc.)
     api/
-      admin/              # Admin API (users, billing, agents, health, settings, audit)
       projects/[id]/      # Project API (cards, chat, agents, decisions, git, pipelines)
       auth/               # Auth API (register, login, forgot/reset password)
-      billing/            # Stripe billing (checkout, portal, subscription)
       user/               # User API (profile, API keys)
-      webhooks/           # Webhook handlers (GitHub, Stripe)
+      webhooks/           # Webhook handlers (GitHub)
       internal/           # Internal APIs (task processing)
   components/
     marketing/            # Landing page sections
     layout/               # Sidebar, topbar
-    admin/                # Admin sidebar, topbar, layout shell
     board/                # Kanban board
     preview/              # Live preview panel (Sandpack, WebContainer)
     command-palette/      # Cmd+K search
@@ -194,20 +189,6 @@ prisma/
 | **Pipeline** | CI/CD deployment pipeline with build/test/deploy stages |
 | **Settings** | Project config, AI model providers, team management |
 
-## Admin Console
-
-| Page | Description |
-|------|-------------|
-| **Dashboard** | Platform overview, user growth, project stats |
-| **Users** | Customer management (suspend, role changes, plan changes) |
-| **AI Agents** | Configure all 23 agents (enable/disable, temperature, usage stats) |
-| **Billing** | MRR, revenue, subscription analytics |
-| **Analytics** | Platform-wide usage analytics |
-| **System Health** | Database, Redis, BullMQ, LLM provider health checks |
-| **Guardrails** | AI safety and content filtering rules |
-| **Audit Log** | Full audit trail of admin and system actions |
-| **Settings** | LLM config, email (SendGrid), Stripe, feature flags, security |
-
 ## Key Features
 
 - **Auto Project Seeding** — Creating a project auto-seeds 23 agents + 10 SDLC stages
@@ -217,7 +198,6 @@ prisma/
 - **Mock Provider** — Full mock LLM provider with realistic agent responses for development
 - **Background Processing** — BullMQ workers handle async tasks (orchestration, email, git sync, webhooks)
 - **Real-time Streaming** — SSE-based token-by-token chat streaming
-- **Stripe Billing** — Subscription management, billing portal, webhook processing
 - **Email System** — SendGrid with React email templates (welcome, verification, billing, team invites)
 - **Git Integration** — GitHub branches, PRs, releases via Octokit
 - **Webhook System** — Outgoing webhooks with HMAC-SHA256 verification and retry queue
@@ -256,10 +236,6 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 # Email (optional)
 SENDGRID_API_KEY=SG.xxx
-
-# Stripe (optional)
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
 
 # Encryption
 ENCRYPTION_KEY=your-32-byte-hex-key
