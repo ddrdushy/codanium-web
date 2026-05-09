@@ -1,23 +1,39 @@
-Welcome to the **Codanium (Ai-Team Studio)** Wiki!
+# Welcome to the Codanium Wiki!
 
-Codanium is a full-service AI platform that builds and delivers software from your ideas. By simply describing what you want built, our orchestration engine spins up a team of 23 specialized AI agents to handle the entire Software Development Life Cycle (SDLC) — from requirements analysis to architecture, coding, testing, and deployment.
+**Codanium (Ai-Team Studio)** is an advanced, multi-agent AI orchestration platform designed to automate the entire Software Development Life Cycle (SDLC). By acting as a complete "AI Software Delivery Team," Codanium moves beyond simple code generation to provide enterprise-grade requirements gathering, architecture design, coding, testing, and deployment.
 
-## Quick Links
+---
 
-- [[Architecture Overview|Architecture]]
-- [[The AI Agent System|Agent-System]]
-- [[Local Development Setup|Local-Development]]
-- [Source Code](https://github.com/AiSenseiMY/Ai-Team_studio)
+## 📖 Table of Contents
 
-## What Makes Codanium Different?
+### 1. Getting Started
+* [[Home]] - You are here!
+* [[Local Development Setup|Local-Development]] - Step-by-step guide to running Codanium on your local machine.
+* [[Project Structure|Project-Structure]] - A deep dive into the repository layout.
 
-Unlike standard code-generation tools that output a single file or snippet, Codanium simulates a real engineering organization. 
+### 2. Core Concepts
+* [[System Architecture|Architecture]] - Understanding the 4-container Docker stack (Next.js, Postgres, Redis, BullMQ).
+* [[The AI Agent System|Agent-System]] - Meet the 23 AI agents across 5 departments.
+* [[The Orchestration Engine|Orchestration-Engine]] - How Intent Routing, Context Building, and Action Parsing work.
+* [[Multi-LLM Integration|Multi-LLM-Support]] - How to switch between OpenAI, Anthropic, Ollama, and NVIDIA.
 
-1. **Auto-Seeding**: A project automatically provisions 23 specialized agents.
-2. **SDLC Pipelines**: We enforce a strict 10-stage delivery pipeline. The Business Analyst (BA) Agent gathers requirements before the Software Architect (SA) Agent makes technology choices, ensuring high-quality, structured output.
-3. **Multi-LLM Support**: Bring Your Own Model (BYOM). You can seamlessly route tasks between OpenAI, Anthropic, Ollama, or a Mock provider for local testing.
-4. **Asynchronous Execution**: Long-running LLM generation and orchestration are handled via Redis and BullMQ so the UI remains highly responsive.
+### 3. Workflows
+* [[The 10-Stage SDLC Pipeline|SDLC-Pipeline]] - From Business Requirements Document (BRD) to production deployment.
+* [[Agent Collaboration|Agent-Collaboration]] - How agents delegate tasks and communicate with one another.
 
-## Getting Started
+---
 
-If you want to contribute or run the platform locally, head over to the [[Local Development Setup|Local-Development]] page for a step-by-step guide.
+## 🌟 The Codanium Philosophy
+
+Standard code generation tools (like GitHub Copilot or ChatGPT) require the human to act as the Product Manager, Software Architect, QA Engineer, and DevOps Engineer. They rely heavily on the human to provide perfect context and piece together disparate code snippets.
+
+**Codanium flips this model.**
+
+When you create a project in Codanium:
+1. **You act as the Stakeholder/Product Owner.**
+2. **The system provisions an organization of 23 specialized AI agents.**
+3. **The Business Analyst (BA) agent automatically kicks off the project**, interviewing you to extract requirements.
+4. **The workflow progresses automatically.** The BA hands off to the Software Architect (SA), who designs the database and API. The SA hands off to the Project Manager (PM), who creates Kanban cards. The Tech Lead (TL) assigns these cards to Junior/Senior Developers (JD/SD).
+5. **Quality is enforced at every step.** State Controllers prevent coding from starting until the architecture is approved.
+
+This multi-agent, role-based approach ensures that the generated software is cohesive, well-architected, and ready for production.

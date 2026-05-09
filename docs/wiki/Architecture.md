@@ -1,40 +1,70 @@
 # System Architecture
 
-Codanium uses a modern, containerized architecture designed for high performance, real-time LLM streaming, and reliable background task execution.
+Codanium is built on a highly scalable, event-driven, containerized architecture designed to handle long-running LLM generation tasks without blocking the main UI thread. 
 
-## Core Infrastructure
+## 1. The Container Stack
 
-The platform is split into 4 core Docker containers:
+The application is distributed across 4 highly decoupled Docker containers. This ensures that heavy AI processing does not impact the web server's responsiveness.
 
-1. **`ats-app` (Next.js Application)**
-   - **Framework**: Next.js 15 (App Router, Turbopack, React 19)
-   - **Role**: Handles all HTTP requests, UI rendering, Server Actions, and Server-Sent Events (SSE) for streaming LLM responses to the client.
-   - **Port**: 14001
+### `ats-app` (Next.js 15 Application Server)
+- **Port:** `14001` (internal) / `3000` (mapped to host)
+- **Role:** Handles all incoming HTTP traffic, Next.js App Router API endpoints, Server Actions, and UI rendering.
+- **Technology:** React 19, Turbopack, Tailwind CSS 4, Zustand (client state).
+- **Key Responsibilities:**
+  - Authenticating users via NextAuth.
+  - Serving the main dashboard, Kanban board, and chat interfaces.
+  - Handling real-time Server-Sent Events (SSE) connections for streaming LLM responses directly to the browser.
+  - Pushing new orchestration jobs to the Redis queue.
 
-2. **`ats-worker` (BullMQ Background Worker)**
-   - **Framework**: Node.js worker process
-   - **Role**: Executes long-running tasks asynchronously. This includes orchestrating complex AI workflows, sending emails, processing webhook retries, and interacting with GitHub (Octokit).
+### `ats-worker` (BullMQ Background Task Runner)
+- **Role:** The workhorse of the orchestration engine. It picks up asynchronous jobs placed on the Redis queue by the `ats-app`.
+- **Technology:** Node.js, BullMQ.
+- **Key Responsibilities:**
+  - Executing long-running LLM requests (e.g., generating a 5-page BRD document).
+  - Processing webhook retries and sending transactional emails via SendGrid.
+  - Running automated QA tests in isolated sandboxes.
+  - Committing code to GitHub via Octokit API.
 
-3. **`ats-postgres` (PostgreSQL Database)**
-   - **Version**: PostgreSQL 17
-   - **Role**: Primary data store managed via Prisma ORM. Stores users, projects, agents, chat history, and generated code artifacts.
-   - **Port**: 14000
+### `ats-postgres` (Primary Database)
+- **Port:** `14000` (mapped to host)
+- **Version:** PostgreSQL 17
+- **Role:** The persistent system of record.
+- **Managed by:** Prisma ORM.
+- **Data Stored:** User accounts, Project states, Agent personas, Chat histories, Kanban cards, Document artifacts, and encrypted API keys (AES-256-GCM).
 
-4. **`ats-redis` (Redis Cache & Message Queue)**
-   - **Version**: Redis 7
-   - **Role**: Powers the BullMQ job queue for the worker. Also used for caching LLM responses and rate-limiting.
-   - **Port**: 14003
+### `ats-redis` (Message Queue & Cache)
+- **Port:** `14003` (mapped to host)
+- **Version:** Redis 7
+- **Role:** High-speed in-memory data store.
+- **Key Responsibilities:**
+  - Backing store for BullMQ (managing job states: waiting, active, completed, failed).
+  - Caching frequent database queries (e.g., current project state).
+  - Rate-limiting LLM API requests to prevent provider quotas from being exceeded.
 
-## The AI Orchestration Engine
+---
 
-When a user submits a prompt, the system doesn't just hit the OpenAI API. It goes through a sophisticated pipeline:
+## 2. Real-Time Communication Flow
 
-1. **Intent Router**: Analyzes the user's message using NLP keywords and context to route it to the correct AI Agent (e.g., if asking for a database schema, it routes to the SA agent).
-2. **Context Builder**: Pulls relevant project history, database schemas, and current SDLC stage data and injects it into the LLM prompt.
-3. **LLM Gateway**: Connects to the user's configured LLM provider (OpenAI, Anthropic, or Ollama) using secure, AES-256 encrypted API keys.
-4. **Action Parser**: The agent's response is streamed back to the user via SSE, but it is also parsed on the server for structured commands like `[ACTION: CREATE_FILE]` or `[DELEGATE: JD]`.
+Because AI generation can take anywhere from 2 seconds to 2 minutes, Codanium relies heavily on an asynchronous, event-driven flow.
 
-## Security & Encryption
+### The Request Lifecycle
+1. **User Input:** The user types a message in the Chat UI.
+2. **API Route Hit:** The Next.js API route receives the message, saves it to PostgreSQL as a `ChatMessage`, and immediately returns a `202 Accepted` response.
+3. **Job Enqueued:** The Next.js API adds a `PROCESS_CHAT_MESSAGE` job to the Redis BullMQ queue.
+4. **Worker Pickup:** The `ats-worker` container pulls the job from Redis.
+5. **Orchestration:** The worker runs the Intent Router, Context Builder, and connects to the LLM Gateway.
+6. **SSE Streaming:** As the LLM generates tokens, the worker publishes these tokens back to a Redis Pub/Sub channel.
+7. **Client Rendering:** The `ats-app` SSE endpoint listens to the Redis channel and streams the tokens to the React frontend, providing a typing-effect experience.
 
-- **At-Rest Encryption**: API keys for external services are encrypted in the database using AES-256-GCM.
-- **Webhooks**: Outbound webhooks are secured with HMAC-SHA256 signatures so receivers can verify the payload originated from Codanium.
+---
+
+## 3. Data Models (Prisma)
+
+The core domain model is centered around the `Project`.
+
+* **Project**: The root entity. Has a specific SDLC `status` (e.g., `REQUIREMENTS_GATHERING`, `ARCHITECTURE_DESIGN`).
+* **Agent**: Represents the 23 personas. Tied to a Project. Tracks their individual configuration and memory.
+* **ChatMessage**: A unified log of all communication between the User, the System, and the Agents.
+* **Document**: Artifacts generated by the agents (BRD, System Architecture, Technical Specs).
+* **Card**: Kanban board tasks created by the PM agent and assigned to JD/SD agents.
+* **CodeArtifact**: The actual source code files generated by the development agents.
