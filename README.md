@@ -50,6 +50,10 @@ User Creates Project → BA Agent Auto-Kicks Off → BRD Generated
       → QA Agent → Testing → DevOps → Release
 ```
 
+## Documentation & Wiki
+
+Detailed documentation, architecture diagrams, and guides for contributing can be found in our [GitHub Wiki](https://github.com/AiSenseiMY/Ai-Team_studio/wiki). If the Wiki is not enabled, you can also check the `docs/` folder in this repository for markdown guides.
+
 ## Tech Stack
 
 | Layer | Technology |
