@@ -17,7 +17,7 @@ import {
   Pause, Archive, TrendingUp, ArrowRight, BarChart3,
   FolderOpen, LayoutGrid, List, Filter, Settings,
   User, CreditCard, Key, Shield, LogOut, ChevronDown,
-  Trash2, X
+  Trash2, X, AlertCircle
 } from 'lucide-react';
 import { CreateProjectModal } from '@/components/modals/create-project-modal';
 import { PlatformSettingsDrawer } from '@/components/modals/platform-settings-drawer';
@@ -44,6 +44,7 @@ export default function ProjectsPage() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [byokStatus, setByokStatus] = useState<{ configured: boolean; requireBYOK: boolean } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,6 +52,20 @@ export default function ProjectsPage() {
       .then(setProjects)
       .catch(() => { setProjects([]); })
       .finally(() => setLoading(false));
+  }, []);
+
+  // Surface a banner when the user has no BYOK config — required for OSS
+  // / self-host deployments running with REQUIRE_USER_BYOK=true, optional
+  // (but encouraged) for hosted users who want to skip credit deduction.
+  useEffect(() => {
+    fetch('/api/account/llm-config')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data.configured === 'boolean') {
+          setByokStatus({ configured: data.configured, requireBYOK: !!data.requireBYOK });
+        }
+      })
+      .catch(() => { /* non-blocking */ });
   }, []);
 
   // Close user menu when clicking outside
@@ -222,6 +237,51 @@ export default function ProjectsPage() {
       <TourGuide />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* BYOK status banner — shown when the user has no personal LLM provider key */}
+        {byokStatus && !byokStatus.configured && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              'mb-6 rounded-xl border px-4 py-3 flex items-start gap-3',
+              byokStatus.requireBYOK
+                ? 'bg-red-500/[0.06] border-red-500/30 text-red-200'
+                : 'bg-amber/[0.06] border-amber/30 text-amber',
+            )}
+          >
+            {byokStatus.requireBYOK ? (
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            ) : (
+              <Key className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm">
+                {byokStatus.requireBYOK
+                  ? 'AI provider required'
+                  : 'Bring your own AI provider'}
+              </p>
+              <p className="text-xs opacity-90 mt-0.5">
+                {byokStatus.requireBYOK
+                  ? 'This deployment runs without platform-provided keys. Add your own OpenAI, Anthropic, Ollama, Mistral, Groq, or compatible provider to start using your AI team.'
+                  : 'Configure your own API key to skip platform credit charges and use your preferred provider — OpenAI, Anthropic, Ollama, Mistral, Groq, and more.'}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setShowSettings(true)}
+              className={cn(
+                'flex-shrink-0 font-semibold',
+                byokStatus.requireBYOK
+                  ? 'bg-red-500 text-white hover:bg-red-500/90'
+                  : 'bg-amber text-background hover:bg-amber/90',
+              )}
+            >
+              <Settings className="w-3.5 h-3.5 mr-1.5" />
+              Configure
+            </Button>
+          </motion.div>
+        )}
+
         {/* Page Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

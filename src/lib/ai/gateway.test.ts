@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Must use vi.hoisted for variables referenced in vi.mock factories
 const { mockPrisma, mockDecrypt, mockIsEncrypted } = vi.hoisted(() => ({
   mockPrisma: {
     lLMProviderConfig: {
       findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     adminSetting: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -20,16 +21,25 @@ vi.mock('./encryption', () => ({
   isEncrypted: mockIsEncrypted,
 }));
 
-import { LLMGateway } from './gateway';
+import { LLMGateway, NoBYOKConfiguredError } from './gateway';
 
 describe('LLM Gateway', () => {
   let gateway: LLMGateway;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks (vs clearAllMocks) drains queued mockResolvedValueOnce
+    // values so they can't leak between tests. We re-establish defaults below.
+    vi.resetAllMocks();
     mockPrisma.lLMProviderConfig.findFirst.mockResolvedValue(null);
+    mockPrisma.lLMProviderConfig.findMany.mockResolvedValue([]);
     mockPrisma.adminSetting.findMany.mockResolvedValue([]);
+    mockDecrypt.mockImplementation((v: string) => v);
+    mockIsEncrypted.mockReturnValue(false);
     gateway = new LLMGateway();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   describe('resolve()', () => {
@@ -76,30 +86,60 @@ describe('LLM Gateway', () => {
       expect(result.config.apiKey).toBe('sk-ant-admin');
     });
 
-    it('throws when no config found', async () => {
-      await expect(gateway.resolve('proj-1', 'BA', 'usr-1')).rejects.toThrow(
+    it('throws NoBYOKConfiguredError when authenticated user has no config in any scope', async () => {
+      const promise = gateway.resolve('proj-1', 'BA', 'usr-1');
+      await expect(promise).rejects.toBeInstanceOf(NoBYOKConfiguredError);
+      await expect(promise).rejects.toMatchObject({ code: 'NO_BYOK_CONFIGURED' });
+    });
+
+    it('throws generic error when no userId and no config (system-context call)', async () => {
+      await expect(gateway.resolve('proj-1', 'BA', undefined)).rejects.toThrow(
         'LLM provider not configured'
       );
     });
 
-    it('skips user-level BYOM (removed)', async () => {
+    it('resolves USER-scope BYOK first and short-circuits other scopes', async () => {
+      mockPrisma.lLMProviderConfig.findFirst.mockResolvedValueOnce({
+        provider: 'anthropic',
+        apiKeyEncrypted: 'sk-ant-user',
+        baseUrl: null,
+        organizationId: null,
+        defaultModel: 'claude-sonnet-4-20250514',
+      });
+
+      const result = await gateway.resolve('proj-1', 'BA', 'usr-1');
+      expect(result.scope).toBe('USER');
+      expect(result.billingType).toBe('BYOK');
+      expect(result.config.apiKey).toBe('sk-ant-user');
+
+      // First findFirst query should target USER scope
+      const firstCall = mockPrisma.lLMProviderConfig.findFirst.mock.calls[0];
+      expect(firstCall[0].where.scope).toBe('USER');
+      expect(firstCall[0].where.userId).toBe('usr-1');
+
+      // Only one query — USER hit short-circuited the rest
+      expect(mockPrisma.lLMProviderConfig.findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    it('REQUIRE_USER_BYOK forbids platform/admin fallback for authenticated users', async () => {
+      vi.stubEnv('REQUIRE_USER_BYOK', 'true');
+
+      const promise = gateway.resolve('proj-1', 'BA', 'usr-1');
+      await expect(promise).rejects.toBeInstanceOf(NoBYOKConfiguredError);
+      // Admin settings should never have been queried — gate blocks before fallback
+      expect(mockPrisma.adminSetting.findMany).not.toHaveBeenCalled();
+    });
+
+    it('REQUIRE_USER_BYOK still allows the system path (no userId) to reach admin defaults', async () => {
+      vi.stubEnv('REQUIRE_USER_BYOK', 'true');
       mockPrisma.adminSetting.findMany.mockResolvedValueOnce([
         { key: 'llm.defaultProvider', value: 'ollama' },
         { key: 'llm.defaultModel', value: 'llama3' },
         { key: 'llm.baseUrl', value: 'http://localhost:11434' },
       ]);
 
-      const result = await gateway.resolve('proj-1', 'BA', 'usr-1');
+      const result = await gateway.resolve(undefined, undefined, undefined);
       expect(result.config.provider).toBe('ollama');
-
-      // No USER scope query
-      const calls = mockPrisma.lLMProviderConfig.findFirst.mock.calls;
-      for (const call of calls) {
-        const where = call[0]?.where;
-        if (where?.scope) {
-          expect(where.scope).not.toBe('USER');
-        }
-      }
     });
 
     it('ignores mock provider in admin settings', async () => {

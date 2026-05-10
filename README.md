@@ -221,29 +221,78 @@ docker compose ps               # Check container status
 docker compose logs -f app      # Follow app logs
 ```
 
+## Self-hosting with your own LLM keys (BYOK)
+
+Codanium is **bring-your-own-key**. Every user can configure their own AI provider through the UI — your keys, your provider, your costs. No data is sent to a central Codanium service.
+
+### How resolution works
+
+The LLM gateway picks a provider in this order:
+
+1. **User-level BYOK** (set in Account Settings → AI Provider) — your own key, no platform billing
+2. **Agent-level override** (admin per-agent)
+3. **Project-level override** (admin per-project)
+4. **Platform fallback chain** (admin-configured, ordered by priority)
+5. **Admin default** (last resort)
+
+### OSS / self-host mode
+
+If you're running Codanium for yourself or your team and you don't want the platform to fall back to *any* keys other than the user's own, set:
+
+```env
+REQUIRE_USER_BYOK=true
+```
+
+With this on, the gateway refuses platform/admin fallback. Each authenticated user **must** configure a provider in their own settings, or requests fail with a clear "configure your AI provider" error and an in-app CTA. This is the recommended setting for a fresh self-host install — it guarantees you never accidentally bill against keys left over from another deployment.
+
+### Required encryption key
+
+API keys are encrypted at rest with AES-256-GCM. Set:
+
+```env
+LLM_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+```
+
+If unset, the app boots with a known dev fallback (loud warning in logs) — fine for local development, **not** safe for production.
+
+### Supported providers
+
+OpenAI, Anthropic, Ollama (local), Mistral, Groq, Together, NVIDIA, OpenRouter, DeepSeek, BytePlus. Anything OpenAI-compatible can be plugged in via base URL.
+
+### Where users configure their key
+
+In the app: top-right **Settings** icon on the Projects page → AI Provider section. Pick provider, paste key, choose default model, optionally override the base URL (useful for Ollama or self-hosted endpoints), save.
+
+---
+
 ## Environment Variables
+
+See [`.env.example`](.env.example) for the full list with comments. Quick reference:
 
 ```env
 # Database
-DATABASE_URL=postgresql://ats:ats_dev_password@localhost:14000/ai_team_studio
+DATABASE_URL=postgresql://ats_user:ats_secret_2025@localhost:14000/ai_team_studio
 
 # Auth
-NEXTAUTH_SECRET=your-secret
+AUTH_SECRET=$(openssl rand -base64 32)
 NEXTAUTH_URL=http://localhost:3000
 
 # Redis
 REDIS_URL=redis://localhost:14003
 
-# LLM Providers (optional — mock provider works without these)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+# LLM key encryption (required, AES-256-GCM)
+LLM_ENCRYPTION_KEY=$(openssl rand -base64 32)
 
-# Email (optional)
-SENDGRID_API_KEY=SG.xxx
+# OSS / self-host: force every user to configure their own LLM key
+# REQUIRE_USER_BYOK=true
 
-# Encryption
-ENCRYPTION_KEY=your-32-byte-hex-key
+# Email (optional — Mailjet)
+# MAILJET_API_KEY=
+# MAILJET_SECRET_KEY=
 
-# Internal
-INTERNAL_TASK_SECRET=your-task-secret
+# Stripe billing (optional — only needed if you want credit purchases)
+# STRIPE_SECRET_KEY=
+# STRIPE_WEBHOOK_SECRET=
 ```
+
+> LLM provider keys (OpenAI, Anthropic, Ollama, etc.) are NOT set via env. Users add them in-app via Account Settings → AI Provider, where they're encrypted with `LLM_ENCRYPTION_KEY` before being stored.

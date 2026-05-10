@@ -12,6 +12,12 @@
 //   4. Platform-level fallback chain (scope=PLATFORM, ordered by priority)
 //   5. Admin settings          (platform-wide default, last resort) ← credits charged
 //   6. Error — admin must configure LLM provider
+//
+// Self-hosted / OSS deployments:
+//   Set REQUIRE_USER_BYOK=true in the environment to disable steps 2–5.
+//   Every authenticated request must then have a USER-scope BYOK config or
+//   the gateway throws NoBYOKConfiguredError. This keeps a self-host install
+//   from accidentally falling back to keys committed by a previous operator.
 // =============================================================================
 
 import {
@@ -46,6 +52,29 @@ interface ResolvedConfig {
 
 /** Max number of fallback attempts to prevent infinite loops. */
 const MAX_FALLBACK_ATTEMPTS = 10;
+
+/**
+ * Whether the deployment requires every authenticated user to bring their
+ * own LLM key (no platform/admin fallback). Read at call time, not at module
+ * load, so tests can toggle it via vi.stubEnv.
+ */
+function requireUserBYOK(): boolean {
+  return process.env.REQUIRE_USER_BYOK === 'true';
+}
+
+/**
+ * Thrown when REQUIRE_USER_BYOK is enabled and the requesting user has no
+ * USER-scope BYOK config. Callers and UI layers can detect this via
+ * `err instanceof NoBYOKConfiguredError` or `err.code === 'NO_BYOK_CONFIGURED'`
+ * to render a "configure your AI provider" CTA instead of a generic error.
+ */
+export class NoBYOKConfiguredError extends Error {
+  readonly code = 'NO_BYOK_CONFIGURED';
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoBYOKConfiguredError';
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Gateway
@@ -94,6 +123,18 @@ export class LLMGateway {
       } catch (err) {
         console.warn('[LLMGateway] ✗ User-level BYOK query failed:', err);
       }
+    }
+
+    // ── BYOK enforcement (self-host / OSS mode) ──
+    // When REQUIRE_USER_BYOK is on and we have an authenticated user, refuse
+    // to fall back to platform/admin keys. The user must configure their own.
+    if (requireUserBYOK() && userId) {
+      console.warn(`[LLMGateway] ✗ REQUIRE_USER_BYOK active and user ${userId} has no BYOK config`);
+      throw new NoBYOKConfiguredError(
+        'No AI provider configured for your account. This deployment requires you to bring ' +
+        'your own API key — open Account Settings → AI Provider and add a key for OpenAI, ' +
+        'Anthropic, Ollama, or another supported provider to continue.',
+      );
     }
 
     // ── 2. Agent-level DB config (admin override per agent) ──
@@ -188,6 +229,18 @@ export class LLMGateway {
     }
 
     // ── 6. No config found ──
+    // For authenticated users with no key anywhere in the chain, surface the
+    // BYOK CTA — it's actionable, whereas "contact your administrator" isn't
+    // when the operator IS the user (self-host).
+    if (userId) {
+      console.error('[LLMGateway] ✗ No LLM config in any scope for authenticated user');
+      throw new NoBYOKConfiguredError(
+        'No AI provider is configured. Open Account Settings → AI Provider and add a key for ' +
+        'OpenAI, Anthropic, Ollama, or another supported provider. Self-hosters can also seed ' +
+        'platform-wide defaults via Admin Settings.',
+      );
+    }
+
     const errMsg =
       'LLM provider not configured. Please contact your administrator to set up the AI provider in Admin Settings.';
     console.error(`[LLMGateway] ✗ ${errMsg}`);

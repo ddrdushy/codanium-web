@@ -16,17 +16,23 @@ export async function GET() {
   if (error) return error;
   const userId = (session.user as any).id as string;
 
+  // Whether this deployment forbids platform-key fallback (self-host mode).
+  // Surfacing this lets the UI show a "you must configure" banner vs a softer
+  // "you can configure" suggestion.
+  const requireBYOK = process.env.REQUIRE_USER_BYOK === 'true';
+
   const config = await prisma.lLMProviderConfig.findFirst({
     where: { userId, scope: 'USER', isActive: true },
     orderBy: { updatedAt: 'desc' },
   });
 
   if (!config) {
-    return NextResponse.json({ configured: false });
+    return NextResponse.json({ configured: false, requireBYOK });
   }
 
   return NextResponse.json({
     configured: true,
+    requireBYOK,
     provider: config.provider,
     defaultModel: config.defaultModel,
     baseUrl: config.baseUrl,
