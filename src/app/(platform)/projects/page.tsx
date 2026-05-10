@@ -126,6 +126,7 @@ export default function ProjectsPage() {
               <span className="text-xs font-semibold text-emerald-400">{totalAgents} AI specialists working</span>
             </div>
             <button
+              data-tour="settings"
               onClick={() => setShowSettings(true)}
               className="w-8 h-8 rounded-lg bg-[var(--surface)] border border-border hover:border-amber/30 hover:bg-amber/5 flex items-center justify-center text-muted-foreground hover:text-amber transition-all"
               title="Platform Settings"

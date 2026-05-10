@@ -17,6 +17,13 @@ export const TOUR_STEPS: TourStep[] = [
     description: 'Let\'s take a quick tour of your AI-powered development team. Your 23 AI specialists are ready to build your product.',
   },
   {
+    id: 'ai-provider',
+    target: '[data-tour="settings"]',
+    title: 'Configure your AI Provider',
+    description: 'Codanium runs on your own API keys — OpenAI, Anthropic, Ollama, Mistral, Groq, or any compatible provider. Click the gear icon to add or change yours. Keys are encrypted at rest with AES-256-GCM.',
+    position: 'bottom',
+  },
+  {
     id: 'new-project',
     target: '[data-tour="new-project"]',
     title: 'Start a New Project',

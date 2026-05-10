@@ -11,15 +11,7 @@ import {
   Loader2, Shield, MessageSquare, Save, X, Cpu, Eye, EyeOff,
   ExternalLink,
 } from 'lucide-react';
-
-const BYOK_PROVIDERS = [
-  { id: 'openai',     label: 'OpenAI',     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
-  { id: 'anthropic',  label: 'Anthropic',  models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'] },
-  { id: 'ollama',     label: 'Ollama (local)', models: ['llama3', 'mistral', 'gemma2', 'phi3'] },
-  { id: 'mistral',    label: 'Mistral AI', models: ['mistral-large-latest', 'mistral-small-latest'] },
-  { id: 'groq',       label: 'Groq',       models: ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'] },
-  { id: 'together',   label: 'Together AI', models: ['meta-llama/Llama-3-70b-chat-hf', 'mistralai/Mixtral-8x7B-Instruct-v0.1'] },
-] as const;
+import { BYOK_PROVIDERS } from '@/lib/ai/byok-providers';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
