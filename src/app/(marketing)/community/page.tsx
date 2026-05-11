@@ -21,7 +21,7 @@ const channels = [
     title: 'GitHub Discussions',
     description: 'Ask questions, share ideas, and report bugs. Our team monitors discussions daily.',
     cta: 'Open GitHub',
-    href: 'https://github.com/AiSenseiMY/Ai-Team_studio/discussions',
+    href: 'https://github.com/ddrdushy/codanium-web/discussions',
     color: 'text-emerald-400',
     bg: 'bg-emerald-400/10',
     border: 'border-emerald-400/20',
@@ -233,7 +233,7 @@ export default function CommunityPage() {
               Codanium is open source. Help us build the future of AI-powered software delivery.
             </p>
             <a
-              href="https://github.com/AiSenseiMY/Ai-Team_studio"
+              href="https://github.com/ddrdushy/codanium-web"
               target="_blank"
               rel="noopener noreferrer"
             >

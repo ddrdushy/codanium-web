@@ -214,7 +214,7 @@ export default function DocsPage() {
               Our documentation is open source. Found a typo or want to contribute a guide? We welcome pull requests.
             </p>
             <a
-              href="https://github.com/AiSenseiMY/Ai-Team_studio"
+              href="https://github.com/ddrdushy/codanium-web"
               target="_blank"
               rel="noopener noreferrer"
             >

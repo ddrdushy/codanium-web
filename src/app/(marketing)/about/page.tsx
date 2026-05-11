@@ -212,7 +212,7 @@ export default function AboutPage() {
                 </p>
                 <div className="flex items-center gap-4 pt-2">
                   <Link
-                    href="https://github.com/AiSenseiMY/Ai-Team_studio"
+                    href="https://github.com/ddrdushy/codanium-web"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors"
@@ -397,7 +397,7 @@ export default function AboutPage() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
               <Link
-                href="https://github.com/AiSenseiMY/Ai-Team_studio"
+                href="https://github.com/ddrdushy/codanium-web"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -411,7 +411,7 @@ export default function AboutPage() {
                 </Button>
               </Link>
               <Link
-                href="https://github.com/AiSenseiMY/Codanium"
+                href="https://github.com/ddrdushy/codanium"
                 target="_blank"
                 rel="noopener noreferrer"
               >

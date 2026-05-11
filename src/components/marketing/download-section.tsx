@@ -5,7 +5,7 @@ import { Download, Monitor, Apple, Terminal, CheckCircle2, Zap, GitBranch, Code2
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const REPO = 'AiSenseiMY/Codanium';
+const REPO = 'ddrdushy/codanium-desktop';
 
 type OSType = 'macOS' | 'Windows' | 'Linux' | null;
 type ArchType = 'arm64' | 'x64';

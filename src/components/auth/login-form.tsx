@@ -66,17 +66,10 @@ export function LoginForm() {
         </p>
       </div>
 
-      {/* Social Login */}
-      <SocialButtons />
-
-      {/* Divider */}
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="px-3 bg-background text-muted-foreground/60">or continue with email</span>
-        </div>
+      {/* Social Login (renders nothing + no divider when no OAuth providers
+          are configured for this deployment) */}
+      <div className="mb-6">
+        <SocialButtons />
       </div>
 
       {/* Email/Password Form */}

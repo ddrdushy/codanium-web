@@ -29,7 +29,7 @@ const footerLinks: FooterGroup[] = [
     links: [
       { label: 'Documentation', href: '/docs' },
       { label: 'Help Center', href: '/help' },
-      { label: 'GitHub', href: 'https://github.com/AiSenseiMY/Codanium', external: true },
+      { label: 'GitHub', href: 'https://github.com/ddrdushy/codanium', external: true },
       { label: 'Community', href: '/community' },
     ],
   },
@@ -147,7 +147,7 @@ export function MarketingFooter() {
             {/* Social icons */}
             <div className="flex items-center gap-3">
               <a
-                href="https://github.com/AiSenseiMY/Codanium"
+                href="https://github.com/ddrdushy/codanium"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-[var(--surface-raised)] text-muted-foreground transition-all hover:text-foreground hover:border-amber/30 hover:bg-amber/5"

@@ -42,8 +42,8 @@ const contactChannels = [
   {
     icon: Github,
     label: 'GitHub',
-    value: 'github.com/AiSenseiMY/Codanium',
-    href: 'https://github.com/AiSenseiMY/Codanium',
+    value: 'github.com/ddrdushy/codanium-desktop',
+    href: 'https://github.com/ddrdushy/codanium-desktop',
     description: 'Open an issue, submit a PR, or explore our codebase.',
   },
   {
